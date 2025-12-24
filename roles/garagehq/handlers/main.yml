@@ -1,0 +1,10 @@
+---
+- name: "Restart garage-server"
+  ansible.builtin.service:
+    name: "garage-server"
+    state: restarted
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: "Reload systemd"
+  ansible.builtin.systemd:
+    daemon_reload: true
