@@ -1,0 +1,31 @@
+---
+namespace: habr
+name: linuxhost
+version: 0.0.1
+readme: README.md
+
+authors:
+  - "Habr Team <servers@habr.team>"
+  - "Vadim Rybalko <vadim@habr.team>"
+
+description: >
+  Habr Ansible Collection for managing Linux hosts and core infrastructure services.
+
+tags:
+  - infrastructure
+  - linux
+
+license:
+  - MIT
+
+repository: https://github.com/habralab/habr-ansible-collection
+issues: https://github.com/habralab/habr-ansible-collection/issues
+
+build_ignore:
+  - ".ansible/"
+  - ".git"
+  - ".gitignore"
+  - ".editorconfig"
+  - ".idea"
+  - ".vscode"
+  - "docs/"
