@@ -1,0 +1,50 @@
+---
+garagehq_version: "2.1.0"
+garagehq_arch: "x86_64-unknown-linux-musl"
+garagehq_download_force: false
+garagehq_download_url: "https://garagehq.deuxfleurs.fr/_releases/v{{ garagehq_version }}/{{ garagehq_arch }}/garage"
+
+# Runtime user/group
+garagehq_user: "garage-user"
+garagehq_group: "garage-user"
+
+# Paths
+garagehq_bin_path: "/usr/bin/garage"
+garagehq_config_dir: "/etc/garage"
+garagehq_config_file: "/etc/garage/garage.toml"
+garagehq_env_file: "/etc/default/garage"
+garagehq_var_dir: "/var/lib/garage"
+
+garagehq_systemd_service: true
+garagehq_systemd_service_state: "started"
+garagehq_systemd_service_enabled: true
+
+# Configuration file
+garagehq_conf_handle: true
+garagehq_conf_rpc_secret: ""
+garagehq_conf_rpc_secret_force: false
+garagehq_conf_rpc_secret_file: "{{ garagehq_config_dir }}/rpc_secret"
+
+garagehq_conf_rpc_bind_addr: "[::]:3901"
+# garagehq_conf_rpc_public_addr: "[fc00:1::1]:3901"
+garagehq_conf_bootstrap_peers: []
+
+## Configuration: s3_api section
+garagehq_conf_s3_api_bind_addr: "[::]:3900"
+garagehq_conf_s3_api_root_domain: ".s3.garage"
+garagehq_conf_s3_api_s3_region: "garage"
+
+## Configuration: s3_web section
+garagehq_conf_s3_web_bind_addr: "[::]:3902"
+garagehq_conf_s3_web_root_domain: ".web.garage"
+garagehq_conf_s3_web_index: "index.html"
+
+## Configuration: k2v_api section
+garagehq_conf_k2v_api_bind_addr: "[::]:3904"
+
+## Configuration: admin_api section
+garagehq_conf_admin_api_bind_addr: "[::]:3903"
+garagehq_conf_admin_admin_token: ""
+garagehq_conf_admin_metrics_token: ""
+garagehq_conf_admin_metrics_require_token: ""   # tri-state: "", true, false
+garagehq_conf_admin_trace_sink: ""

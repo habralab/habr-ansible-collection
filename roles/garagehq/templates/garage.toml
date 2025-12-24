@@ -1,0 +1,51 @@
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+replication_factor = 1
+
+rpc_secret_file = "{{ garagehq_conf_rpc_secret_file }}"
+rpc_bind_addr = "{{ garagehq_conf_rpc_bind_addr }}"
+rpc_bind_outgoing = false
+{% if garagehq_conf_rpc_public_addr is defined %}
+rpc_public_addr = "{{ garagehq_conf_rpc_public_addr }}"
+{% endif %}
+
+allow_world_readable_secrets = false
+
+bootstrap_peers = [
+{% for peer in garagehq_conf_bootstrap_peers %}
+  "{{ peer }}",
+{% endfor %}
+]
+
+allow_punycode = false
+
+[s3_api]
+api_bind_addr = "{{ garagehq_conf_s3_api_bind_addr }}"
+root_domain = "{{ garagehq_conf_s3_api_root_domain }}"
+s3_region = "{{ garagehq_conf_s3_api_s3_region }}"
+
+[s3_web]
+bind_addr = "{{ garagehq_conf_s3_web_bind_addr }}"
+root_domain = "{{ garagehq_conf_s3_web_root_domain }}"
+index = "{{ garagehq_conf_s3_web_index }}"
+add_host_to_metrics = true
+
+[k2v_api]
+api_bind_addr = "{{ garagehq_conf_k2v_api_bind_addr }}"
+
+[admin]
+api_bind_addr = "{{ garagehq_conf_admin_api_bind_addr }}"
+{% if (garagehq_conf_admin_metrics_token | trim | length) > 0 %}
+metrics_token = "{{ garagehq_conf_admin_metrics_token | trim }}"
+{% endif %}
+{% if garagehq_conf_admin_metrics_require_token is not none and (garagehq_conf_admin_metrics_require_token | string | trim | length) > 0 %}
+metrics_require_token = {{ garagehq_conf_admin_metrics_require_token | bool | lower }}
+{% endif %}
+{% if (garagehq_conf_admin_admin_token | trim | length) > 0 %}
+admin_token = "{{ garagehq_conf_admin_admin_token | trim }}"
+{% endif %}
+{% if (garagehq_conf_admin_trace_sink | trim | length) > 0 %}
+trace_sink = "{{ garagehq_conf_admin_trace_sink | trim }}"
+{% endif %}

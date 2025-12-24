@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: "garagehq"
+  author: "Habr Team <servers@habr.team>, Vadim Rybalko <vadim@habr.team>"
+  description: "Install Garage HQ server"
+  company: "Habr"
+  issue_tracker_url: "https://github.com/habralab/habr-ansible-collection/issues"
+  license: "MIT"
+  min_ansible_version: "2.18"
+  platforms:
+    - name: "Ubuntu"
+      versions:
+        - "focal"
+        - "jammy"
+        - "noble"
+dependencies: []

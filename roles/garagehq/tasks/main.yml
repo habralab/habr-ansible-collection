@@ -1,0 +1,153 @@
+---
+- name: "Download Garage binary"
+  ansible.builtin.get_url:
+    url: "{{ garagehq_download_url }}"
+    dest: "{{ garagehq_bin_path }}"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+    force: "{{ garagehq_download_force }}"
+  become: true
+  tags:
+    - garagehq
+
+- name: "Create system user for Garage"
+  ansible.builtin.user:
+    name: "{{ garagehq_user }}"
+    system: true
+    shell: "/usr/sbin/nologin"
+    create_home: false
+  become: true
+  tags:
+    - garagehq
+
+- name: "Create Garage data directory"
+  ansible.builtin.file:
+    path: "{{ garagehq_var_dir }}"
+    state: directory
+    owner: "{{ garagehq_user }}"
+    group: "{{ garagehq_group }}"
+    mode: "0750"
+  become: true
+  tags:
+    - garagehq
+
+- name: "Install Garage environment file"
+  ansible.builtin.template:
+    src: "garage.default.j2"
+    dest: "{{ garagehq_env_file }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+  when:
+    - garagehq_systemd_service | bool
+  notify: "Restart garage-server"
+  tags:
+    - garagehq
+    - systemd
+
+- name: "Install systemd unit file"
+  ansible.builtin.template:
+    src: "garage-server.service"
+    dest: "/etc/systemd/system/garage-server.service"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+  when:
+    - garagehq_systemd_service | bool
+  tags:
+    - garagehq
+    - systemd
+
+- name: "Flush handlers"
+  ansible.builtin.meta: flush_handlers
+  when:
+    - garagehq_systemd_service | bool
+  tags:
+    - garagehq
+    - systemd
+
+- name: "Create Garage config directory"
+  ansible.builtin.file:
+    path: "{{ garagehq_config_dir }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  become: true
+  when:
+    - garagehq_conf_handle | bool
+  tags:
+    - garagehq
+
+- name: "Persist provided RPC secret"
+  ansible.builtin.copy:
+    dest: "{{ garagehq_conf_rpc_secret_file }}"
+    content: "{{ garagehq_conf_rpc_secret | trim }}\n"
+    owner: "{{ garagehq_user }}"
+    group: "{{ garagehq_group }}"
+    mode: "0600"
+    force: "{{ garagehq_conf_rpc_secret_force }}"
+  become: true
+  when:
+    - garagehq_conf_handle | bool
+    - (garagehq_conf_rpc_secret | default('') | trim | length) > 0
+  tags:
+    - garagehq
+
+- name: "Generate RPC secret file if missing"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ( umask 077 && openssl rand -hex 32 > "{{ garagehq_conf_rpc_secret_file }}" )
+  args:
+    executable: /bin/bash
+    creates: "{{ garagehq_conf_rpc_secret_file }}"
+  become: true
+  when:
+    - garagehq_conf_handle | bool
+    - (garagehq_conf_rpc_secret | default('') | trim | length) == 0
+  tags:
+    - garagehq
+
+- name: "Fix permissions for RPC secret file"
+  ansible.builtin.file:
+    path: "{{ garagehq_conf_rpc_secret_file }}"
+    owner: "{{ garagehq_user }}"
+    group: "{{ garagehq_group }}"
+    mode: "0600"
+  become: true
+  when:
+    - garagehq_conf_handle | bool
+    - garagehq_conf_rpc_secret_file | length > 0
+  tags:
+    - garagehq
+
+- name: "Install Garage configuration file"
+  ansible.builtin.template:
+    src: "garage.toml"
+    dest: "{{ garagehq_config_file }}"
+    owner: "root"
+    group: "{{ garagehq_group }}"
+    mode: "0640"
+  become: true
+  notify: "Restart garage-server"
+  when:
+    - garagehq_conf_handle | bool
+  tags:
+    - garagehq
+
+- name: "Enable and start garage-server"
+  ansible.builtin.service:
+    name: "garage-server"
+    state: "{{ garagehq_systemd_service_state }}"
+    enabled: "{{ garagehq_systemd_service_enabled }}"
+  become: true
+  when:
+    - garagehq_systemd_service | bool
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - garagehq
+    - systemd
