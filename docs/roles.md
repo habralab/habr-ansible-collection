@@ -8,7 +8,28 @@ For detailed documentation, configuration options and examples, refer to the `RE
 
 ## Available roles
 
-*empty list*
+### `garagehq`
+
+Installs and configures
+[Garage](https://garagehq.deuxfleurs.fr/), a distributed, S3-compatible object
+storage system.
+
+Scope:
+- Binary installation
+- systemd service management
+- Secure configuration file generation
+- RPC secret handling via `rpc_secret_file`
+- Configuration of S3, S3 Web, K2V and Admin APIs
+
+Non-goals:
+- Cluster lifecycle management
+- TLS and reverse proxy setup
+- User, access key or bucket management
+
+Documentation:
+- `roles/garagehq/README.md`
+- Upstream reference:
+  https://garagehq.deuxfleurs.fr/documentation/
 
 ---
 
