@@ -21,6 +21,16 @@
   tags:
     - garagehq
 
+- name: "Erease Garage data directory"
+  ansible.builtin.file:
+    path: "{{ garagehq_var_dir }}"
+    state: absent
+  become: true
+  when:
+    - garagehq_erease_var_dir | bool
+  tags:
+    - garagehq
+
 - name: "Create Garage data directory"
   ansible.builtin.file:
     path: "{{ garagehq_var_dir }}"
@@ -42,7 +52,6 @@
   become: true
   when:
     - garagehq_systemd_service | bool
-  notify: "Restart garage-server"
   tags:
     - garagehq
     - systemd
