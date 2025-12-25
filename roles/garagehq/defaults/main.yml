@@ -14,7 +14,9 @@ garagehq_config_dir: "/etc/garage"
 garagehq_config_file: "/etc/garage/garage.toml"
 garagehq_env_file: "/etc/default/garage"
 garagehq_var_dir: "/var/lib/garage"
+garagehq_erease_var_dir: false # True only if you want to delete all data!
 
+# Systemd handling
 garagehq_systemd_service: true
 garagehq_systemd_service_state: "started"
 garagehq_systemd_service_enabled: true
