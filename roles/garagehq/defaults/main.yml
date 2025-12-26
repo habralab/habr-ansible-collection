@@ -14,6 +14,8 @@ garagehq_config_dir: "/etc/garage"
 garagehq_config_file: "/etc/garage/garage.toml"
 garagehq_env_file: "/etc/default/garage"
 garagehq_var_dir: "/var/lib/garage"
+garagehq_meta_dir: "{{ garagehq_var_dir }}/meta"
+garagehq_data_dir: "{{ garagehq_var_dir }}/data"
 garagehq_erease_var_dir: false # True only if you want to delete all data!
 
 # Systemd handling
@@ -23,6 +25,7 @@ garagehq_systemd_service_enabled: true
 
 # Configuration file
 garagehq_conf_handle: true
+garagehq_conf_replication_factor: 1
 garagehq_conf_rpc_secret: ""
 garagehq_conf_rpc_secret_force: false
 garagehq_conf_rpc_secret_file: "{{ garagehq_config_dir }}/rpc_secret"
@@ -50,3 +53,5 @@ garagehq_conf_admin_admin_token: ""
 garagehq_conf_admin_metrics_token: ""
 garagehq_conf_admin_metrics_require_token: ""   # tri-state: "", true, false
 garagehq_conf_admin_trace_sink: ""
+
+garagehq_cluster_layout_delete: false # Only if you know what you are doing!

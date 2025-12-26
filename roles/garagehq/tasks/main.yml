@@ -91,6 +91,7 @@
     - garagehq_conf_handle | bool
   tags:
     - garagehq
+    - config
 
 - name: "Persist provided RPC secret"
   ansible.builtin.copy:
@@ -106,6 +107,7 @@
     - (garagehq_conf_rpc_secret | default('') | trim | length) > 0
   tags:
     - garagehq
+    - config
 
 - name: "Generate RPC secret file if missing"
   ansible.builtin.shell: |
@@ -120,6 +122,7 @@
     - (garagehq_conf_rpc_secret | default('') | trim | length) == 0
   tags:
     - garagehq
+    - config
 
 - name: "Fix permissions for RPC secret file"
   ansible.builtin.file:
@@ -133,6 +136,7 @@
     - garagehq_conf_rpc_secret_file | length > 0
   tags:
     - garagehq
+    - config
 
 - name: "Install Garage configuration file"
   ansible.builtin.template:
@@ -147,6 +151,7 @@
     - garagehq_conf_handle | bool
   tags:
     - garagehq
+    - config
 
 - name: "Enable and start garage-server"
   ansible.builtin.service:
@@ -160,3 +165,14 @@
   tags:
     - garagehq
     - systemd
+
+- name: "Delete Garage cluster layout file"
+  ansible.builtin.file:
+    path: "{{ garagehq_meta_dir }}/cluster_layout"
+    state: absent
+  become: true
+  when:
+    - garagehq_cluster_layout_delete | bool
+  tags:
+    - garagehq
+    - cluster
