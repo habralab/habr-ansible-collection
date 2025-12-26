@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.0] - 2025-12-26
+
+### Added
+- First production-ready role: `garagehq`:
+  - Installation and systemd management of Garage HQ server.
+  - Secure, idempotent configuration management using `garage.toml`.
+  - RPC secret handling via `rpc_secret_file` with safe defaults.
+- Role-level documentation and inclusion in roles index.
+- Release workflow and roles documentation (`docs/release.md`, `docs/roles.md`).
+
 ## [0.0.1] - 2025-12-24
 
 ### Added
