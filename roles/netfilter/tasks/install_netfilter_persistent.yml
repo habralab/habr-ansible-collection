@@ -1,4 +1,18 @@
 ---
+- name: "Install base netfilter packages"
+  ansible.builtin.apt:
+    name:
+      - "iptables"
+      - "ipset"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  become: true
+  tags:
+    - netfilter
+    - apt
+
 - name: "Install netfilter-persistent package"
   ansible.builtin.apt:
     name: "netfilter-persistent"
@@ -6,6 +20,7 @@
     update_cache: true
     cache_valid_time: 3600
     install_recommends: false
+  when: ansible_facts['distribution_release'] in netfilter_persistent_available_releases
   become: true
   tags:
     - netfilter
@@ -18,7 +33,9 @@
     update_cache: true
     cache_valid_time: 3600
     install_recommends: false
-  when: netfilter_use_ipset | bool
+  when:
+    - netfilter_use_ipset | bool
+    - ansible_facts['distribution_release'] in netfilter_ipset_persistent_available_releases
   become: true
   tags:
     - netfilter
@@ -31,7 +48,9 @@
     update_cache: true
     cache_valid_time: 3600
     install_recommends: false
-  when: netfilter_use_iptables | bool
+  when:
+    - netfilter_use_iptables | bool
+    - ansible_facts['distribution_release'] in netfilter_iptables_persistent_available_releases
   become: true
   tags:
     - netfilter

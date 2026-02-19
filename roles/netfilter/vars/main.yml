@@ -1,5 +1,19 @@
 ---
 netfilter_persistent_available_releases:
+ - "xenial"
+ - "bionic"
+ - "focal"
+ - "jammy"
+ - "noble"
+
+netfilter_iptables_persistent_available_releases:
+ - "xenial"
+ - "bionic"
+ - "focal"
+ - "jammy"
+ - "noble"
+
+netfilter_ipset_persistent_available_releases:
  - "focal"
  - "jammy"
  - "noble"
