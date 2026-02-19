@@ -1,0 +1,31 @@
+---
+- name: "Configure ipsets"
+  ansible.builtin.template:
+    src: "ipsets.j2"
+    dest: "/etc/iptables/ipsets"
+    owner: root
+    group: root
+    mode: "0644"
+  when: netfilter_use_ipset | bool
+  become: true
+  notify:
+    - Restart netfilter-persistent
+  tags:
+    - netfilter
+
+- name: "Configure iptables"
+  ansible.builtin.template:
+    src: "rules.j2"
+    dest: "/etc/iptables/rules.v{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: netfilter_use_iptables | bool
+  become: true
+  loop:
+    - 4
+    - 6
+  notify:
+    - Restart netfilter-persistent
+  tags:
+    - netfilter

@@ -33,6 +33,25 @@ Documentation:
 
 ---
 
+### `netfilter`
+
+Installs and configures `netfilter-persistent` for persistent `iptables` and `ipset` management.
+
+Scope:
+- Installation of `netfilter-persistent`, `iptables-persistent`, and `ipset-persistent`
+- Declarative configuration of `ipsets`
+- Declarative configuration of IPv4 and IPv6 `iptables` rulesets
+
+Non-goals:
+- Dynamic rule management (e.g., Fail2ban, Docker firewall sync)
+- High-level abstractions (like UFW or Firewalld)
+- `nftables` native syntax (uses legacy/iptables syntax via persistent packages)
+
+Documentation:
+- `roles/netfilter/README.md`
+
+---
+
 ## Role design principles
 
 All roles in this collection follow these principles:

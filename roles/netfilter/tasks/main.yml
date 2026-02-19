@@ -1,0 +1,20 @@
+---
+- name: "Detect netfilter-persistent available release"
+  ansible.builtin.set_fact:
+    netfilter_persistent_available: "{{ ansible_distribution == 'Ubuntu' and ansible_distribution_release in netfilter_persistent_available_releases }}"
+  tags:
+    - netfilter
+
+- name: "Install netfilter-persistent packages"
+  ansible.builtin.import_tasks: install_netfilter_persistent.yml
+  when: netfilter_persistent_available | bool
+  tags:
+    - netfilter
+
+- name: "Configure netfilter-persistent"
+  ansible.builtin.import_tasks: configure_netfilter_persistent.yml
+  when:
+    - netfilter_persistent_available | bool
+    - netfilter_use_ipset | bool or netfilter_use_iptables | bool
+  tags:
+    - netfilter

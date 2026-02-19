@@ -1,0 +1,5 @@
+---
+netfilter_persistent_available_releases:
+ - "focal"
+ - "jammy"
+ - "noble"

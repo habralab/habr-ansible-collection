@@ -1,0 +1,53 @@
+---
+netfilter_use_ipset: false
+netfilter_use_iptables: false
+
+netfilter_ipsets: []
+netfilter_ipset_hashsize: 131072
+netfilter_ipset_maxelem: 131072
+netfilter_ipset_type: "hash:net"
+netfilter_ipset_family: "inet"
+
+netfilter_iptables:
+  - name: "nat"
+    ip_ver: 4
+    chains:
+      - name: "PREROUTING"
+        policy: "ACCEPT"
+      - name: "INPUT"
+        policy: "ACCEPT"
+      - name: "OUTPUT"
+        policy: "ACCEPT"
+      - name: "POSTROUTING"
+        policy: "ACCEPT"
+  - name: "mangle"
+    ip_ver: 4
+    chains:
+      - name: "PREROUTING"
+        policy: "ACCEPT"
+      - name: "INPUT"
+        policy: "ACCEPT"
+      - name: "FORWARD"
+        policy: "ACCEPT"
+      - name: "OUTPUT"
+        policy: "ACCEPT"
+      - name: "POSTROUTING"
+        policy: "ACCEPT"
+  - name: "filter"
+    ip_ver: 4
+    chains:
+      - name: "INPUT"
+        policy: "ACCEPT"
+      - name: "FORWARD"
+        policy: "ACCEPT"
+      - name: "OUTPUT"
+        policy: "ACCEPT"
+  - name: "filter"
+    ip_ver: 6
+    chains:
+      - name: "INPUT"
+        policy: "ACCEPT"
+      - name: "FORWARD"
+        policy: "ACCEPT"
+      - name: "OUTPUT"
+        policy: "ACCEPT"
