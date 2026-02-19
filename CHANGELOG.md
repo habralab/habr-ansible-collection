@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] - 2026-02-19
+
+### Added
+- Production-ready role: `netfilter`:
+  - Installation of `netfilter-persistent`, `iptables-persistent`, and `ipset-persistent`.
+  - Declarative configuration of `ipsets` and `iptables` rulesets for IPv4 and IPv6.
+  - Systemd fallback mechanism for `ipset` loading on legacy distributions (Xenial, Bionic).
+  - Granular handling of package availability across different Ubuntu releases.
+
 ## [1.0.0] - 2025-12-26
 
 ### Added
