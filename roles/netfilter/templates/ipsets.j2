@@ -1,0 +1,9 @@
+{% for ipset in netfilter_ipsets %}
+create {{ ipset.name }} {{ ipset.type | default( netfilter_ipset_type ) }} family {{ ipset.family | default( netfilter_ipset_family ) }} hashsize {{ ipset.hashsize | default( netfilter_ipset_hashsize ) | int }} maxelem {{ ipset.maxelem | default( netfilter_ipset_maxelem ) | int }}
+{% if ipset.addrs is defined and ipset.addrs | length > 0 %}
+{% for addr in ipset.addrs %}
+add {{ ipset.name }} {{ addr }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}

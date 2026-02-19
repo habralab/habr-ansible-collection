@@ -1,0 +1,38 @@
+---
+- name: "Install netfilter-persistent package"
+  ansible.builtin.apt:
+    name: "netfilter-persistent"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  become: true
+  tags:
+    - netfilter
+    - apt
+
+- name: "Install ipset-persistent package"
+  ansible.builtin.apt:
+    name: "ipset-persistent"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  when: netfilter_use_ipset | bool
+  become: true
+  tags:
+    - netfilter
+    - apt
+
+- name: "Install iptables-persistent package"
+  ansible.builtin.apt:
+    name: "iptables-persistent"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  when: netfilter_use_iptables | bool
+  become: true
+  tags:
+    - netfilter
+    - apt

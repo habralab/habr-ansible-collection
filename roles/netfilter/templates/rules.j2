@@ -1,0 +1,21 @@
+{% for table in netfilter_iptables %}
+{% if table.ip_ver | int == item | int %}
+*{{ table.name }}
+{% for chain in table.chains %}
+{% if chain.user_defined | default('false') | bool %}
+-N {{ chain.name }}
+{% endif %}
+{% endfor %}
+{% for chain in table.chains %}
+{% if not chain.user_defined | default('false') | bool %}
+:{{ chain.name }} {{ chain.policy }} [0:0]
+{% endif %}
+{% if chain.rules is defined and chain.rules | length > 0 %}
+{% for rule in chain.rules %}
+-A {{ chain.name }} {{ rule }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+COMMIT
+{% endif %}
+{% endfor %}
