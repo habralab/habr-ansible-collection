@@ -1,0 +1,15 @@
+[Unit]
+Description=Loading IP Sets
+Before=network-pre.target iptables.service ip6tables.service netfilter-persistent.service
+Wants=network-pre.target netfilter-persistent.service
+ConditionPathExists=/etc/iptables/ipsets
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ipset -R -! -f /etc/iptables/ipsets
+ExecReload=/sbin/ipset -R -! -f /etc/iptables/ipsets
+ExecStop=/sbin/ipset -X
+
+[Install]
+WantedBy=basic.target

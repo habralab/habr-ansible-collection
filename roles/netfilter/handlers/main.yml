@@ -4,3 +4,14 @@
     name: "netfilter-persistent"
     state: restarted
   ignore_errors: "{{ ansible_check_mode }}"
+
+- name: "Restart legacy ipset"
+  ansible.builtin.service:
+    name: "ipset"
+    state: restarted
+  when: ansible_facts['distribution_release'] not in netfilter_ipset_persistent_available_releases
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: "Reload systemd"
+  ansible.builtin.systemd:
+    daemon_reload: true
