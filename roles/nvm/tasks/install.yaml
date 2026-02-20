@@ -1,92 +1,16 @@
 ---
-- name: Check if NVM user exists
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ nvm_user }}"
-  register: user_check
-  ignore_errors: true
-  tags:
-    - nvm
-
-- name: Create NVM user if missing
-  ansible.builtin.user:
-    name: "{{ nvm_user }}"
-    group: "www-data"
-    create_home: true
-    shell: "/bin/bash"
-  when: user_check.ansible_facts.getent_passwd[nvm_user] is not defined
-  tags:
-    - nvm
-
 - name: Set NVM installation path
   ansible.builtin.set_fact:
-    nvm_dir: "/home/{{ nvm_user }}/.nvm"
-  tags:
-    - nvm
+    nvm_dir: "~{{ nvm_user }}/.nvm"
 
-- name: Check if NVM is installed
-  ansible.builtin.stat:
-    path: "{{ nvm_dir }}/nvm.sh"
-  register: nvm_installed
-  tags:
-    - nvm
-
-- name: Get installed NVM version
-  ansible.builtin.command:
-    cmd: "bash -i -c 'nvm --version'"
-  register: nvm_current_version
-  ignore_errors: yes
-  changed_when: false
-  become: true
-  become_user: "{{ nvm_user }}"
-  check_mode: no
-  tags:
-    - nvm
-
-
-- name: Debug current NVM version
-  ansible.builtin.debug:
-    msg: "Current installed NVM version: {{ nvm_current_version.stdout | default('0.0.0') }}"
-  tags:
-    - nvm
-
-- name: Update NVM if installed version is less than desired
-  ansible.builtin.shell: >
-    cd {{ nvm_dir }} &&
-    git fetch --tags &&
-    git checkout {{ nvm_version }}
-  become: true
-  become_user: "{{ nvm_user }}"
-  tags:
-    - nvm
-  when: nvm_installed.stat.exists and
-        nvm_current_version is defined and
-        (nvm_current_version.stdout | default("0.0.0") | regex_replace('^v', '') | trim)
-          is version(nvm_version | regex_replace('^v', '') | trim, '<')
-
-
-- name: Ensure NVM repository is cloned if not installed
+- name: Ensure NVM repository is cloned to the correct version
   ansible.builtin.git:
     repo: "{{ nvm_repo }}"
     dest: "{{ nvm_dir }}"
     version: "{{ nvm_version }}"
     depth: 1
-    update: yes
-    accept_hostkey: yes
-    clone: yes
+    update: true
+    accept_hostkey: true
     recursive: false
   become: true
   become_user: "{{ nvm_user }}"
-  tags:
-    - nvm
-  when: not nvm_installed.stat.exists
-
-- name: Set permissions for NVM
-  ansible.builtin.file:
-    path: "{{ nvm_dir }}"
-    owner: "{{ nvm_user }}"
-    group: "{{ nvm_user_group }}"
-    mode: "0755"
-    state: directory
-  tags:
-    - nvm
