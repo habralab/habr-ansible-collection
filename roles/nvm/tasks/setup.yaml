@@ -3,6 +3,17 @@
   ansible.builtin.getent:
     database: passwd
     key: "{{ current_nvm_user.name }}"
+    fail_key: false
+
+- name: "Fail with clear message if user {{ current_nvm_user.name }} is missing"
+  ansible.builtin.assert:
+    that:
+      - getent_passwd is defined
+      - getent_passwd.get(current_nvm_user.name) is not none
+    fail_msg: >-
+      The user '{{ current_nvm_user.name }}' does not exist on the target system.
+      Please ensure the user is created before installing NVM.
+    quiet: true
 
 - name: "Clone NVM repository for {{ current_nvm_user.name }}"
   ansible.builtin.git:
