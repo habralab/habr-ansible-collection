@@ -52,6 +52,26 @@ Documentation:
 
 ---
 
+### `nvm`
+
+Installs Node Version Manager (NVM) from the upstream Git repository.
+
+Scope:
+- Git-based NVM installation for a specified list of users
+- Configurable shell environment initialization (`.bashrc` by default)
+- Support for specifying different NVM versions per user
+
+Non-goals:
+- Node.js runtime or NPM package installation
+- System-wide availability (NVM is per-user by design)
+
+Documentation:
+- `roles/nvm/README.md`
+- Upstream reference:
+  https://github.com/nvm-sh/nvm
+
+---
+
 ### `users`
 
 Manages system and normal Linux users declaratively via a unified list.
