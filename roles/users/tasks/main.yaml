@@ -1,0 +1,18 @@
+---
+- name: Manage system and normal users
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    system: "{{ item.system | default(false) }}"
+    password: "{{ item.password | default(omit) }}"
+    shell: "{{ item.shell | default(omit) }}"
+    create_home: "{{ item.create_home | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    groups: "{{ item.groups | default(omit) }}"
+    append: "{{ item.append | default(omit) }}"
+    uid: "{{ item.uid | default(omit) }}"
+  loop: "{{ users_list }}"
+  loop_control:
+    label: "{{ item.name }}"  # Чтобы в логах выводилось имя юзера, а не весь дамп словаря с паролем
+  tags:
+    - users
