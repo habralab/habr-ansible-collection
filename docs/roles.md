@@ -52,6 +52,25 @@ Documentation:
 
 ---
 
+### `nvm`
+
+Installs Node Version Manager (NVM) from the upstream Git repository.
+
+Scope:
+- Git-based NVM installation for a specific user
+- Shell environment (`.bashrc` / `.profile`) configuration
+
+Non-goals:
+- Node.js runtime or NPM package installation
+- System-wide availability
+
+Documentation:
+- `roles/nvm/README.md`
+- Upstream reference:
+  https://github.com/nvm-sh/nvm
+
+---
+
 ## Role design principles
 
 All roles in this collection follow these principles:

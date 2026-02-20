@@ -1,0 +1,55 @@
+---
+- name: Ensure .bashrc exists for user {{ nvm_user }}
+  ansible.builtin.file:
+    path: "/home/{{ nvm_user }}/.bashrc"
+    state: touch
+    owner: "{{ nvm_user }}"
+    group: "{{ nvm_user_group }}"
+    mode: "0644"
+  tags:
+    - nvm
+
+- name: Ensure .bashrc is sourced in .profile
+  ansible.builtin.lineinfile:
+    path: "/home/{{ nvm_user }}/.profile"
+    line: 'source ~/.bashrc'
+    state: present
+    create: yes
+  tags:
+    - nvm
+
+- name: Debug .bashrc existence
+  ansible.builtin.command: ls -la /home/{{ nvm_user }}/.bashrc
+  register: bashrc_debug
+  ignore_errors: yes
+  changed_when: false
+  tags:
+    - nvm
+
+- name: Show .bashrc debug output
+  ansible.builtin.debug:
+    msg: "{{ bashrc_debug.stdout_lines }}"
+  tags:
+    - nvm
+
+- name: Check if NVM is added to .bashrc
+  ansible.builtin.command:
+    cmd: "grep 'export NVM_DIR' /home/{{ nvm_user }}/.bashrc"
+  register: nvm_env_check
+  ignore_errors: true  # Ошибки (если grep ничего не найдет) не должны прерывать Ansible
+  changed_when: false
+  tags:
+    - nvm
+
+- name: Add NVM to .bashrc for user
+  ansible.builtin.blockinfile:
+    path: "/home/{{ nvm_user }}/.bashrc"
+    create: yes
+    block: |
+      export NVM_DIR="{{ nvm_dir }}"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+    mode: "0644"
+  when: nvm_env_check.rc != 0  # Если grep не нашел строку, добавляем
+  tags:
+    - nvm
