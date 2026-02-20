@@ -12,9 +12,18 @@
   become: true
   notify:
     - Reload systemd
-    - Restart legacy ipset
   tags:
     - netfilter
+    - systemd
+
+- name: "Flush handlers"
+  ansible.builtin.meta: flush_handlers
+  when:
+    - netfilter_use_ipset | bool
+    - ansible_facts['distribution_release'] not in netfilter_ipset_persistent_available_releases
+  tags:
+    - netfilter
+    - systemd
 
 - name: "Configure ipsets"
   ansible.builtin.template:
