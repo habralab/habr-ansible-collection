@@ -57,12 +57,13 @@ Documentation:
 Installs Node Version Manager (NVM) from the upstream Git repository.
 
 Scope:
-- Git-based NVM installation for a specific user
-- Shell environment (`.bashrc` / `.profile`) configuration
+- Git-based NVM installation for a specified list of users
+- Configurable shell environment initialization (`.bashrc` by default)
+- Support for specifying different NVM versions per user
 
 Non-goals:
 - Node.js runtime or NPM package installation
-- System-wide availability
+- System-wide availability (NVM is per-user by design)
 
 Documentation:
 - `roles/nvm/README.md`

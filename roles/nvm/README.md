@@ -1,11 +1,11 @@
 # NVM (Node Version Manager)
 
-Installs NVM (Node Version Manager) directly from the upstream Git repository for a specific user.
+Installs NVM (Node Version Manager) directly from the upstream Git repository for a specific list of users.
 
 ## Scope
-- Clones NVM to the specified user's home directory.
-- Configures `.bashrc` and `.profile` to load NVM environment variables.
-- Checks out a specific tagged version of NVM.
+- Clones NVM to the users' home directories.
+- Configures shell profiles (e.g., `.bashrc`) to load NVM environment variables.
+- Supports specifying different NVM versions for different users.
 
 ## Non-goals
 - Node.js runtime installation (this role only installs the version manager).
@@ -14,9 +14,26 @@ Installs NVM (Node Version Manager) directly from the upstream Git repository fo
 
 ## Configuration
 
-See `defaults/main.yaml` for all variables. Key variables include:
-- `nvm_user`: The Linux user who will own the NVM installation (default: `web`).
-- `nvm_version`: The git tag/version to install (default: `v0.40.2`).
+The role is driven by a list of dictionaries `nvm_users`.
+
+### Variables
+
+**Global defaults** (can be overridden per user):
+- `nvm_version`: Default git tag/version to install (default: `v0.40.4`).
+- `nvm_profile`: Default shell profile file to modify (default: `.bashrc`).
+
+**User list (`nvm_users`)**:
+A list of dictionaries. Each dictionary must contain `name` and can optionally override `version` and `profile`.
+
+### Example
+
+```yaml
+nvm_users:
+  - name: "user1"
+  - name: "user2"
+    version: "v0.39.5"
+    profile: ".bash_profile"
+```
 
 ## Upstream documentation
 https://github.com/nvm-sh/nvm
