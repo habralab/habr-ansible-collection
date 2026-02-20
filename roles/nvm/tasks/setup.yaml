@@ -26,6 +26,7 @@
     recursive: false
   become: true
   become_user: "{{ current_nvm_user.name }}"
+  diff: false
 
 - name: "Add NVM configuration to {{ current_nvm_user.name }} profile"
   ansible.builtin.blockinfile:
