@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.2.0] - 2026-02-20
+
+### Added
+- Production-ready role: `users`:
+  - Declarative management of system and normal Linux users via a unified list.
+  - Configuration of UID, shell, home directories, and group memberships.
+  - Safe, idempotent password hash assignment.
+- Production-ready role: `nvm`:
+  - Git-based Node Version Manager (NVM) installation for a specified list of users.
+  - Configurable shell environment initialization (`.bashrc` by default).
+  - Support for specifying different NVM versions per user.
+  - Full `check_mode` support and strict user existence validation.
+
+### Fixed
+- `netfilter`: Prevent systemd race condition for legacy ipset unit by flushing handlers immediately after unit creation.
+
 ## [1.1.0] - 2026-02-19
 
 ### Added
