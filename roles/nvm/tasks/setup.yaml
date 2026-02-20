@@ -1,0 +1,44 @@
+---
+- name: "Verify that user {{ current_nvm_user.name }} exists"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ current_nvm_user.name }}"
+
+- name: "Clone NVM repository for {{ current_nvm_user.name }}"
+  ansible.builtin.git:
+    repo: "{{ nvm_repo }}"
+    dest: "~{{ current_nvm_user.name }}/.nvm"
+    version: "{{ current_nvm_user.version | default(nvm_version) }}"
+    depth: 1
+    update: true
+    accept_hostkey: true
+    recursive: false
+  become: true
+  become_user: "{{ current_nvm_user.name }}"
+
+- name: "Add NVM configuration to {{ current_nvm_user.name }} profile"
+  ansible.builtin.blockinfile:
+    path: "~{{ current_nvm_user.name }}/{{ current_nvm_user.profile | default(nvm_profile) }}"
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: NVM"
+    block: |
+      export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  become: true
+  become_user: "{{ current_nvm_user.name }}"
+
+- name: Verify NVM version
+  ansible.builtin.command:
+    cmd: "bash -i -c 'nvm --version'"
+  become: true
+  become_user: "{{ current_nvm_user.name }}"
+  register: nvm_check
+  changed_when: false
+  check_mode: false
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Print NVM version
+  ansible.builtin.debug:
+    msg: "NVM version for user {{ current_nvm_user.name }}: {{ nvm_check.stdout | default('Not installed yet (Check Mode)') }}"
