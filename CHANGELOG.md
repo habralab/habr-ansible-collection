@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.1] - 2026-02-20
+
+### Fixed
+- `nvm`: Suppress Git diff output during repository cloning to reduce task noise in playbooks.
+
 ## [1.2.0] - 2026-02-20
 
 ### Added
