@@ -52,6 +52,25 @@ Documentation:
 
 ---
 
+### `users`
+
+Manages system and normal Linux users declaratively via a unified list.
+
+Scope:
+- User creation and removal
+- UID, shell, and home directory configuration
+- Group membership (primary and secondary)
+- Password hash assignment
+
+Non-goals:
+- SSH authorized keys management
+- `sudo` privileges and sudoers file configuration
+
+Documentation:
+- `roles/users/README.md`
+
+---
+
 ## Role design principles
 
 All roles in this collection follow these principles:
