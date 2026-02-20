@@ -1,11 +1,11 @@
 ---
-- name: "Verify that user {{ current_nvm_user.name }} exists"
+- name: "Check if user exists: {{ current_nvm_user.name }}"
   ansible.builtin.getent:
     database: passwd
     key: "{{ current_nvm_user.name }}"
     fail_key: false
 
-- name: "Fail with clear message if user {{ current_nvm_user.name }} is missing"
+- name: "Fail if missing user: {{ current_nvm_user.name }}"
   ansible.builtin.assert:
     that:
       - getent_passwd is defined
@@ -15,7 +15,7 @@
       Please ensure the user is created before installing NVM.
     quiet: true
 
-- name: "Clone NVM repository for {{ current_nvm_user.name }}"
+- name: "Clone NVM repository for user: {{ current_nvm_user.name }}"
   ansible.builtin.git:
     repo: "{{ nvm_repo }}"
     dest: "~{{ current_nvm_user.name }}/.nvm"
@@ -28,7 +28,7 @@
   become_user: "{{ current_nvm_user.name }}"
   diff: false
 
-- name: "Add NVM configuration to {{ current_nvm_user.name }} profile"
+- name: "Add NVM configuration to profile for user: {{ current_nvm_user.name }}"
   ansible.builtin.blockinfile:
     path: "~{{ current_nvm_user.name }}/{{ current_nvm_user.profile | default(nvm_profile) }}"
     create: true
@@ -41,7 +41,7 @@
   become: true
   become_user: "{{ current_nvm_user.name }}"
 
-- name: Verify NVM version
+- name: "Verify NVM version for user: {{ current_nvm_user.name }}"
   ansible.builtin.command:
     cmd: "bash -i -c 'nvm --version'"
   become: true
@@ -51,6 +51,6 @@
   check_mode: false
   ignore_errors: "{{ ansible_check_mode }}"
 
-- name: Print NVM version
+- name: "Print NVM version for user: {{ current_nvm_user.name }}"
   ansible.builtin.debug:
     msg: "NVM version for user {{ current_nvm_user.name }}: {{ nvm_check.stdout | default('Not installed yet (Check Mode)') }}"
