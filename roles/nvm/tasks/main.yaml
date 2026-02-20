@@ -1,15 +1,32 @@
 ---
-- name: Install dependencies
-  ansible.builtin.include_tasks: install.yaml
+- name: Assert that nvm_user is defined
+  ansible.builtin.assert:
+    that:
+      - nvm_user is defined
+      - nvm_user | length > 0
+    fail_msg: "Variable 'nvm_user' must be defined to use the habr.linuxhost.nvm role."
+    quiet: true
+  tags:
+    - nvm
+
+- name: Verify that the target NVM user exists on the remote host
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ nvm_user }}"
+  tags:
+    - nvm
+
+- name: Install NVM
+  ansible.builtin.import_tasks: install.yaml
   tags:
     - nvm
 
 - name: Configure NVM
-  ansible.builtin.include_tasks: configure.yaml
+  ansible.builtin.import_tasks: configure.yaml
   tags:
     - nvm
 
-- name: Verify installation
-  ansible.builtin.include_tasks: verify.yaml
+- name: Verify NVM
+  ansible.builtin.import_tasks: verify.yaml
   tags:
     - nvm

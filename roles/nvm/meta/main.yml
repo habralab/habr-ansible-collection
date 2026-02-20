@@ -2,7 +2,7 @@
 galaxy_info:
   role_name: "nvm"
   author: "Habr Team <servers@habr.team>, Vadim Rybalko <vadim@habr.team>"
-  description: "NodeJS Vertion Manager from git"
+  description: "NodeJS Version Manager from git"
   company: "Habr"
   issue_tracker_url: "https://github.com/habralab/habr-ansible-collection/issues"
   license: "MIT"
