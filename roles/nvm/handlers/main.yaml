@@ -1,0 +1,6 @@
+---
+- name: Reload shell environment
+  ansible.builtin.shell:
+    cmd: "bash -c 'source /home/{{ nvm_user }}/.bashrc'"
+  become: true
+  become_user: "{{ nvm_user }}"

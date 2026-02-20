@@ -1,0 +1,5 @@
+---
+nvm_version: "v0.40.2"
+nvm_user: "web"
+nvm_user_group: "www-data"
+nvm_repo: "https://github.com/nvm-sh/nvm.git"

@@ -1,0 +1,4 @@
+---
+nvm_dependencies:
+  - curl
+  - git

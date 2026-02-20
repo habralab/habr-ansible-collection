@@ -1,0 +1,23 @@
+---
+- name: Verify if NVM is installed
+  ansible.builtin.command:
+    cmd: "bash -i -c 'nvm --version'"
+  register: nvm_check
+  become: true
+  become_user: "{{ nvm_user }}"
+  changed_when: false
+  failed_when: nvm_check.rc != 0
+  tags:
+    - nvm
+
+- name: Debug NVM version check
+  ansible.builtin.debug:
+    msg: "{{ nvm_check | default('nvm_check is undefined') }}"
+  tags:
+    - nvm
+
+- name: Print NVM version
+  ansible.builtin.debug:
+    msg: "NVM version for user {{ nvm_user }}: {{ nvm_check.stdout | default('UNKNOWN') }}"
+  tags:
+    - nvm
