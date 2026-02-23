@@ -30,6 +30,7 @@ ansible-galaxy collection install git+ssh://git@git.habralab.com/tools/habr-ansi
 Detailed documentation for each role is available in its respective `roles/<name>/README.md`.
 
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
+- `logind`: Manages `systemd-logind` configuration and user lingering.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nvm`: Multi-user Node Version Manager (NVM) installation from git.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
