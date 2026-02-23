@@ -1,0 +1,38 @@
+---
+- name: Install common and extra packages from APT
+  ansible.builtin.apt:
+    name: "{{ (packages_install_common + packages_install_extra) | unique | reject('equalto', '') | list }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  when: (packages_install_common + packages_install_extra) | length > 0
+  tags:
+    - packages
+    - apt
+    - deb
+    - dpkg
+
+- name: Install packages from direct URLs or local deb files
+  ansible.builtin.apt:
+    deb: "{{ item }}"
+    state: present
+  loop: "{{ packages_install_urls }}"
+  when: packages_install_urls | length > 0
+  tags:
+    - packages
+    - apt
+    - deb
+    - dpkg
+
+- name: Remove specific packages
+  ansible.builtin.apt:
+    name: "{{ packages_remove_list }}"
+    state: absent
+    autoremove: true
+  when: packages_remove_list | length > 0
+  tags:
+    - packages
+    - apt
+    - deb
+    - dpkg
