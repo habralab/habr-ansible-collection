@@ -32,6 +32,7 @@ Detailed documentation for each role is available in its respective `roles/<name
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nvm`: Multi-user Node Version Manager (NVM) installation from git.
+- `packages`: Declarative management of APT packages and .deb URLs.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
 
 ## Usage Example
