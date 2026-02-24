@@ -5,7 +5,7 @@ plugins, and modules for managing Linux hosts and infrastructure services.
 
 ## Requirements
 
-- ansible-core >= 2.15
+- ansible-core >= 2.16.0
 
 ## Installation
 

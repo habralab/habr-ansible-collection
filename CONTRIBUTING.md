@@ -28,15 +28,17 @@ We use a feature-branch workflow. All changes must go through Merge Requests to 
 
 ## Release Process
 
-1. **Prepare**: Create `release/vX.Y.Z` from `develop`.
-2. **Pack**: Bump version in `galaxy.yml` and update `CHANGELOG.md`.
-3. **Commit**: `chore(release): vX.Y.Z`.
-4. **Merge to Main**: Create MR to `main`, then tag it:
+1. **Test**: Ensure linting passes across all versions: run `tox` in
+   the collection root.
+2. **Prepare**: Create `release/vX.Y.Z` from `develop`.
+3. **Pack**: Bump version in `galaxy.yml` and update `CHANGELOG.md`.
+4. **Commit**: `chore(release): vX.Y.Z`.
+5. **Merge to Main**: Create MR to `main`, then tag it:
    ```bash
    git tag -a vX.Y.Z -m vX.Y.Z && git push --tags
    ```
-5. **Sync**: Merge `release/vX.Y.Z` back to develop to sync metadata.
-6. **Cleanup**: Delete the release branch.
+6. **Sync**: Merge `release/vX.Y.Z` back to develop to sync metadata.
+7. **Cleanup**: Delete the release branch.
 
 # Role Design Rules
 
