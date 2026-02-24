@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.0] - 2026-02-24
+
+### Added
+- Production-ready role: `apt_repo`:
+  - Helper role to manage legacy and deb822 APT repositories.
+- Production-ready role: `packages`:
+  - Base utility role for declarative management of APT packages and .deb URLs.
+  - Integrates with the new `apt_repo` role for custom repository configuration.
+- Production-ready role: `logind`:
+  - Manage `systemd-logind` user lingering.
+  - Utilizes `loginctl` with `creates/removes` for immediate D-Bus activation and idempotency.
+
+### Changed
+- `core`: Lowered minimum required `ansible-core` version to `>= 2.16.0`.
+- `docs`: Consolidated documentation into `README.md` and `CONTRIBUTING.md`.
+- `ci`: Implemented `tox` test matrix for automated linting across Ansible core versions 2.16 through 2.20.
+
+### Fixed
+- `nvm`: Resolved `ansible-lint` `name[template]` violations.
+- `users`: Added Xenial and Bionic to supported Ubuntu versions in role metadata.
+
 ## [1.2.1] - 2026-02-20
 
 ### Fixed
