@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  role_name: "apt_repo"
+  author: "Habr Team <servers@habr.team>"
+  description: "Helper role to manage APT repositories (supports legacy and deb822)"
+  company: "Habr"
+  issue_tracker_url: "https://git.habralab.com/tools/habr-ansible-collection/issues"
+  license: "MIT"
+  min_ansible_version: "2.15"
+  platforms:
+    - name: "Ubuntu"
+      versions:
+        - "xenial"
+        - "bionic"
+        - "focal"
+        - "jammy"
+        - "noble"
+dependencies: []

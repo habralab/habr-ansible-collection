@@ -1,0 +1,85 @@
+---
+- name: "Validate required variables | {{ apt_repo_config.name | default('UNKNOWN') }}"
+  ansible.builtin.assert:
+    that:
+      - apt_repo_config is defined
+      - apt_repo_config.name is defined
+      - apt_repo_config.url is defined
+    msg: "Keys 'name' and 'url' must be defined in 'apt_repo_config' dictionary."
+
+- name: "Ensure keyrings directory exists | {{ apt_repo_config.name }}"
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: "Import GPG keys from direct URL | {{ apt_repo_config.name }}"
+  ansible.builtin.apt_key:
+    url: "{{ apt_repo_config.key_url | default(apt_repo_key_url) }}"
+    keyring: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
+    state: present
+  when:
+    - (apt_repo_config.state | default(apt_repo_state)) == 'present'
+    - (apt_repo_config.key_url | default(apt_repo_key_url)) | length > 0
+  notify: Update apt cache
+
+- name: "Import GPG keys from keyserver | {{ apt_repo_config.name }}"
+  ansible.builtin.apt_key:
+    id: "{{ key_item }}"
+    keyserver: "{{ apt_repo_config.key_server | default(apt_repo_key_server) }}"
+    keyring: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
+    state: present
+  loop: "{{ [apt_repo_config.key_ids | default(apt_repo_key_ids)] | flatten }}"
+  loop_control:
+    loop_var: key_item
+  when:
+    - (apt_repo_config.state | default(apt_repo_state)) == 'present'
+    - (apt_repo_config.key_ids | default(apt_repo_key_ids)) | length > 0
+    - (apt_repo_config.key_url | default(apt_repo_key_url)) | length == 0
+  notify: Update apt cache
+
+- name: "Configure repository (Legacy .list format) | {{ apt_repo_config.name }}"
+  ansible.builtin.apt_repository:
+    repo: >-
+      {{ type_item }} [arch={{ apt_repo_config.arch | default(apt_repo_arch) }}
+      {%- if (apt_repo_config.key_url | default(apt_repo_key_url) | length > 0) or
+             (apt_repo_config.key_ids | default(apt_repo_key_ids) | length > 0) %}
+      signed-by={{ apt_repo_config.keyring | default(apt_repo_keyring) }}
+      {%- endif %}]
+      {{ apt_repo_config.url }} {{ apt_repo_config.suite | default(apt_repo_suite) }}
+      {{ apt_repo_config.components | default(apt_repo_components) | join(' ') }}
+    state: "{{ apt_repo_config.state | default(apt_repo_state) }}"
+    filename: "{{ apt_repo_config.name }}"
+  loop: "{{ apt_repo_config.types | default(apt_repo_types) }}"
+  loop_control:
+    loop_var: type_item
+  when: ansible_distribution_version is version('22.04', '<')
+  notify: Update apt cache
+
+- name: "Configure repository (Modern deb822 format) | {{ apt_repo_config.name }}"
+  ansible.builtin.deb822_repository:
+    name: "{{ apt_repo_config.name }}"
+    types: "{{ apt_repo_config.types | default(apt_repo_types) }}"
+    uris: "{{ apt_repo_config.url }}"
+    suites: "{{ apt_repo_config.suite | default(apt_repo_suite) }}"
+    components: "{{ apt_repo_config.components | default(apt_repo_components) }}"
+    architectures: "{{ apt_repo_config.arch | default(apt_repo_arch) }}"
+    signed_by: >-
+      {{
+        apt_repo_config.keyring | default(apt_repo_keyring)
+        if ((apt_repo_config.key_url | default(apt_repo_key_url) | length > 0) or
+            (apt_repo_config.key_ids | default(apt_repo_key_ids) | length > 0))
+        else omit
+      }}
+    state: "{{ apt_repo_config.state | default(apt_repo_state) }}"
+  when: ansible_distribution_version is version('22.04', '>=')
+  notify: Update apt cache
+  tags:
+    - skip_ansible_lint
+
+- name: "Remove keyring file if repository is absent | {{ apt_repo_config.name }}"
+  ansible.builtin.file:
+    path: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
+    state: absent
+  when: (apt_repo_config.state | default(apt_repo_state)) == 'absent'
+  notify: Update apt cache
