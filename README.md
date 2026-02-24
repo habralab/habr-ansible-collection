@@ -29,6 +29,7 @@ ansible-galaxy collection install git+ssh://git@git.habralab.com/tools/habr-ansi
 
 Detailed documentation for each role is available in its respective `roles/<name>/README.md`.
 
+- `apt_repo`: Helper role to manage APT repositories (supports legacy lists and deb822 sources).
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nvm`: Multi-user Node Version Manager (NVM) installation from git.
