@@ -1,0 +1,10 @@
+---
+apt_repo_state: present
+apt_repo_arch: "amd64"
+apt_repo_types: ["deb"]
+apt_repo_components: ["main"]
+apt_repo_key_server: "keyserver.ubuntu.com"
+apt_repo_keyring: "/etc/apt/keyrings/{{ apt_repo_config.name }}.gpg"
+apt_repo_suite: "{{ ansible_distribution_release }}"
+apt_repo_key_url: ""
+apt_repo_key_ids: []
