@@ -1,4 +1,33 @@
 ---
+- name: "Configure custom APT repositories via helper role"
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - packages
+        - apt
+        - deb
+        - dpkg
+  vars:
+    apt_repo_config: "{{ item }}"
+  loop: "{{ packages_custom_repos }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: packages_custom_repos | length > 0
+  tags:
+    - packages
+    - apt
+    - deb
+    - dpkg
+
+- name: "Force handler execution to update APT cache immediately"
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - packages
+    - apt
+    - deb
+    - dpkg
+
 - name: Install common and extra packages from APT
   ansible.builtin.apt:
     name: "{{ (packages_install_common + packages_install_extra) | unique | reject('equalto', '') | list }}"
