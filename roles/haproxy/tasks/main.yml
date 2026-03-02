@@ -84,3 +84,30 @@
     masked: "{{ haproxy_service_masked }}"
   tags:
     - haproxy
+
+- name: "Deploy HAProxy stats configuration"
+  ansible.builtin.template:
+    src: "stats.cfg.j2"
+    dest: "/etc/haproxy/conf.d/10-stats.cfg"
+    owner: root
+    group: root
+    mode: '0644'
+    validate: "haproxy -c -f /etc/haproxy/haproxy.cfg -f /etc/haproxy/conf.d/ -f %s"
+  when:
+    - haproxy_manage_config | bool
+    - haproxy_manage_confd | bool
+    - haproxy_stats_enabled | bool
+  notify: Reload haproxy
+  tags:
+    - haproxy
+
+- name: "Remove HAProxy stats configuration if disabled"
+  ansible.builtin.file:
+    path: "/etc/haproxy/conf.d/10-stats.cfg"
+    state: absent
+  when:
+    - haproxy_manage_confd | bool
+    - not haproxy_stats_enabled | bool
+  notify: Reload haproxy
+  tags:
+    - haproxy
