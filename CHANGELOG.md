@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.0] - 2026-03-02
+
+### Added
+- Production-ready role: `haproxy`:
+  - Install HAProxy from upstream PPA with dynamic version mapping based on Ubuntu release.
+  - Idempotent `conf.d` directory support for modular sidecar configurations.
+  - Standardized base configuration aligned with upstream Ubuntu packages.
+
+### Fixed
+- `apt_repo`: Replaced top-level `ansible_distribution_*` variables with explicit `ansible_facts` dictionary.
+
 ## [1.3.0] - 2026-02-24
 
 ### Added
