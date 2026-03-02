@@ -46,3 +46,10 @@ haproxy_global_ssl_ciphersuites:
 haproxy_global_ssl_options:
   - "ssl-min-ver TLSv1.2"
   - "no-tls-tickets"
+
+haproxy_stats_enabled: false
+haproxy_stats_bind: "*:8404"
+haproxy_stats_path: "/stats"
+haproxy_stats_refresh: "10s"
+haproxy_stats_prometheus_enabled: true
+haproxy_stats_prometheus_path: "/metrics"
