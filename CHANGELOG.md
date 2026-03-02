@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0] - 2026-03-02
+
+### Added
+- Production-ready role: `haproxy_sidecar`:
+  - Introduce `conf.d` based sidecar provisioning for HAProxy on the loopback interface.
+  - Add dynamic template for `50-<service>.cfg` generation.
+  - Implement automated cleanup of orphaned sidecar configurations.
+  - Add default fallback timers for health checks.
+  - Add comprehensive documentation with real-world examples.
+- `haproxy`: Add native stats and Prometheus metrics support.
+  - Introduce `haproxy_stats_*` variables to `defaults/main.yml`.
+  - Deploy `10-stats.cfg` into `conf.d` when `haproxy_stats_enabled: true`.
+  - Ensure idempotent removal of stats config when disabled.
+
 ## [1.4.0] - 2026-03-02
 
 ### Added
