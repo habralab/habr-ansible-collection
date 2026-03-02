@@ -22,10 +22,13 @@ repository: https://github.com/habralab/habr-ansible-collection
 issues: https://github.com/habralab/habr-ansible-collection/issues
 
 build_ignore:
-  - ".ansible/"
+  - "*.gitkeep"
+  - ".ansible"
+  - ".ansible-lint"
   - ".git"
   - ".gitignore"
   - ".editorconfig"
   - ".idea"
+  - ".tox"
   - ".vscode"
-  - "docs/"
+  - "tox.ini"
