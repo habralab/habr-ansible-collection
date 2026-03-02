@@ -1,0 +1,13 @@
+---
+haproxy_sidecar_ca_file_path: "/etc/ssl/certs/ca-certificates.crt"
+haproxy_sidecar_alpn: "h2,http/1.1"
+
+haproxy_sidecar_bind_address: "127.0.0.1"
+haproxy_sidecar_services: []
+haproxy_sidecar_service_bind: []
+
+haproxy_sidecar_check_fall: 3
+haproxy_sidecar_check_rise: 2
+haproxy_sidecar_check_inter: "2s"
+haproxy_sidecar_check_fastinter: "1s"
+haproxy_sidecar_check_downinter: "5s"

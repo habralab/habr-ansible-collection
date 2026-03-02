@@ -1,0 +1,65 @@
+### Managed by Ansible role `haproxy_sidecar`
+### Service: {{ item.name }}
+
+listen service_{{ item.name }}
+	bind		{{ haproxy_sidecar_bind_address }}:{{ item.bind_port }}
+	mode		{{ item.mode | default('http') }}
+	balance		{{ item.balance | default('roundrobin') }}
+{% if item.mode | default('http') == "http" %}
+{% if item.http_host_send | default('false') | bool and item.http_host is defined %}
+	http-request	set-header Host {{ item.http_host }}
+{% endif %}
+	http-reuse	{{ item.http_reuse | default('always') }}
+	option		httplog
+{% if item.check | default('true') | bool %}
+	option		{{ item.check_mode | default('httpchk') }}
+{% if item.check_connect is defined %}
+	http-check	{{ item.check_connect }}
+{% else %}
+	http-check	connect
+{%- if item.secure_backend | default('false') | bool %} ssl
+{%- if item.secure_sni_send | default('false') | bool %} sni {{ item.secure_sni_send_host | default( item.http_host ) }}{% endif %}
+{% endif %}
+{%- if item.http_alpn_send | default('false') | bool %} alpn {{ item.http_alpn | default( haproxy_sidecar_alpn ) }}{% endif %}{{ '' }}
+{% endif %}
+{% if item.check_send_method is defined or item.check_send_uri is defined or item.check_send_version is defined or item.check_send_host is defined or item.check_send_header is defined or item.http_host_send | default('false') | bool %}
+	http-check	send
+{%- if item.check_send_method is defined %} meth {{ item.check_send_method }}{% endif %}
+{%- if item.check_send_uri is defined %} uri {{ item.check_send_uri }}{% endif %}
+{%- if item.check_send_version is defined %} ver {{ item.check_send_version }}{% endif %}
+{%- if item.check_send_host is defined or item.http_host_send | default('false') | bool %} hdr Host {{ item.check_send_host | default( item.http_host ) }}{% endif %}
+{%- if item.check_send_header is defined %}{% for i in item.check_send_header %} hdr {{ i.name }} "{{ i.string }}"{% endfor %}{% endif %}{{ '' }}
+{% endif %}
+{% if item.check_expect_status is defined and item.check_expect_status | length > 0 %}
+	http-check	expect status {{ item.check_expect_status | join(', ') }}
+{% endif %}
+{% if item.check_expect_string is defined %}
+	http-check	expect string {{ item.check_expect_string }}
+{% endif %}
+{% endif %}
+{% elif item.mode | default('http') == "tcp" %}
+	option		tcplog
+{% if item.tcpka | default('false') | bool %}
+	option		tcpka
+{% endif %}
+{% if item.check_mysql_user is defined %}
+	option		mysql-check user {{ item.check_mysql_user }}
+{% endif %}
+{% endif %}
+{% if item.servers is defined %}
+{% for server in item.servers if item.servers | length > 0 %}
+	server		{{ server.name }} {{ server.inet_addr }}{% if server.inet_port is defined %}:{{ server.inet_port | int }}{% endif %}
+{%- if item.secure_backend | default('false') | bool %} ssl
+{%- if item.secure_sni_send | default('false') | bool %} sni str({{ item.secure_sni_send_host | default( item.http_host ) }}){% endif %}
+{%- if item.secure_no_verify | default('false') | bool %} verify none{% else %} ca-file {{ item.secure_ca_file_path | default( haproxy_sidecar_ca_file_path ) }}{% endif %}
+{% endif %}
+{%- if item.http_alpn_send | default('false') | bool %} alpn {{ item.http_alpn | default( haproxy_sidecar_alpn ) }}{% endif %}
+{%- if item.check | default('true') | bool %} check
+{%- if item.check_fall is defined %} fall {{ item.check_fall | int }}{% elif haproxy_sidecar_check_fall is defined %} fall {{ haproxy_sidecar_check_fall | int }}{% endif %}
+{%- if item.check_rise is defined %} rise {{ item.check_rise | int }}{% elif haproxy_sidecar_check_rise is defined %} rise {{ haproxy_sidecar_check_rise | int }}{% endif %}
+{%- if item.check_inter is defined %} inter {{ item.check_inter }}{% elif haproxy_sidecar_check_inter is defined %} inter {{ haproxy_sidecar_check_inter }}{% endif %}
+{%- if item.check_fastinter is defined %} fastinter {{ item.check_fastinter }}{% elif haproxy_sidecar_check_fastinter is defined %} fastinter {{ haproxy_sidecar_check_fastinter }}{% endif %}
+{%- if item.check_downinter is defined %} downinter {{ item.check_downinter }}{% elif haproxy_sidecar_check_downinter is defined %} downinter {{ haproxy_sidecar_check_downinter }}{% endif %}
+{% endif %}{{ '' }}
+{% endfor %}
+{% endif %}
