@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.1] - 2026-03-02
+
+### Fixed
+- `haproxy_sidecar`: Fix HAProxy syntax error by removing spaces in `expect status` lists.
+
 ## [1.5.0] - 2026-03-02
 
 ### Added
