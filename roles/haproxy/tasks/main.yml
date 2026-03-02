@@ -1,0 +1,86 @@
+---
+- name: "Configure HAProxy APT repository via helper role"
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - haproxy
+        - apt
+  vars:
+    apt_repo_config: "{{ haproxy_repo_config }}"
+  tags:
+    - haproxy
+    - apt
+
+- name: "Force handler execution to update APT cache immediately"
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - haproxy
+    - apt
+
+- name: "Install HAProxy packages"
+  ansible.builtin.apt:
+    name: "{{ haproxy_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags:
+    - haproxy
+    - apt
+
+- name: "Create configuration directory"
+  ansible.builtin.file:
+    path: "/etc/haproxy"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: haproxy_manage_config | bool or haproxy_manage_confd | bool
+  tags:
+    - haproxy
+
+- name: "Create conf.d directory"
+  ansible.builtin.file:
+    path: "/etc/haproxy/conf.d"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: haproxy_manage_confd | bool
+  tags:
+    - haproxy
+
+- name: "Deploy default HAProxy configuration"
+  ansible.builtin.template:
+    src: "haproxy.cfg.j2"
+    dest: "/etc/haproxy/haproxy.cfg"
+    owner: root
+    group: root
+    mode: '0644'
+    validate: "haproxy -c -f %s"
+  when: haproxy_manage_config | bool
+  notify: Restart haproxy
+  tags:
+    - haproxy
+
+- name: "Configure HAProxy systemd unit to read conf.d"
+  ansible.builtin.lineinfile:
+    path: "/etc/default/haproxy"
+    regexp: '^EXTRAOPTS='
+    line: 'EXTRAOPTS="-f /etc/haproxy/conf.d"'
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+  when: haproxy_manage_confd | bool
+  notify: Restart haproxy
+  tags:
+    - haproxy
+
+- name: "Ensure HAProxy service is in configured state"
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: "{{ haproxy_service_enabled }}"
+    masked: "{{ haproxy_service_masked }}"
+  tags:
+    - haproxy
