@@ -1,0 +1,11 @@
+### Managed by Ansible role `haproxy`
+
+frontend stats
+	bind		{{ haproxy_stats_bind }}
+	option		dontlog-normal
+{% if haproxy_stats_prometheus_enabled | bool %}
+	http-request	use-service prometheus-exporter if { path {{ haproxy_stats_prometheus_path }} }
+{% endif %}
+	stats		enable
+	stats		uri {{ haproxy_stats_path }}
+	stats		refresh {{ haproxy_stats_refresh }}
