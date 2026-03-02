@@ -3,7 +3,7 @@
   ansible.builtin.find:
     paths: "/etc/haproxy/conf.d"
     patterns: "50-*.cfg"
-  register: _existing_sidecars
+  register: _haproxy_sidecar_existing_configs
   tags:
     - haproxy_sidecar
     - haproxy
@@ -12,7 +12,7 @@
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
-  loop: "{{ _existing_sidecars.files }}"
+  loop: "{{ _haproxy_sidecar_existing_configs.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
   when: >
