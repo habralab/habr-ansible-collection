@@ -31,7 +31,7 @@ listen service_{{ item.name }}
 {%- if item.check_send_header is defined %}{% for i in item.check_send_header %} hdr {{ i.name }} "{{ i.string }}"{% endfor %}{% endif %}{{ '' }}
 {% endif %}
 {% if item.check_expect_status is defined and item.check_expect_status | length > 0 %}
-	http-check	expect status {{ item.check_expect_status | join(', ') }}
+	http-check	expect status {{ item.check_expect_status | join(',') }}
 {% endif %}
 {% if item.check_expect_string is defined %}
 	http-check	expect string {{ item.check_expect_string }}
