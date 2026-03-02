@@ -1,0 +1,48 @@
+---
+haproxy_version_matrix:
+  xenial: "2.0"
+  bionic: "2.7"
+  focal: "3.0"
+  jammy: "3.0"
+  noble: "3.3"
+
+haproxy_version: "{{ haproxy_version_matrix[ansible_facts['distribution_release']] | default('3.3') }}"
+
+haproxy_repo_config:
+  name: "vbernat-haproxy"
+  url: "http://ppa.launchpad.net/vbernat/haproxy-{{ haproxy_version }}/ubuntu"
+  components: ["main"]
+  key_server: "keyserver.ubuntu.com"
+  key_ids:
+    - "0x3D653970FBAB0A890E4E4E9A0F14D8B0CF4EFE96"
+
+haproxy_packages:
+  - "haproxy"
+
+haproxy_service_enabled: true
+haproxy_service_masked: false
+
+haproxy_manage_config: true
+haproxy_manage_confd: true
+
+haproxy_global_ssl_ca_base: "/etc/ssl/certs"
+haproxy_global_ssl_crt_base: "/etc/ssl/private"
+
+haproxy_global_ssl_ciphers:
+  - "ECDHE-ECDSA-AES128-GCM-SHA256"
+  - "ECDHE-RSA-AES128-GCM-SHA256"
+  - "ECDHE-ECDSA-AES256-GCM-SHA384"
+  - "ECDHE-RSA-AES256-GCM-SHA384"
+  - "ECDHE-ECDSA-CHACHA20-POLY1305"
+  - "ECDHE-RSA-CHACHA20-POLY1305"
+  - "DHE-RSA-AES128-GCM-SHA256"
+  - "DHE-RSA-AES256-GCM-SHA384"
+
+haproxy_global_ssl_ciphersuites:
+  - "TLS_AES_128_GCM_SHA256"
+  - "TLS_AES_256_GCM_SHA384"
+  - "TLS_CHACHA20_POLY1305_SHA256"
+
+haproxy_global_ssl_options:
+  - "ssl-min-ver TLSv1.2"
+  - "no-tls-tickets"
