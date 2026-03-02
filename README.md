@@ -30,6 +30,7 @@ ansible-galaxy collection install git+ssh://git@git.habralab.com/tools/habr-ansi
 Detailed documentation for each role is available in its respective `roles/<name>/README.md`.
 
 - `apt_repo`: Helper role to manage APT repositories (supports legacy lists and deb822 sources).
+- `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `logind`: Manages `systemd-logind` configuration and user lingering.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
