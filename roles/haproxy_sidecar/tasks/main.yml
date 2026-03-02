@@ -1,0 +1,44 @@
+---
+- name: "Find existing sidecar configurations"
+  ansible.builtin.find:
+    paths: "/etc/haproxy/conf.d"
+    patterns: "50-*.cfg"
+  register: _existing_sidecars
+  tags:
+    - haproxy_sidecar
+    - haproxy
+
+- name: "Remove orphaned sidecar configurations"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ _existing_sidecars.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: >
+    (item.path | basename | regex_replace('^50-(.*)\\.cfg$', '\\1')) not in haproxy_sidecar_service_bind
+  notify: Reload haproxy
+  tags:
+    - haproxy_sidecar
+    - haproxy
+
+- name: "Deploy HAProxy sidecar service configurations"
+  ansible.builtin.template:
+    src: "service.cfg.j2"
+    dest: "/etc/haproxy/conf.d/50-{{ item.name }}.cfg"
+    owner: root
+    group: root
+    mode: '0644'
+    validate: "haproxy -c -f /etc/haproxy/haproxy.cfg -f %s"
+  loop: "{{ haproxy_sidecar_services }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - haproxy_sidecar_services | length > 0
+    - item.name in haproxy_sidecar_service_bind
+    - item.servers is defined
+    - item.servers | length > 0
+  notify: Reload haproxy
+  tags:
+    - haproxy_sidecar
+    - haproxy
