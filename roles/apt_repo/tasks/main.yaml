@@ -40,16 +40,16 @@
 
 - name: "Configure repository (Legacy .list format) | {{ apt_repo_config.name }}"
   ansible.builtin.apt_repository:
-    repo: >-
-      {{ type_item }} [arch={{ apt_repo_config.arch | default(apt_repo_arch) }}
-      {%- if (apt_repo_config.key_url | default(apt_repo_key_url) | length > 0) or
-             (apt_repo_config.key_ids | default(apt_repo_key_ids) | length > 0) %}
-      signed-by={{ apt_repo_config.keyring | default(apt_repo_keyring) }}
-      {%- endif %}]
-      {{ apt_repo_config.url }} {{ apt_repo_config.suite | default(apt_repo_suite) }}
-      {{ apt_repo_config.components | default(apt_repo_components) | join(' ') }}
+    repo: "{{ apt_repo_var_repo_parts | select | join(' ') }}"
     state: "{{ apt_repo_config.state | default(apt_repo_state) }}"
     filename: "{{ apt_repo_config.name }}"
+  vars:
+    apt_repo_var_repo_parts:
+      - "{{ type_item }}"
+      - "{{ '[' ~ apt_repo_var_opts ~ ']' if apt_repo_var_opts | length > 0 else '' }}"
+      - "{{ apt_repo_config.url }}"
+      - "{{ apt_repo_var_suite }}"
+      - "{{ apt_repo_var_comps_str }}"
   loop: "{{ apt_repo_config.types | default(apt_repo_types) }}"
   loop_control:
     loop_var: type_item
@@ -61,14 +61,16 @@
     name: "{{ apt_repo_config.name }}"
     types: "{{ apt_repo_config.types | default(apt_repo_types) }}"
     uris: "{{ apt_repo_config.url }}"
-    suites: "{{ apt_repo_config.suite | default(apt_repo_suite) }}"
-    components: "{{ apt_repo_config.components | default(apt_repo_components) }}"
+    suites: "{{ apt_repo_var_suite }}"
+    components: >-
+      {{
+        omit if apt_repo_var_is_flat | bool or apt_repo_var_components | length == 0
+        else apt_repo_var_components
+      }}
     architectures: "{{ apt_repo_config.arch | default(apt_repo_arch) }}"
     signed_by: >-
       {{
-        apt_repo_config.keyring | default(apt_repo_keyring)
-        if ((apt_repo_config.key_url | default(apt_repo_key_url) | length > 0) or
-            (apt_repo_config.key_ids | default(apt_repo_key_ids) | length > 0))
+        apt_repo_var_keyring if apt_repo_var_key_active | bool
         else omit
       }}
     state: "{{ apt_repo_config.state | default(apt_repo_state) }}"
