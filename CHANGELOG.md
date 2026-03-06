@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0] - 2026-03-06
+
+### Added
+- `apt_repo`: Support for "flat" repositories (automatically detected by a trailing slash in the `suite` parameter).
+
+### Changed
+- `apt_repo`: Internal refactoring. Moved complex Jinja2 formatting to `vars/main.yaml` for better maintainability and readability.
+- `apt_repo`: Improved GPG key and architecture string construction for both legacy and deb822 formats.
+
+### Fixed
+- `ci`: Updated collection build ignore list to exclude unnecessary metadata from the artifact.
+
 ## [1.5.1] - 2026-03-02
 
 ### Fixed
