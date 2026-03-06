@@ -1,0 +1,20 @@
+{% if nginx_gzip_disabled is not defined %}
+gzip			off; # bacause udefined
+{% else %}
+{% if nginx_gzip_disabled | bool %}
+gzip			off;
+{% else %}
+gzip			on;
+{% if nginx_gzip_disable is defined %}
+
+gzip_disable		{{ nginx_gzip_disable | join(' ') }};
+{% endif %}
+
+gzip_vary		{% if nginx_gzip_vary | default('true') | bool %}on{% else %}off{% endif %};
+gzip_proxied		{{ nginx_gzip_proxied | default('any') }};
+gzip_comp_level	{{ nginx_gzip_comp_level | default('6') | int }};
+gzip_buffers		{{ nginx_gzip_buffers | default('16 8k') }};
+gzip_http_version	{{ nginx_gzip_http_version | default('1.1') }};
+gzip_types		{{ nginx_gzip_types | join(' ') }};
+{% endif %}
+{% endif %}

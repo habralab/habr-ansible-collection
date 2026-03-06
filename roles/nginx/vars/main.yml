@@ -1,0 +1,3 @@
+---
+nginx_deb822_releases:
+  - "noble"

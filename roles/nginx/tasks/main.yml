@@ -1,0 +1,187 @@
+---
+- name: "Install repository key"
+  ansible.builtin.apt_key:
+    id: "{{ item }}"
+    keyserver: "{{ nginx_repo_key_server }}"
+    keyring: "{{ nginx_repo_keyring }}"
+  become: true
+  notify: Update apt cache
+  loop: "{{ nginx_repo_key_id }}"
+  tags:
+    - nginx
+    - apt
+
+- name: "Install PPA repository"
+  ansible.builtin.apt_repository:
+    repo: ppa:ondrej/nginx
+    state: present
+  when: ansible_distribution_release not in nginx_deb822_releases
+  become: true
+  notify: Update apt cache
+  tags:
+    - nginx
+    - apt
+
+- name: "Remove old repository key"
+  ansible.builtin.apt_key:
+    id: 7BD9BF62
+    state: absent
+  become: true
+  notify: Update apt cache
+  tags:
+    - nginx
+    - apt
+
+- name: "Remove old binary package repository"
+  ansible.builtin.apt_repository:
+    repo: "{{ item }}"
+    state: absent
+    filename: 'nginx-org-mainline'
+  loop:
+    - "deb [arch=amd64] http://nginx.org/packages/mainline/ubuntu/ {{ ansible_distribution_release }} nginx"
+    - "deb http://nginx.org/packages/mainline/ubuntu/ {{ ansible_distribution_release }} nginx"
+  when: ansible_distribution_release not in nginx_deb822_releases
+  become: true
+  notify: Update apt cache
+  tags:
+    - nginx
+    - apt
+
+- name: "Install PPA repository in deb822 style"
+  ansible.builtin.deb822_repository:
+    name: ppa_ondrej_nginx
+    types: deb
+    uris: "{{ nginx_repo_remote }}"
+    suites: "{{ ansible_distribution_release }}"
+    components:
+      - main
+    architectures: amd64
+    signed_by: "{{ nginx_repo_keyring }}"
+  when: ansible_distribution_release in nginx_deb822_releases
+  become: true
+  notify: Update apt cache
+  tags:
+    - nginx
+    - apt
+
+- name: "Force all notified handlers"
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - nginx
+    - apt
+
+- name: "Install list of packages"
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - nginx-full
+  notify: Restart nginx
+  become: true
+  tags:
+    - nginx
+    - apt
+
+- name: "Create directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - '/etc/nginx'
+    - '/etc/nginx/conf.d'
+    - '/etc/nginx/modules.d'
+    - '/etc/nginx/ssl'
+    - '/etc/nginx/sites-available'
+    - '/etc/nginx/sites-enabled'
+  become: true
+  tags:
+    - nginx
+    - nginx_cfg
+
+- name: "Create working directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ nginx_working_owner }}"
+    group: "{{ nginx_working_group }}"
+    mode: "0775"
+  loop:
+    - '/var/log/nginx'
+  become: true
+  tags:
+    - nginx
+    - nginx_cfg
+
+- name: "Delete unnecessary files"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/conf.d/default.conf
+    - /etc/nginx/sites-enabled/000_default
+    - /etc/nginx/sites-enabled/000_status
+    - /etc/apt/sources.list.d/nginx-org-mainline.list
+  become: true
+  tags:
+    - nginx
+    - nginx_cfg
+
+- name: "Create config files"
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/nginx/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - 'nginx.conf'
+    - 'conf.d/gzip.conf'
+    - 'conf.d/log.conf'
+    - 'conf.d/realip.conf'
+    - 'conf.d/ssl.conf'
+    - 'sites-available/default'
+    - 'sites-available/status'
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx_cfg
+
+- name: "Generate DH param"
+  ansible.builtin.command:
+    cmd: "openssl dhparam -out /etc/nginx/ssl/dhparam.pem 2048"
+    creates: "/etc/nginx/ssl/dhparam.pem"
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+
+- name: "Install default servernames"
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    state: link
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - default
+    - status
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx_cfg
+
+- name: "Add nginx user to shared group"
+  ansible.builtin.user:
+    name: nginx
+    groups: www-data
+    append: true
+  notify: Restart nginx
+  become: true
+  tags:
+    - nginx
