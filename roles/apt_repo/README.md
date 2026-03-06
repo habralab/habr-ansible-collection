@@ -14,7 +14,7 @@ The role expects a single dictionary named `apt_repo_config` containing the repo
 - `types`: List of repository types (default: `["deb"]`).
 - `components`: List of distribution components (default: `["main"]`).
 - `arch`: Architecture restriction (default: `amd64`).
-- `suite`: Distribution suite (default: `{{ ansible_distribution_release }}`).
+- `suite`: Distribution suite. Use trailing slash for flat repositories.
 - `key_url`: Direct URL to a GPG key.
 - `key_server`: Keyserver URL (default: `keyserver.ubuntu.com`).
 - `key_ids`: List of GPG key IDs to fetch from the keyserver.
