@@ -1,3 +1,44 @@
 ---
-nginx_deb822_releases:
-  - "noble"
+__nginx_default_packages:
+  - "nginx"
+
+__nginx_repositories_defaults:
+  ppa_ondrej:
+    enabled: false
+    packages:
+      - "nginx-full"
+    config:
+      name: "ppa-ondrej-nginx"
+      url: "https://ppa.launchpadcontent.net/ondrej/nginx/ubuntu"
+      components:
+        - "main"
+      key_server: "keyserver.ubuntu.com"
+      key_ids:
+        - "0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6"
+      keyring: "/etc/apt/keyrings/ppa-ondrej-nginx.gpg"
+
+  nginx_org:
+    enabled: false
+    packages:
+      - "nginx"
+    config:
+      name: "nginx-org"
+      url: "https://nginx.org/packages/ubuntu"
+      suite: "{{ ansible_facts['distribution_release'] }}"
+      components:
+        - "nginx"
+      key_url: "https://nginx.org/keys/nginx_signing.key"
+      keyring: "/etc/apt/keyrings/nginx-org.gpg"
+
+  nginxorg_mainline:
+    enabled: false
+    packages:
+      - "nginx"
+    config:
+      name: "nginx-org-mainline"
+      url: "https://nginx.org/packages/mainline/ubuntu"
+      suite: "{{ ansible_facts['distribution_release'] }}"
+      components:
+        - "nginx"
+      key_url: "https://nginx.org/keys/nginx_signing.key"
+      keyring: "/etc/apt/keyrings/nginx-org-mainline.gpg"

@@ -1,84 +1,104 @@
 ---
-- name: "Install repository key"
-  ansible.builtin.apt_key:
-    id: "{{ item }}"
-    keyserver: "{{ nginx_repo_key_server }}"
-    keyring: "{{ nginx_repo_keyring }}"
-  become: true
-  notify: Update apt cache
-  loop: "{{ nginx_repo_key_id }}"
+- name: "Merge repositories configuration"
+  ansible.builtin.set_fact:
+    _nginx_repos_merged: "{{ __nginx_repositories_defaults | combine(nginx_repositories, recursive=True) }}"
   tags:
+    - nginx-debug
     - nginx
     - apt
 
-- name: "Install PPA repository"
-  ansible.builtin.apt_repository:
-    repo: ppa:ondrej/nginx
-    state: present
-  when: ansible_distribution_release not in nginx_deb822_releases
-  become: true
-  notify: Update apt cache
+- name: "Validate input variables and repositories structure"
+  ansible.builtin.assert:
+    that:
+      - _nginx_repos_merged is mapping
+      - nginx_packages is sequence and nginx_packages is not string
+      - nginx_remove_packages is sequence and nginx_remove_packages is not string
+    fail_msg: >-
+      _nginx_repos_merged must be a dictionary.
+      nginx_packages and nginx_remove_packages must be lists.
   tags:
+    - nginx-debug
     - nginx
     - apt
 
-- name: "Remove old repository key"
-  ansible.builtin.apt_key:
-    id: 7BD9BF62
-    state: absent
-  become: true
-  notify: Update apt cache
+- name: "Configure nginx APT repository via helper role"
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - nginx-debug
+        - nginx
+        - apt
+  loop: "{{ _nginx_repos_merged | dict2items }}"
+  loop_control:
+    loop_var: nginx_repo_item
+    label: "{{ nginx_repo_item.key }} (enabled: {{ nginx_repo_item.value.enabled }})"
+  vars:
+    apt_repo_config: >-
+      {{
+        nginx_repo_item.value.config | combine({
+          'state': nginx_repo_item.value.enabled | ternary('present', 'absent')
+        })
+      }}
+  when: nginx_repo_manage | bool
   tags:
+    - nginx-debug
     - nginx
     - apt
 
-- name: "Remove old binary package repository"
-  ansible.builtin.apt_repository:
-    repo: "{{ item }}"
-    state: absent
-    filename: 'nginx-org-mainline'
-  loop:
-    - "deb [arch=amd64] http://nginx.org/packages/mainline/ubuntu/ {{ ansible_distribution_release }} nginx"
-    - "deb http://nginx.org/packages/mainline/ubuntu/ {{ ansible_distribution_release }} nginx"
-  when: ansible_distribution_release not in nginx_deb822_releases
-  become: true
-  notify: Update apt cache
-  tags:
-    - nginx
-    - apt
-
-- name: "Install PPA repository in deb822 style"
-  ansible.builtin.deb822_repository:
-    name: ppa_ondrej_nginx
-    types: deb
-    uris: "{{ nginx_repo_remote }}"
-    suites: "{{ ansible_distribution_release }}"
-    components:
-      - main
-    architectures: amd64
-    signed_by: "{{ nginx_repo_keyring }}"
-  when: ansible_distribution_release in nginx_deb822_releases
-  become: true
-  notify: Update apt cache
-  tags:
-    - nginx
-    - apt
-
-- name: "Force all notified handlers"
+- name: "Force handler execution to update APT cache immediately"
   ansible.builtin.meta: flush_handlers
+  when: nginx_repo_manage | bool
   tags:
+    - nginx-debug
     - nginx
     - apt
 
-- name: "Install list of packages"
+- name: "Determine which repository is enabled"
+  ansible.builtin.set_fact:
+    _active_nginx_repo: >-
+      {{
+        _nginx_repos_merged | dict2items | selectattr('value.enabled', 'equalto', true) | list | first | default(none)
+      }}
+  tags:
+    - nginx-debug
+    - nginx
+    - apt
+
+- name: "Determine final list of nginx packages"
+  ansible.builtin.set_fact:
+    _nginx_final_packages: >-
+      {{
+        nginx_packages if (nginx_packages | length > 0)
+        else (_active_nginx_repo.value.packages if _active_nginx_repo
+        else __nginx_default_packages)
+      }}
+  tags:
+    - nginx-debug
+    - nginx
+    - apt
+
+- name: "Remove specified nginx packages"
   ansible.builtin.apt:
-    name: "{{ item }}"
+    name: "{{ nginx_remove_packages }}"
+    state: absent
+    purge: true
+  become: true
+  when: nginx_remove_packages | length > 0
+  tags:
+    - nginx-debug
+    - nginx
+    - apt
+
+- name: "Install nginx packages"
+  ansible.builtin.apt:
+    name: "{{ _nginx_final_packages }}"
     state: present
-  loop:
-    - nginx-full
-  notify: Restart nginx
+    update_cache: true
+    cache_valid_time: 3600
   become: true
   tags:
+    - nginx-debug
     - nginx
     - apt
 
@@ -123,7 +143,6 @@
     - /etc/nginx/conf.d/default.conf
     - /etc/nginx/sites-enabled/000_default
     - /etc/nginx/sites-enabled/000_status
-    - /etc/apt/sources.list.d/nginx-org-mainline.list
   become: true
   tags:
     - nginx

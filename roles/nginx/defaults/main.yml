@@ -1,11 +1,10 @@
 ---
-nginx_repo_remote: "http://ppa.launchpad.net/ondrej/nginx/ubuntu"
-nginx_repo_key_server: "keyserver.ubuntu.com"
-nginx_repo_key_id:
-  - "71DAEAAB4AD4CAB6"
-  - "4F4EA0AAE5267A6C"
-nginx_repo_key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6"
-nginx_repo_keyring: "/usr/share/keyrings/ppa_ondrej_nginx.gpg"
+nginx_repo_manage: true
+
+nginx_packages: []
+nginx_remove_packages: []
+
+nginx_repositories: {}
 
 nginx_working_owner: "www-data"
 nginx_working_group: "www-data"
