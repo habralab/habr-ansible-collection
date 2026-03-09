@@ -79,6 +79,16 @@
   tags:
     - skip_ansible_lint
 
+- name: "Remove repository files if state is absent | {{ apt_repo_config.name }}"
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/{{ apt_repo_config.name }}{{ item }}"
+    state: absent
+  loop:
+    - ".list"
+    - ".sources"
+  when: (apt_repo_config.state | default(apt_repo_state)) == 'absent'
+  notify: Update apt cache
+
 - name: "Remove keyring file if repository is absent | {{ apt_repo_config.name }}"
   ansible.builtin.file:
     path: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
