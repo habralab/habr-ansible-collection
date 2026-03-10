@@ -1,0 +1,70 @@
+
+user  {{ _nginx_runtime_user }};
+worker_processes  {{ nginx_worker_processes | default('auto') }};
+{% if nginx_worker_rlimit_nofile is defined and nginx_worker_rlimit_nofile is number %}
+worker_rlimit_nofile {{ nginx_worker_rlimit_nofile | int }};
+{% endif %}
+
+error_log  {{ nginx_error_log | default('/var/log/nginx/error.log') }} notice;
+pid        {{ nginx_pid_file | default('/run/nginx.pid') }};
+
+
+events {
+    worker_connections  {{ nginx_worker_connections | default(1024) | int }};
+{% if nginx_multi_accept is defined and nginx_multi_accept is boolean %}
+    multi_accept {{ nginx_multi_accept | ternary('on', 'off') }};
+{% endif %}
+}
+
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  {{ nginx_default_type | default('application/octet-stream') }};
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        {{ nginx_sendfile | default(true) | bool | ternary('on', 'off') }};
+{% if nginx_tcp_nopush is defined and nginx_tcp_nopush is boolean %}
+    tcp_nopush      {{ nginx_tcp_nopush | ternary('on', 'off') }};
+{% else %}
+    #tcp_nopush     on;
+{% endif %}
+
+    keepalive_timeout  {{ nginx_keepalive_timeout | default(65) | int }};
+
+{% if nginx_gzip is defined %}
+    gzip {{ nginx_gzip | bool | ternary('on', 'off') }};
+{% else %}
+    #gzip  on;
+{% endif %}
+{% if nginx_gzip_vary is defined %}
+    gzip_vary {{ nginx_gzip_vary | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_gzip_proxied is defined %}
+    gzip_proxied {{ nginx_gzip_proxied }};
+{% endif %}
+{% if nginx_gzip_comp_level is defined %}
+    gzip_comp_level {{ nginx_gzip_comp_level | int }};
+{% endif %}
+{% if nginx_gzip_buffers is defined %}
+    gzip_buffers {{ nginx_gzip_buffers }};
+{% endif %}
+{% if nginx_gzip_http_version is defined %}
+    gzip_http_version {{ nginx_gzip_http_version }};
+{% endif %}
+{% if nginx_gzip_types is defined %}
+    gzip_types {{ nginx_gzip_types | join(' ') if nginx_gzip_types is sequence and nginx_gzip_types is not string else nginx_gzip_types}};
+{% endif %}
+{% if nginx_gzip_disable is defined %}
+    gzip_disable {{ nginx_gzip_disable | join(' ') if nginx_gzip_disable is sequence and nginx_gzip_disable is not string else nginx_gzip_disable }};
+{% endif %}
+{% if nginx_gzip_min_length is defined %}
+    gzip_min_length {{ nginx_gzip_min_length }};
+{% endif %}
+
+    include /etc/nginx/conf.d/*.conf;
+}
