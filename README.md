@@ -37,6 +37,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `locale`: Declarative management of generated system locales and default `LANG`.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
+- `nginx`: Installs and configures Nginx using a layout-driven approach (Debian/Upstream).
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
 - `packages`: Declarative management of APT packages and .deb URLs.
 - `ssh_authorized_keys`: Manages SSH public keys through catalogs, groups and per-user contracts.

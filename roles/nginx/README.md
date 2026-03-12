@@ -28,6 +28,7 @@ Official Nginx documentation for the modules configured by this section:
 | `nginx_error_log` | `/var/log/nginx/error.log` | `logs/error.log` | Path to the error log. |
 | `nginx_worker_connections` | `768` / `1024` | `512` | Worker connections. |
 | `nginx_worker_rlimit_nofile`| `undefined` | `-` | Limit on the maximum number of open files (RLIMIT_NOFILE). |
+| `nginx_mime_types` | `undefined` | `-` | Dictionary overriding or adding custom MIME types. Merges seamlessly with stock `mime.types` (e.g., `{"model/gltf+json": "gltf"}`). |
 | `nginx_multi_accept` | `undefined` | `off` | Accept multiple connections per process. |
 | `nginx_sendfile` | `true` | `off` | Enable sendfile. |
 | `nginx_tcp_nopush` | `true` | `off` | Enable tcp_nopush. |
@@ -70,3 +71,22 @@ Official Nginx documentation for the modules configured by this section:
 | `nginx_gzip_types` | `undefined` | `text/html` | List of MIME types to compress. |
 | `nginx_gzip_disable` | `undefined` | `-` | Disables gzipping for matching User-Agents (e.g. `msie6`). |
 | `nginx_gzip_min_length` | `undefined` | `20` | Sets the minimum length of a response that will be gzipped. |
+
+#### Logging
+Official Nginx documentation: [HTTP Log module](https://nginx.org/en/docs/http/ngx_http_log_module.html)
+
+| Variable | Role Default | Nginx Default | Description |
+|---|---|---|---|
+| `nginx_access_log` | `/var/log/nginx/access.log` | `logs/access.log` | Path to the default access log. |
+| `nginx_log_format` | `undefined` | `main` | List of dictionaries defining custom log formats. Supports `name`, `escape` (e.g., `json`), and `string` (list of format lines). |
+
+#### IP Sets & Real IP
+Centralized dictionary for managing IP prefixes across Real IP, ACLs, and Geo modules.
+Official Nginx documentation: [HTTP RealIP module](https://nginx.org/en/docs/http/ngx_http_realip_module.html)
+
+| Variable | Role Default | Nginx Default | Description |
+|---|---|---|---|
+| `nginx_ip_sets` | `undefined` | `-` | Global dictionary of IP lists. Keys are list names (e.g., `cloudflare`), values are lists of dicts containing `net` (required), `value`, and `remark`. |
+| `nginx_real_ip_lists` | `undefined` | `-` | List of `nginx_ip_sets` keys to automatically configure `set_real_ip_from` directives. |
+| `nginx_real_ip_header` | `X-Forwarded-For` | `X-Real-IP` | Defines the request header used to send the client's real IP address. |
+| `nginx_real_ip_recursive`| `false` | `off` | Enables recursive search for the client IP address. |

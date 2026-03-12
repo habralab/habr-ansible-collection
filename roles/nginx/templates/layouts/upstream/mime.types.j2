@@ -1,5 +1,11 @@
 
 types {
+{% if nginx_mime_types is defined and nginx_mime_types | length > 0 %}
+{% set final_mime_types = __nginx_mime_types_defaults | combine(nginx_mime_types) %}
+{% for mime_type, extensions in final_mime_types.items() | sort %}
+    {{ "%-74s" | format(mime_type) }} {{ extensions }};
+{% endfor %}
+{% else %}
     text/html                                        html htm shtml;
     text/css                                         css;
     text/xml                                         xml;
@@ -96,4 +102,5 @@ types {
     video/x-ms-asf                                   asx asf;
     video/x-ms-wmv                                   wmv;
     video/x-msvideo                                  avi;
+{% endif %}
 }

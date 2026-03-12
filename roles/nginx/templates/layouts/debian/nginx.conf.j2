@@ -1,6 +1,6 @@
 user {{ _nginx_runtime_user }};
 worker_processes {{ nginx_worker_processes | default('auto') }};
-{% if nginx_worker_rlimit_nofile is defined and nginx_worker_rlimit_nofile is number %}
+{% if nginx_worker_rlimit_nofile is defined %}
 worker_rlimit_nofile {{ nginx_worker_rlimit_nofile | int }};
 {% endif %}
 pid {{ nginx_pid_file | default('/run/nginx.pid') }};
@@ -9,8 +9,8 @@ include /etc/nginx/modules-enabled/*.conf;
 
 events {
 	worker_connections {{ nginx_worker_connections | default(768) | int }};
-{% if nginx_multi_accept is defined and nginx_multi_accept is boolean %}
-	multi_accept {{ nginx_multi_accept | ternary('on', 'off') }};
+{% if nginx_multi_accept is defined %}
+	multi_accept {{ nginx_multi_accept | bool | ternary('on', 'off') }};
 {% else %}
 	# multi_accept on;
 {% endif %}
@@ -25,31 +25,10 @@ http {
 	sendfile {{ nginx_sendfile | default(true) | bool | ternary('on', 'off') }};
 	tcp_nopush {{ nginx_tcp_nopush | default(true) | bool | ternary('on', 'off') }};
 	types_hash_max_size {{ nginx_types_hash_max_size | default(2048) }};
-{% if nginx_server_tokens is defined and nginx_server_tokens is boolean %}
-	server_tokens {{ nginx_server_tokens | ternary('on', 'off') }};
+{% if nginx_server_tokens is defined %}
+	server_tokens {{ nginx_server_tokens | bool | ternary('on', 'off') }};
 {% else %}
 	# server_tokens off;
-{% endif %}
-
-{% if nginx_server_names_hash_max_size is defined %}
-	server_names_hash_max_size {{ nginx_server_names_hash_max_size }};
-{% endif %}
-{% if nginx_server_names_hash_bucket_size is defined and nginx_server_names_hash_bucket_size is number %}
-	server_names_hash_bucket_size {{ nginx_server_names_hash_bucket_size }};
-{% else %}
-	# server_names_hash_bucket_size 64;
-{% endif %}
-{% if nginx_server_name_in_redirect is defined and nginx_server_name_in_redirect is boolean %}
-	server_name_in_redirect {{ nginx_server_name_in_redirect | ternary('on', 'off') }};
-{% else %}
-	# server_name_in_redirect off;
-{% endif %}
-
-{% if nginx_variables_hash_max_size is defined %}
-	variables_hash_max_size {{ nginx_variables_hash_max_size }};
-{% endif %}
-{% if nginx_variables_hash_bucket_size is defined %}
-	variables_hash_bucket_size {{ nginx_variables_hash_bucket_size }};
 {% endif %}
 
 {% if nginx_map_hash_max_size is defined %}
@@ -58,16 +37,38 @@ http {
 {% if nginx_map_hash_bucket_size is defined %}
 	map_hash_bucket_size {{ nginx_map_hash_bucket_size }};
 {% endif %}
+{% if nginx_variables_hash_max_size is defined %}
+	variables_hash_max_size {{ nginx_variables_hash_max_size }};
+{% endif %}
+{% if nginx_variables_hash_bucket_size is defined %}
+	variables_hash_bucket_size {{ nginx_variables_hash_bucket_size }};
+{% endif %}
+{% if nginx_server_names_hash_max_size is defined %}
+	server_names_hash_max_size {{ nginx_server_names_hash_max_size }};
+{% endif %}
+{% if nginx_server_names_hash_bucket_size is defined %}
+	server_names_hash_bucket_size {{ nginx_server_names_hash_bucket_size }};
+{% else %}
+	# server_names_hash_bucket_size 64;
+{% endif %}
+{% if nginx_server_name_in_redirect is defined %}
+	server_name_in_redirect {{ nginx_server_name_in_redirect | bool | ternary('on', 'off') }};
+{% else %}
+	# server_name_in_redirect off;
+{% endif %}
 
 	include /etc/nginx/mime.types;
 	default_type {{ nginx_default_type | default('application/octet-stream') }};
+{% if nginx_keepalive_timeout is defined %}
+	keepalive_timeout {{ nginx_keepalive_timeout | default(65) | int }};
+{% endif %}
 
 	##
 	# SSL Settings
 	##
 
-{% if nginx_ssl_protocols is defined and nginx_ssl_protocols is sequence and nginx_ssl_protocols is not string %}
-	ssl_protocols {{ nginx_ssl_protocols | join(' ') }};
+{% if nginx_ssl_protocols is defined %}
+	ssl_protocols {{ nginx_ssl_protocols | join(' ') if nginx_ssl_protocols is sequence and nginx_ssl_protocols is not string else nginx_ssl_protocols }};
 {% else %}
 	ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
 {% endif %}
@@ -90,6 +91,20 @@ http {
 	# Logging Settings
 	##
 
+{% if nginx_log_format is defined %}
+{% for log in nginx_log_format %}
+{% set _decl = "log_format " ~ log.name ~ ((" escape=" ~ log.escape) if log.escape is defined else "") %}
+{% set _align_spaces = _decl | length + 1 %}
+{% for string in log.string %}
+{% if loop.first %}
+	{{ _decl }} '{{ string }}'{% if loop.length == 1 %};{% endif %}{{ '' }}
+{% else %}
+	{{ ' ' * _align_spaces }}'{{ string }}'{% if loop.last %};{% endif %}{{ '' }}
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+{% endif %}
 	access_log {{ nginx_access_log | default('/var/log/nginx/access.log') }};
 
 	##

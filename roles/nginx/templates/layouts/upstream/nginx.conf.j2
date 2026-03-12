@@ -1,7 +1,7 @@
 
 user  {{ _nginx_runtime_user }};
 worker_processes  {{ nginx_worker_processes | default('auto') }};
-{% if nginx_worker_rlimit_nofile is defined and nginx_worker_rlimit_nofile is number %}
+{% if nginx_worker_rlimit_nofile is defined %}
 worker_rlimit_nofile {{ nginx_worker_rlimit_nofile | int }};
 {% endif %}
 
@@ -11,8 +11,8 @@ pid        {{ nginx_pid_file | default('/run/nginx.pid') }};
 
 events {
     worker_connections  {{ nginx_worker_connections | default(1024) | int }};
-{% if nginx_multi_accept is defined and nginx_multi_accept is boolean %}
-    multi_accept {{ nginx_multi_accept | ternary('on', 'off') }};
+{% if nginx_multi_accept is defined %}
+    multi_accept {{ nginx_multi_accept | bool | ternary('on', 'off') }};
 {% endif %}
 }
 
@@ -21,21 +21,93 @@ http {
     include       /etc/nginx/mime.types;
     default_type  {{ nginx_default_type | default('application/octet-stream') }};
 
+{% set _custom_log_names = nginx_log_format | default([]) | map(attribute='name') | list %}
+{% if nginx_log_format is defined %}
+{% for log in nginx_log_format %}
+{% set _decl = "log_format " ~ log.name ~ ((" escape=" ~ log.escape) if log.escape is defined else "") %}
+{% set _indent = _decl | length + 1 %}
+{% for string in log.string %}
+{% if loop.first %}
+    {{ _decl }} '{{ string }}'{% if loop.length == 1 %};{% endif %}{{ '' }}
+{% else %}
+    {{ ' ' * _indent }}'{{ string }}'{% if loop.last %};{% endif %}{{ '' }}
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+{% endif %}
+{% if 'main' not in _custom_log_names %}
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
                       '$status $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
+{% endif %}
 
     access_log  /var/log/nginx/access.log  main;
 
     sendfile        {{ nginx_sendfile | default(true) | bool | ternary('on', 'off') }};
-{% if nginx_tcp_nopush is defined and nginx_tcp_nopush is boolean %}
-    tcp_nopush      {{ nginx_tcp_nopush | ternary('on', 'off') }};
+{% if nginx_tcp_nopush is defined %}
+    tcp_nopush      {{ nginx_tcp_nopush | bool | ternary('on', 'off') }};
 {% else %}
     #tcp_nopush     on;
 {% endif %}
 
     keepalive_timeout  {{ nginx_keepalive_timeout | default(65) | int }};
+{% if nginx_server_tokens is defined %}
+    server_tokens {{ nginx_server_tokens | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_server_name_in_redirect is defined %}
+    server_name_in_redirect {{ nginx_server_name_in_redirect | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_server_names_hash_max_size is defined %}
+    server_names_hash_max_size {{ nginx_server_names_hash_max_size }};
+{% endif %}
+{% if nginx_server_names_hash_bucket_size is defined %}
+    server_names_hash_bucket_size {{ nginx_server_names_hash_bucket_size }};
+{% endif %}
+{% if nginx_types_hash_max_size is defined %}
+    types_hash_max_size {{ nginx_types_hash_max_size }};
+{% endif %}
+{% if nginx_types_hash_bucket_size is defined %}
+    types_hash_bucket_size {{ nginx_types_hash_bucket_size }};
+{% endif %}
+{% if nginx_map_hash_max_size is defined %}
+    map_hash_max_size {{ nginx_map_hash_max_size }};
+{% endif %}
+{% if nginx_map_hash_bucket_size is defined %}
+    map_hash_bucket_size {{ nginx_map_hash_bucket_size }};
+{% endif %}
+{% if nginx_variables_hash_max_size is defined %}
+    variables_hash_max_size {{ nginx_variables_hash_max_size }};
+{% endif %}
+{% if nginx_variables_hash_bucket_size is defined %}
+    variables_hash_bucket_size {{ nginx_variables_hash_bucket_size }};
+{% endif %}
 
+{% set _ssl_triggers = [
+    'nginx_ssl_protocols',
+    'nginx_ssl_prefer_server_ciphers',
+    'nginx_ssl_ciphers',
+    'nginx_ssl_session_cache',
+    'nginx_ssl_dhparam_file'
+] %}
+{% if _ssl_triggers | intersect(q('varnames', '.*')) %}
+{% if nginx_ssl_protocols is defined %}
+    ssl_protocols {{ nginx_ssl_protocols | join(' ') if nginx_ssl_protocols is sequence and nginx_ssl_protocols is not string else nginx_ssl_protocols }};
+{% endif %}
+{% if nginx_ssl_prefer_server_ciphers is defined %}
+    ssl_prefer_server_ciphers {{ nginx_ssl_prefer_server_ciphers | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_ssl_ciphers is defined %}
+    ssl_ciphers {{ nginx_ssl_ciphers | join(':') if nginx_ssl_ciphers is sequence and nginx_ssl_ciphers is not string else nginx_ssl_ciphers }};
+{% endif %}
+{% if nginx_ssl_session_cache is defined %}
+    ssl_session_cache {{ nginx_ssl_session_cache }};
+{% endif %}
+{% if nginx_ssl_dhparam_file is defined %}
+    ssl_dhparam {{ nginx_ssl_dhparam_file }};
+{% endif %}
+
+{% endif %}
 {% if nginx_gzip is defined %}
     gzip {{ nginx_gzip | bool | ternary('on', 'off') }};
 {% else %}
