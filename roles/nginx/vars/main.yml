@@ -4,6 +4,13 @@ __nginx_default_packages:
   - "nginx"
 
 __nginx_repositories_defaults:
+  ubuntu:
+    enabled: false
+    layout: debian
+    packages:
+      - "nginx-full"
+      - "nginx"
+
   ppa_ondrej:
     enabled: false
     layout: debian

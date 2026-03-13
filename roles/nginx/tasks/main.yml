@@ -68,11 +68,13 @@
   vars:
     apt_repo_config: >-
       {{
-        nginx_repo_item.value.config | combine({
+        (nginx_repo_item.value.config | default({})) | combine({
           'state': nginx_repo_item.value.enabled | ternary('present', 'absent')
         })
       }}
-  when: nginx_repo_manage | bool
+  when:
+    - nginx_repo_manage | bool
+    - nginx_repo_item.value.config is defined
   tags:
     - nginx-debug
     - nginx
