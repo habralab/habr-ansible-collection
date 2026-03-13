@@ -98,6 +98,11 @@ __nginx_dropins:
       - proxy_next_upstream_tries
       - proxy_read_timeout
       - proxy_send_timeout
+  realip:
+    description: "Global Real IP Settings"
+    template: "realip"
+    triggers:
+      - "^nginx_real_ip_"
 
 __nginx_mime_types_defaults:
   "text/html": "html htm shtml"

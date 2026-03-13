@@ -14,11 +14,5 @@ nginx_ssl_dhparam_size: 2048
 nginx_working_owner: "www-data"
 nginx_working_group: "www-data"
 
-nginx_real_ip_header: "X-Forwarded-For"
-nginx_real_ip_recursive: false
-nginx_real_ip_set_from:
-  - 127.0.0.0/8
-  - ::1
-
 nginx_include_sites_enabled: true
 nginx_include_dirs: []

@@ -243,7 +243,6 @@
     group: root
     mode: "0644"
   loop:
-    - 'conf.d/realip.conf'
     - 'sites-available/default'
     - 'sites-available/status'
   notify: Reload nginx
