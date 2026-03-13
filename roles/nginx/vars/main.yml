@@ -51,6 +51,16 @@ __nginx_repositories_defaults:
 __nginx_layouts_config:
   debian:
     runtime_user: "www-data"
+    runtime_group: "www-data"
+    working_dirs:
+      - path: "/var/log/nginx"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      - path: "/var/lib/nginx"
+        owner: "root"
+        group: "root"
+        mode: "0755"
     core_files:
       - nginx.conf
       - mime.types
@@ -68,6 +78,16 @@ __nginx_layouts_config:
 
   upstream:
     runtime_user: "nginx"
+    runtime_group: "nginx"
+    working_dirs:
+      - path: "/var/log/nginx"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      - path: "/var/cache/nginx"
+        owner: "root"
+        group: "root"
+        mode: "0755"
     core_files:
       - nginx.conf
       - mime.types

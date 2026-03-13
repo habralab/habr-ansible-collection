@@ -10,9 +10,8 @@ nginx_mime_types: {}
 
 nginx_ssl_dhparam_size: 2048
 
-### LEGACY below!
-nginx_working_owner: "www-data"
-nginx_working_group: "www-data"
+nginx_working_dirs: []
+nginx_cleanup_paths: []
 
 nginx_include_sites_enabled: true
 nginx_include_dirs: []
