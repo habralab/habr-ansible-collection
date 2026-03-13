@@ -8,6 +8,9 @@ error_log {{ nginx_error_log | default('/var/log/nginx/error.log') }};
 include /etc/nginx/modules-enabled/*.conf;
 
 events {
+{% if nginx_use is defined %}
+	use {{ nginx_use }};
+{% endif %}
 	worker_connections {{ nginx_worker_connections | default(768) | int }};
 {% if nginx_multi_accept is defined %}
 	multi_accept {{ nginx_multi_accept | bool | ternary('on', 'off') }};
@@ -24,6 +27,9 @@ http {
 
 	sendfile {{ nginx_sendfile | default(true) | bool | ternary('on', 'off') }};
 	tcp_nopush {{ nginx_tcp_nopush | default(true) | bool | ternary('on', 'off') }};
+{% if nginx_tcp_nodelay is defined %}
+	tcp_nodelay {{ nginx_tcp_nodelay | bool | ternary('on', 'off') }};
+{% endif %}
 	types_hash_max_size {{ nginx_types_hash_max_size | default(2048) }};
 {% if nginx_server_tokens is defined %}
 	server_tokens {{ nginx_server_tokens | bool | ternary('on', 'off') }};
@@ -55,6 +61,12 @@ http {
 	server_name_in_redirect {{ nginx_server_name_in_redirect | bool | ternary('on', 'off') }};
 {% else %}
 	# server_name_in_redirect off;
+{% endif %}
+{% if nginx_client_max_body_size is defined %}
+	client_max_body_size {{ nginx_client_max_body_size }};
+{% endif %}
+{% if nginx_client_body_buffer_size is defined %}
+	client_body_buffer_size {{ nginx_client_body_buffer_size }};
 {% endif %}
 
 	include /etc/nginx/mime.types;

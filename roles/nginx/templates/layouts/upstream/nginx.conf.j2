@@ -10,6 +10,9 @@ pid        {{ nginx_pid_file | default('/run/nginx.pid') }};
 
 
 events {
+{% if nginx_use is defined %}
+    use {{ nginx_use }};
+{% endif %}
     worker_connections  {{ nginx_worker_connections | default(1024) | int }};
 {% if nginx_multi_accept is defined %}
     multi_accept {{ nginx_multi_accept | bool | ternary('on', 'off') }};
@@ -50,6 +53,9 @@ http {
 {% else %}
     #tcp_nopush     on;
 {% endif %}
+{% if nginx_tcp_nodelay is defined %}
+    tcp_nodelay {{ nginx_tcp_nodelay | bool | ternary('on', 'off') }};
+{% endif %}
 
     keepalive_timeout  {{ nginx_keepalive_timeout | default(65) | int }};
 {% if nginx_server_tokens is defined %}
@@ -81,6 +87,12 @@ http {
 {% endif %}
 {% if nginx_variables_hash_bucket_size is defined %}
     variables_hash_bucket_size {{ nginx_variables_hash_bucket_size }};
+{% endif %}
+{% if nginx_client_max_body_size is defined %}
+    client_max_body_size {{ nginx_client_max_body_size }};
+{% endif %}
+{% if nginx_client_body_buffer_size is defined %}
+    client_body_buffer_size {{ nginx_client_body_buffer_size }};
 {% endif %}
 
 {% set _ssl_triggers = [

@@ -14,18 +14,6 @@ nginx_ssl_dhparam_size: 2048
 nginx_working_owner: "www-data"
 nginx_working_group: "www-data"
 
-nginx_proxy_headers_hash_max_size: 512
-nginx_proxy_headers_hash_bucket_size: 64
-
-
-nginx_proxy_buffering: true
-nginx_proxy_buffer_size: "8k"
-nginx_proxy_buffers: "8 8k"
-nginx_proxy_max_temp_file_size: "1024m"
-
-nginx_client_body_buffer_size: "8k"
-nginx_client_max_body_size: "1m"
-
 nginx_real_ip_header: "X-Forwarded-For"
 nginx_real_ip_recursive: false
 nginx_real_ip_set_from:

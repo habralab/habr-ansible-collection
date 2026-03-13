@@ -77,6 +77,28 @@ __nginx_layouts_config:
     dirs:
       - conf.d
 
+__nginx_dropins:
+  proxy:
+    description: "Global HTTP Proxy Settings"
+    template: "generic"
+    triggers:
+      - "^nginx_proxy_"
+    keys:
+      - proxy_buffering
+      - proxy_buffer_size
+      - proxy_buffers
+      - proxy_busy_buffers_size
+      - proxy_cache_path
+      - proxy_connect_timeout
+      - proxy_headers_hash_bucket_size
+      - proxy_headers_hash_max_size
+      - proxy_max_temp_file_size
+      - proxy_next_upstream
+      - proxy_next_upstream_timeout
+      - proxy_next_upstream_tries
+      - proxy_read_timeout
+      - proxy_send_timeout
+
 __nginx_mime_types_defaults:
   "text/html": "html htm shtml"
   "text/css": "css"
