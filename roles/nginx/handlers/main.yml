@@ -1,16 +1,28 @@
 ---
-- name: Reload nginx
+- name: "Verify Nginx config"
+  ansible.builtin.command: "nginx -t"
+  changed_when: false
+  become: true
+  listen:
+    - "Reload nginx"
+    - "Restart nginx"
+
+- name: "Reload Nginx service"
   ansible.builtin.service:
     name: nginx
     state: reloaded
     enabled: true
+  become: true
+  listen: "Reload nginx"
   ignore_errors: "{{ ansible_check_mode }}"
 
-- name: Restart nginx
+- name: "Restart Nginx service"
   ansible.builtin.service:
     name: nginx
     state: restarted
     enabled: true
+  become: true
+  listen: "Restart nginx"
   ignore_errors: "{{ ansible_check_mode }}"
 
 - name: Update apt cache
