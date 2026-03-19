@@ -124,6 +124,9 @@ Official Nginx documentation: [HTTP Log module](https://nginx.org/en/docs/http/n
 |---|---|---|---|
 | `nginx_access_log` | `/var/log/nginx/access.log` | `logs/access.log` | Path to the default access log. |
 | `nginx_log_format` | `undefined` | `main` | List of dictionaries defining custom log formats. Supports `name`, `escape` (e.g., `json`), and `string` (list of format lines). |
+| `nginx_logrotate_frequency` | layout specific | `daily` | Frequency of log rotation (e.g., `daily`, `weekly`). |
+| `nginx_logrotate_rotate` | layout specific | `14` / `52` | Number of rotated log files to keep. |
+| `nginx_log_group` | layout specific | `adm` | Group ownership for log files. |
 
 #### Proxy Settings
 These variables are injected via a generic drop-in. If any of the `nginx_proxy_*` variables listed below are defined, the `proxy.conf` file is automatically generated.

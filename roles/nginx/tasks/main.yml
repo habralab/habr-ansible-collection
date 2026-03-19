@@ -3,7 +3,6 @@
   ansible.builtin.set_fact:
     _nginx_repos_merged: "{{ __nginx_repositories_defaults | combine(nginx_repositories, recursive=True) }}"
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -19,7 +18,6 @@
          | default('ubuntu', true)
       }}
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -35,7 +33,6 @@
         nginx_group | default(__nginx_layouts_config[_nginx_repos_merged[_nginx_active_repo].layout].runtime_group, true)
       }}
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -49,7 +46,6 @@
       _nginx_repos_merged must be a dictionary.
       nginx_packages and nginx_remove_packages must be lists.
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -58,7 +54,6 @@
     name: habr.linuxhost.apt_repo
     apply:
       tags:
-        - nginx-debug
         - nginx
         - apt
   loop: "{{ _nginx_repos_merged | dict2items }}"
@@ -76,7 +71,6 @@
     - nginx_repo_manage | bool
     - nginx_repo_item.value.config is defined
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -84,7 +78,6 @@
   ansible.builtin.meta: flush_handlers
   when: nginx_repo_manage | bool
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -96,7 +89,6 @@
         else (_nginx_repos_merged[_nginx_active_repo].packages | default(__nginx_default_packages))
       }}
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -108,7 +100,6 @@
   become: true
   when: nginx_remove_packages | length > 0
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -120,7 +111,6 @@
     cache_valid_time: 3600
   become: true
   tags:
-    - nginx-debug
     - nginx
     - apt
 
@@ -134,9 +124,9 @@
   loop: "{{ [''] + __nginx_layouts_config[_nginx_active_layout].dirs }}"
   become: true
   tags:
-    - nginx-debug
-    - nginx-config
     - nginx
+    - nginx-config
+    - user
 
 - name: "Deploy core configuration files for layout {{ _nginx_active_layout }}"
   ansible.builtin.template:
@@ -149,9 +139,9 @@
   notify: Reload nginx
   become: true
   tags:
-    - nginx-debug
-    - nginx-config
     - nginx
+    - nginx-config
+    - user
 
 - name: "Evaluate and deploy active drop-ins"
   ansible.builtin.template:
@@ -165,9 +155,9 @@
   notify: Reload nginx
   become: true
   tags:
-    - nginx-debug
-    - nginx-config
     - nginx
+    - nginx-config
+    - user
 
 - name: "Remove inactive drop-ins"
   ansible.builtin.file:
@@ -178,23 +168,8 @@
   notify: Reload nginx
   become: true
   tags:
-    - nginx-debug
-    - nginx-config
     - nginx
-
-- name: "Ensure working directories exist with correct permissions"
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: "{{ item.owner | default(_nginx_runtime_user) }}"
-    group: "{{ item.group | default(_nginx_runtime_group) }}"
-    mode: "{{ item.mode | default('0755') }}"
-  loop: "{{ __nginx_layouts_config[_nginx_active_layout].working_dirs + nginx_working_dirs }}"
-  become: true
-  tags:
-    - nginx-debug
     - nginx-config
-    - nginx
 
 - name: "Ensure directory for DH param exists"
   ansible.builtin.file:
@@ -206,10 +181,10 @@
   become: true
   when: nginx_ssl_dhparam_file is defined
   tags:
-    - nginx-debug
+    - nginx
     - nginx-config
     - nginx-ssl
-    - nginx
+    - user
 
 - name: "Generate DH param"
   ansible.builtin.command:
@@ -219,10 +194,24 @@
   become: true
   when: nginx_ssl_dhparam_file is defined
   tags:
-    - nginx-debug
+    - nginx
     - nginx-config
     - nginx-ssl
+
+- name: "Ensure working directories exist with correct permissions"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(_nginx_runtime_user) }}"
+    group: "{{ item.group | default(_nginx_runtime_group) }}"
+    mode: "{{ item.mode | default('0755') }}"
+    recurse: "{{ item.recurse | default(false) | bool }}"
+  loop: "{{ __nginx_layouts_config[_nginx_active_layout].working_dirs + nginx_working_dirs }}"
+  become: true
+  tags:
     - nginx
+    - nginx-config
+    - user
 
 - name: "Ensure runtime user is in required extra groups"
   ansible.builtin.user:
@@ -233,9 +222,53 @@
   become: true
   when: nginx_extra_groups | length > 0
   tags:
-    - nginx-debug
-    - nginx-config
     - nginx
+    - nginx-config
+    - user
+
+- name: "Deploy logrotate configuration"
+  ansible.builtin.template:
+    src: "layouts/{{ _nginx_active_layout }}/logrotate.j2"
+    dest: "/etc/logrotate.d/nginx"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - user
+    - logs
+    - logrotate
+
+- name: "Find all existing Nginx log files"
+  ansible.builtin.find:
+    paths: /var/log/nginx
+    file_type: file
+    patterns: "*.log"
+  register: _nginx_logs_paths
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - user
+    - logs
+
+- name: "Comb Nginx log files ownership"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ _nginx_runtime_user }}"
+    group: "{{ __nginx_layouts_config[_nginx_active_layout].log_group }}"
+  loop: "{{ _nginx_logs_paths.files }}"
+  when: >
+    item.pw_name != _nginx_runtime_user or
+    item.gr_name != __nginx_layouts_config[_nginx_active_layout].log_group
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - user
+    - logs
 
 - name: "Cleanup obsolete or user-defined paths"
   ansible.builtin.file:
@@ -245,9 +278,8 @@
   become: true
   notify: Reload nginx
   tags:
-    - nginx-debug
-    - nginx-config
     - nginx
+    - nginx-config
 
 # started legacy tasks
 - name: "Create config files"

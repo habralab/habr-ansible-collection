@@ -59,6 +59,10 @@ __nginx_layouts_config:
   debian:
     runtime_user: "www-data"
     runtime_group: "www-data"
+    bin_path: "/usr/sbin/nginx"
+    log_group: "adm"
+    logrotate_rotate: 14
+    logrotate_frequency: "daily"
     working_dirs:
       - path: "/var/log/nginx"
         owner: "root"
@@ -86,6 +90,10 @@ __nginx_layouts_config:
   upstream:
     runtime_user: "nginx"
     runtime_group: "nginx"
+    bin_path: "/usr/sbin/nginx"
+    log_group: "adm"
+    logrotate_rotate: 52
+    logrotate_frequency: "daily"
     working_dirs:
       - path: "/var/log/nginx"
         owner: "root"
@@ -130,6 +138,20 @@ __nginx_dropins:
     template: "realip"
     triggers:
       - "^nginx_real_ip_"
+  gzip:
+    description: "Global Gzip Settings"
+    template: "generic"
+    triggers:
+      - "^nginx_gzip_"
+    keys:
+      - gzip
+      - gzip_comp_level
+      - gzip_disable
+      - gzip_min_length
+      - gzip_http_version
+      - gzip_proxied
+      - gzip_types
+      - gzip_vary
 
 __nginx_mime_types_defaults:
   "text/html": "html htm shtml"
