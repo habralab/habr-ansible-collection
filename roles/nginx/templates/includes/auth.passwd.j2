@@ -1,0 +1,9 @@
+{% if item.basic is defined and item.basic.passwd_lists is defined and item.basic.passwd_lists | length > 0 %}
+{% for list_name in item.basic.passwd_lists %}
+{% for passwd_set in nginx_auth_passwd_list | selectattr('name', 'equalto', list_name) %}
+{% for passwd in passwd_set.passwd | default([]) %}
+{{ passwd.user }}:{{ passwd.hash }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% endif %}

@@ -15,6 +15,8 @@ The selected repository affects not only package origin and update cadence, but 
 
 **Out of Scope:** This role does not ship application-specific vhost templates beyond the built-in `default` and `status` examples. Custom websites should be provided as your own Jinja templates and referenced via `nginx_servers`.
 
+**Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_maps`, `nginx_proxy_*`, and `nginx_real_ip_*` are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
+
 ## Variables
 
 ### Core Role Variables
@@ -216,6 +218,248 @@ Official Nginx documentation: [HTTP RealIP module](https://nginx.org/en/docs/htt
 | `nginx_real_ip_header` | `undefined` | `X-Real-IP` | Defines the request header used to send the client's real IP address. |
 | `nginx_real_ip_recursive`| `undefined` | `off` | Enables recursive search for the client IP address. |
 | `nginx_real_ip_set_from`| `undefined` | `-` | A direct list of IP prefixes/CIDRs to define trusted addresses without using the global dictionary (e.g., `['127.0.0.0/8', '::1']`). Useful for simple, host-specific overrides or legacy compatibility. |
+
+### Managed Includes
+The role can render reusable include companions into `/etc/nginx/includes`. These files are meant to be referenced from server templates such as `servers/vhost`, and the directory is intended to grow over time beyond auth-specific helpers.
+
+Current managed include families:
+- `auth.<name>.include`: reusable auth/access bundles
+- `auth.<name>.passwd`: passwd companions for bundles that enable HTTP Basic auth
+
+General behavior:
+- Include filenames are derived from the logical object `name`.
+- Include companions are rendered only for managed objects declared in role variables.
+- Optional companion files are created only when the corresponding feature is enabled by the data model.
+- Managed include files are removed when the owning object is switched to `state: absent`.
+
+### Auth Includes
+Managed auth include/passwd companions for reuse across vhosts and locations. This layer combines access control and optional HTTP Basic authentication under a single named auth bundle.
+
+Official Nginx documentation for the directives configured by this section:
+* [HTTP Access module](https://nginx.org/en/docs/http/ngx_http_access_module.html)
+* [HTTP Auth Basic module](https://nginx.org/en/docs/http/ngx_http_auth_basic_module.html)
+* [HTTP Core `satisfy` directive](https://nginx.org/en/docs/http/ngx_http_core_module.html#satisfy)
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_auth` | `[]` | List of managed auth bundles. Each item may define `name`, `satisfy`, `access`, `basic`, and optional `state`. |
+| `nginx_auth_passwd_list` | `[]` | Shared passwd dictionaries referenced from `nginx_auth[*].basic.passwd_lists`. Each item uses `name` and `passwd` where entries contain `user` and `hash`. |
+
+Rendered files:
+- `/etc/nginx/includes/auth.<name>.include`
+- `/etc/nginx/includes/auth.<name>.passwd` when `basic.passwd_lists` is defined and non-empty
+
+Notes:
+- Files are rendered into `/etc/nginx/includes`, which is intended for managed include companions beyond auth as the role grows.
+- `nginx_auth[*].access.ip_sets` references keys from `nginx_ip_sets` and renders ordered ACL rules for every prefix in those sets.
+- Every `ip_sets` item uses `name` and optional `action`; `action` defaults to `allow`.
+- `nginx_auth[*].access.default_action` renders the terminal access rule and defaults to `deny`.
+- HTTP Basic authentication is enabled only when `basic.banner` and `basic.passwd_lists` are both defined.
+- User entries in `nginx_auth_passwd_list` use `hash`, not `pass`. This is an intentional breaking change for the new managed path.
+- Set `state: absent` on a `nginx_auth` item to remove its generated include and optional passwd companion.
+
+`nginx_auth` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Logical auth bundle name. Also used in rendered filenames `auth.<name>.include` and `auth.<name>.passwd`. |
+| `satisfy` | no | Value for the nginx `satisfy` directive. Defaults to `any`. |
+| `access` | no | Access-control section. Currently supports `ip_sets`. |
+| `basic` | no | HTTP Basic auth section. Controls `auth_basic` and the optional passwd companion file. |
+| `state` | no | `present` or `absent`. Defaults to `present`. |
+
+`nginx_auth[*].access` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `ip_sets` | no | Ordered list of references to `nginx_ip_sets`. Each item defines `name` and optional `action`. |
+| `default_action` | no | Terminal action rendered as the final access rule. Supported values are `allow` and `deny`. Defaults to `deny`. |
+
+`nginx_auth[*].access.ip_sets[]` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Key from `nginx_ip_sets` to expand into one or more address rules. |
+| `action` | no | ACL action for every entry in the referenced set. Supported values are `allow` and `deny`. Defaults to `allow`. |
+
+`nginx_auth[*].basic` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `banner` | yes | Value for `auth_basic`, shown by the client as the auth realm/prompt. |
+| `passwd_lists` | yes | Ordered list of shared passwd-list names from `nginx_auth_passwd_list`. |
+
+`nginx_auth_passwd_list` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Shared passwd-list name referenced from `nginx_auth[*].basic.passwd_lists`. |
+| `passwd` | yes | List of htpasswd-compatible user entries. |
+
+`nginx_auth_passwd_list[*].passwd[]` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `user` | yes | Login name written to the passwd file. |
+| `hash` | yes | Precomputed htpasswd-compatible hash. Plaintext passwords are intentionally not supported by this role path. |
+
+Minimal example:
+
+```yaml
+nginx_auth:
+  - name: "service_admin"
+    access:
+      ip_sets:
+        - name: "localhost"
+        - name: "private"
+        - name: "trusted_networks"
+    basic:
+      banner: "Password required"
+      passwd_lists:
+        - "service_admin"
+
+nginx_auth_passwd_list:
+  - name: "service_admin"
+    passwd:
+      - user: "admin"
+        hash: "<HTPASSWD_HASH_PLACEHOLDER>"
+```
+
+Allow-by-default example:
+
+```yaml
+nginx_auth:
+  - name: "blacklist_only"
+    access:
+      default_action: "allow"
+      ip_sets:
+        - name: "blocked_hosts"
+          action: "deny"
+```
+
+Access-only example:
+
+```yaml
+nginx_auth:
+  - name: "restricted_network"
+    satisfy: "all"
+    access:
+      default_action: "deny"
+      ip_sets:
+        - name: "blocked_hosts"
+          action: "deny"
+        - name: "trusted_networks"
+```
+
+Access evaluation notes:
+- Rules are rendered in the order you define them.
+- The example above first denies explicitly blocked hosts and then allows the wider trusted prefix set.
+- When `access` is defined, the helper always appends a terminal rule based on `default_action`.
+- The default terminal rule is `deny all;`.
+- Set `default_action: "allow"` for blacklist-style configurations where all unmatched clients should pass the access layer.
+
+Hash generation hints:
+
+```bash
+openssl passwd -apr1 'secret-password'
+openssl passwd -6 'secret-password'
+openssl passwd -5 'secret-password'
+```
+
+Notes on hash formats:
+- `-apr1` produces Apache MD5 hashes and is widely accepted in `.htpasswd`-style workflows.
+- `-6` produces SHA-512 crypt hashes.
+- `-5` produces SHA-256 crypt hashes.
+- Availability of algorithms depends on the target system OpenSSL/libcrypt stack, so generate hashes on a platform compatible with your fleet.
+
+### Maps
+Managed `map` blocks for the `http` context.
+
+Official Nginx documentation: [HTTP Map module](https://nginx.org/en/docs/http/ngx_http_map_module.html)
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_maps` | `[]` | List of managed map definitions. Each item may define `name`, `source`, `target`, `entries`, `default`, `hostnames`, `volatile`, and optional `state`. |
+
+Rendered files:
+- `/etc/nginx/conf.d/maps.conf` when `nginx_maps` is non-empty
+
+`nginx_maps` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | no | Optional logical identifier used only for human readability inside the data model. |
+| `source` | yes | First argument of the nginx `map` directive, usually a source variable such as `$host` or `$request_uri`. |
+| `target` | yes | Target variable set by the map, including the leading `$`. |
+| `entries` | no | Ordered list of map entries. Each item defines `match` and `value`. |
+| `default` | no | `default` clause for the map. Rendered as a single-quoted string. |
+| `hostnames` | no | Enables the `hostnames;` flag for hostname masks. |
+| `volatile` | no | Enables the `volatile;` flag. |
+| `state` | no | `present` or `absent`. Defaults to `present`. |
+
+`nginx_maps[*].entries[]` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `match` | yes | Match expression for the map entry. Rendered as a single-quoted string, which is safer for regex-heavy patterns. |
+| `value` | yes | Result assigned when the entry matches. Rendered as a single-quoted string. |
+
+Naming notes:
+- `source` and `target` are clearer than legacy names like `string` and `variable`.
+- `entries` is clearer than legacy `set`, because these items are ordered map entries, not arbitrary sets.
+- `match` and `value` are clearer than `condition` and `result` for day-to-day maintenance.
+- `name` remains available as a logical label, but with the singleton drop-in approach it no longer controls filenames.
+- The current renderer uses single quotes for `default`, `match`, and `value`, following the safer legacy behavior for complex regex maps.
+
+Minimal example:
+
+```yaml
+nginx_maps:
+  - name: "forwarded_proto"
+    source: "$http_x_forwarded_proto"
+    target: "$request_scheme"
+    default: "$scheme"
+    entries:
+      - match: "http"
+        value: "http"
+      - match: "https"
+        value: "https"
+```
+
+Hostname example:
+
+```yaml
+nginx_maps:
+  - name: "canonical_host"
+    source: "$host"
+    target: "$is_primary_host"
+    hostnames: true
+    default: "0"
+    entries:
+      - match: "example.org"
+        value: "1"
+      - match: "*.example.org"
+        value: "1"
+```
+
+Regex-heavy example:
+
+```yaml
+nginx_maps:
+  - name: "detected_device"
+    source: "$http_user_agent"
+    target: "$detected_device"
+    default: "desktop"
+    entries:
+      - match: '~*\b(sch-i[89]0\d|shw-m380s|sm-[pt]\w{2,4}|gt-[pn]\d{2,4}|sgh-t8[56]9|nexus 10)'
+        value: "tablet"
+      - match: '~*\b((?:s[cgp]h|gt|sm)-\w+|galaxy nexus)'
+        value: "mobile"
+```
+
+Regex quoting note:
+- In YAML, regex-heavy `match` strings should usually be wrapped in single quotes so backslashes and `{m,n}` fragments survive parsing unchanged.
+- The role renderer also wraps `default`, `match`, and `value` in single quotes inside the generated nginx config, following the safer legacy behavior for complex map patterns.
 
 ### Server Configuration Model
 

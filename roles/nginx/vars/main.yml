@@ -159,6 +159,11 @@ __nginx_dropins:
     template: "realip"
     triggers:
       - "^nginx_real_ip_"
+  maps:
+    description: "Global HTTP Map Blocks"
+    template: "maps"
+    triggers:
+      - "^nginx_maps$"
 
 __nginx_mime_types_defaults:
   "text/html": "html htm shtml"

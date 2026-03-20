@@ -1,0 +1,23 @@
+##
+# {{ item.value['description'] | default('Global HTTP Map Blocks') }}
+##
+
+{% for map in nginx_maps if map.state | default('present') == 'present' %}
+map {{ map.source }} {{ map.target }} {
+{% if map.hostnames | default(false) | bool %}
+	hostnames;
+{% endif %}
+{% if map.volatile | default(false) | bool %}
+	volatile;
+{% endif %}
+{% if map.default is defined %}
+	default '{{ map.default }}';
+{% endif %}
+{% if map.entries is defined and map.entries | length > 0 %}
+{% for entry in map.entries if entry.match is defined and entry.value is defined %}
+	'{{ entry.match }}' '{{ entry.value }}';
+{% endfor %}
+{% endif %}
+}
+
+{% endfor %}

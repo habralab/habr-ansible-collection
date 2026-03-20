@@ -39,9 +39,12 @@
       - _nginx_repos_merged is mapping
       - nginx_packages is sequence and nginx_packages is not string
       - nginx_remove_packages is sequence and nginx_remove_packages is not string
+      - nginx_auth is sequence and nginx_auth is not string
+      - nginx_auth_passwd_list is sequence and nginx_auth_passwd_list is not string
+      - nginx_maps is sequence and nginx_maps is not string
     fail_msg: >-
       _nginx_repos_merged must be a dictionary.
-      nginx_packages and nginx_remove_packages must be lists.
+      nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list, and nginx_maps must be lists.
   tags:
     - nginx
     - apt
@@ -125,6 +128,20 @@
     - nginx-config
     - user
 
+- name: "Ensure Nginx includes: directory exists"
+  ansible.builtin.file:
+    path: "/etc/nginx/includes"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: nginx_auth | length > 0
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-includes
+
 - name: "Deploy core configuration files for layout {{ _nginx_active_layout }}"
   ansible.builtin.template:
     src: "layouts/{{ _nginx_active_layout }}/{{ item }}.j2"
@@ -167,6 +184,72 @@
   tags:
     - nginx
     - nginx-config
+
+- name: "Deploy Nginx includes: auth passwd files"
+  ansible.builtin.template:
+    src: "includes/auth.passwd.j2"
+    dest: "/etc/nginx/includes/auth.{{ item.name }}.passwd"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ nginx_auth }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.basic is defined
+    - item.basic.passwd_lists is defined
+    - item.basic.passwd_lists | length > 0
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-auth
+
+- name: "Remove Nginx includes: auth passwd files"
+  ansible.builtin.file:
+    path: "/etc/nginx/includes/auth.{{ item.name }}.passwd"
+    state: absent
+  loop: "{{ nginx_auth }}"
+  when: >-
+    item.state | default('present') == 'absent' or
+    item.basic is not defined or
+    item.basic.passwd_lists is not defined or
+    item.basic.passwd_lists | length == 0
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-auth
+
+- name: "Deploy Nginx includes: auth include files"
+  ansible.builtin.template:
+    src: "includes/auth.include.j2"
+    dest: "/etc/nginx/includes/auth.{{ item.name }}.include"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ nginx_auth }}"
+  when: item.state | default('present') == 'present'
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-auth
+
+- name: "Remove Nginx includes: auth include files"
+  ansible.builtin.file:
+    path: "/etc/nginx/includes/auth.{{ item.name }}.include"
+    state: absent
+  loop: "{{ nginx_auth }}"
+  when: item.state | default('present') == 'absent'
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-auth
 
 - name: "Merge default and user-defined servers"
   ansible.builtin.set_fact:
