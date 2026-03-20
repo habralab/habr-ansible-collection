@@ -159,20 +159,6 @@ __nginx_dropins:
     template: "realip"
     triggers:
       - "^nginx_real_ip_"
-  gzip:
-    description: "Global Gzip Settings"
-    template: "generic"
-    triggers:
-      - "^nginx_gzip_"
-    keys:
-      - gzip
-      - gzip_comp_level
-      - gzip_disable
-      - gzip_min_length
-      - gzip_http_version
-      - gzip_proxied
-      - gzip_types
-      - gzip_vary
 
 __nginx_mime_types_defaults:
   "text/html": "html htm shtml"

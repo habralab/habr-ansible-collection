@@ -9,7 +9,7 @@ The selected repository affects not only package origin and update cadence, but 
 - Selects one active package source and automatically switches the filesystem layout between Debian-style (`sites-available` / `sites-enabled`) and upstream-style (`conf.d` only).
 - Optionally manages APT repositories through the internal `apt_repo` helper role.
 - Installs and removes packages, deploys the base `nginx.conf` and companion files, and validates configuration before reload/restart.
-- Creates optional global HTTP drop-ins for proxy, gzip, and Real IP settings based on the variables you define.
+- Creates optional global HTTP drop-ins for proxy and Real IP settings based on the variables you define.
 - Manages server configs from a declarative `nginx_servers` list, including optional symlinks for Debian-style layouts.
 - Prepares runtime directories, logrotate configuration, DH parameters, runtime group membership, and cleanup of obsolete paths.
 
@@ -408,8 +408,9 @@ nginx_servers:
 
 Drop-ins are generated automatically in `/etc/nginx/conf.d/`:
 - `proxy.conf` when any `nginx_proxy_*` variable is defined
-- `gzip.conf` when any `nginx_gzip_*` variable is defined
 - `realip.conf` when any `nginx_real_ip_*` variable is defined
+
+Gzip settings are rendered directly into the layout-specific main `nginx.conf`, not into a generated drop-in.
 
 ### Handlers and Validation
 
