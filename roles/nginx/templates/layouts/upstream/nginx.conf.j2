@@ -150,5 +150,8 @@ http {
     gzip_min_length {{ nginx_gzip_min_length }};
 {% endif %}
 
-    include /etc/nginx/conf.d/*.conf;
+{% set _all_http_includes = (__nginx_layouts_config[_nginx_active_layout].http_includes | default([])) + (nginx_http_includes | default([])) %}
+{% for inc in _all_http_includes | unique %}
+    include {{ inc }};
+{% endfor %}
 }

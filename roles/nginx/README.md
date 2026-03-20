@@ -1,6 +1,19 @@
 # Role: Nginx
 
-Installs and configures Nginx using a layout-driven approach to support different upstream repositories (Ubuntu default, Ondrej PPA, Nginx.org).
+Installs and configures Nginx using a layout-driven approach that supports the Ubuntu distribution packages, Ondrej PPA, and the official Nginx.org stable or mainline repositories.
+
+The selected repository affects not only package origin and update cadence, but also the filesystem layout the role manages. Ubuntu and Ondrej use the familiar Debian-style structure with `sites-available` / `sites-enabled`, while Nginx.org uses the upstream-style layout centered around `conf.d`. In practice, this changes the default package set, runtime user, generated include paths, logrotate retention, and whether server configs are enabled through symlinks or rendered directly into the active directory.
+
+## Scope
+
+- Selects one active package source and automatically switches the filesystem layout between Debian-style (`sites-available` / `sites-enabled`) and upstream-style (`conf.d` only).
+- Optionally manages APT repositories through the internal `apt_repo` helper role.
+- Installs and removes packages, deploys the base `nginx.conf` and companion files, and validates configuration before reload/restart.
+- Creates optional global HTTP drop-ins for proxy, gzip, and Real IP settings based on the variables you define.
+- Manages server configs from a declarative `nginx_servers` list, including optional symlinks for Debian-style layouts.
+- Prepares runtime directories, logrotate configuration, DH parameters, runtime group membership, and cleanup of obsolete paths.
+
+**Out of Scope:** This role does not ship application-specific vhost templates beyond the built-in `default` and `status` examples. Custom websites should be provided as your own Jinja templates and referenced via `nginx_servers`.
 
 ## Variables
 
@@ -11,6 +24,35 @@ Installs and configures Nginx using a layout-driven approach to support differen
 | `nginx_packages` | `[]` | Explicit list of packages to install. Overrides layout defaults. |
 | `nginx_remove_packages` | `[]` | List of packages to purge before installation. |
 | `nginx_repositories` | `{}` | Dictionary to configure/enable repositories (see overrides). |
+
+### Repository Selection and Layouts
+
+The role merges `nginx_repositories` with the built-in repository map and uses the first entry with `enabled: true` as the active source. If nothing is enabled, it falls back to the built-in `ubuntu` definition.
+
+Built-in repository keys:
+- `ubuntu`: distro packages, Debian-style layout, default package set `["nginx-full", "nginx"]`
+- `ppa_ondrej`: Ondrej PPA, Debian-style layout, default package set `["nginx-full", "nginx"]`
+- `nginx_org`: official stable upstream repository, upstream layout, default package set `["nginx"]`
+- `nginx_org_mainline`: official mainline upstream repository, upstream layout, default package set `["nginx"]`
+
+Supported repository item fields:
+
+| Field | Description |
+|---|---|
+| `enabled` | Enables this repository candidate. The first enabled item becomes active. |
+| `layout` | Selects the file layout (`debian` or `upstream`). |
+| `packages` | Package list used when `nginx_packages` is empty. |
+| `config` | Optional `apt_repo` definition used when `nginx_repo_manage: true`. |
+
+Minimal override example:
+
+```yaml
+nginx_repositories:
+  nginx_org_mainline:
+    enabled: true
+```
+
+**NB:** Switching between repositories is supported, but it is not a no-op. Package contents, directory layout, generated include paths, runtime user, and default server placement may all change at once. This can be useful for semi-manual migrations from one packaging model to another, but it also means your overrides must be reviewed carefully or you may end up with duplicate vhosts, orphaned files, or configs rendered into the wrong path.
 
 ### IP Sets (Global Dictionaries)
 A centralized, data-driven dictionary for managing IP prefixes across the infrastructure. This allows you to define networks once and reference them dynamically in Real IP, ACLs, and Geo modules.
@@ -87,6 +129,9 @@ Official Nginx documentation for the modules configured by this section:
 | `nginx_variables_hash_bucket_size`| `undefined` | `64` | Bucket size for the variables hash table. |
 | `nginx_map_hash_max_size` | `undefined` | `2048` | Max size of the map variables hash table. |
 | `nginx_map_hash_bucket_size` | `undefined` | `32\|64\|128` | Bucket size for the map variables hash table. |
+| `nginx_default_type` | `application/octet-stream` | `text/plain` | Overrides the default MIME type used for unknown content types. |
+| `nginx_keepalive_timeout` | omitted in Debian layout, `65` in upstream layout | `75s` | Keepalive timeout in the `http` block. |
+| `nginx_use` | `undefined` | platform dependent | Explicitly selects the event method for the `events` block. |
 
 #### SSL
 Official Nginx documentation for the modules configured by this section:
@@ -128,6 +173,16 @@ Official Nginx documentation: [HTTP Log module](https://nginx.org/en/docs/http/n
 | `nginx_logrotate_rotate` | layout specific | `14` / `52` | Number of rotated log files to keep. |
 | `nginx_log_group` | layout specific | `adm` | Group ownership for log files. |
 
+### Runtime / Filesystem Management
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_working_dirs` | `[]` | Extra directories to create in addition to the layout defaults. Each item may define `path`, `owner`, `group`, `mode`, and `recurse`. |
+| `nginx_extra_groups` | `[]` | Extra UNIX groups appended to the runtime user; triggers a service restart. |
+| `nginx_cleanup_paths` | `[]` | Arbitrary paths to remove after configuration deployment. Useful for retiring legacy files. |
+| `nginx_user` | layout specific | Overrides the runtime user (`www-data` for Debian layout, `nginx` for upstream layout). |
+| `nginx_group` | layout specific | Overrides the runtime group. |
+
 #### Proxy Settings
 These variables are injected via a generic drop-in. If any of the `nginx_proxy_*` variables listed below are defined, the `proxy.conf` file is automatically generated.
 
@@ -161,3 +216,246 @@ Official Nginx documentation: [HTTP RealIP module](https://nginx.org/en/docs/htt
 | `nginx_real_ip_header` | `undefined` | `X-Real-IP` | Defines the request header used to send the client's real IP address. |
 | `nginx_real_ip_recursive`| `undefined` | `off` | Enables recursive search for the client IP address. |
 | `nginx_real_ip_set_from`| `undefined` | `-` | A direct list of IP prefixes/CIDRs to define trusted addresses without using the global dictionary (e.g., `['127.0.0.0/8', '::1']`). Useful for simple, host-specific overrides or legacy compatibility. |
+
+### Server Configuration Model
+
+Server files are managed through `nginx_servers`. The role combines built-in defaults with your entries, deduplicates them by `name`, and lets the last definition win. Layout defaults also inject a `default` server automatically.
+
+Each item in `nginx_servers` can use the following fields:
+
+| Field | Description |
+|---|---|
+| `name` | Logical name of the server entry. Also used as the default template and filename base. |
+| `template` | Template path relative to `roles/nginx/templates/` without the `.j2` suffix. |
+| `filename` | Output filename override. Defaults to `name`. |
+| `state` | `present` or `absent`. When absent, both config file and symlink are removed. |
+| `server_dir` | Destination directory for the rendered server config. |
+| `server_ext` | Filename suffix for the rendered config (for example, `.conf`). |
+| `server_symlink_enable` | Enables symlink creation for this server. Typically used with Debian-style layouts. |
+| `server_symlink_dir` | Directory where the symlink is created. |
+| `server_symlink_ext` | Suffix for the symlink filename. |
+| `symlink_prefix` | Prefix added to the symlink name, useful for deterministic ordering. |
+
+Global overrides for the same path mechanics are also supported:
+- `nginx_server_dir`
+- `nginx_server_ext`
+- `nginx_server_symlink_enable`
+- `nginx_server_symlink_dir`
+- `nginx_server_symlink_ext`
+- `nginx_server_symlink_prefix`
+
+Built-in server templates:
+- `layouts/debian/default`
+- `layouts/upstream/default`
+- `servers/status`
+
+### Bundled Site Templates
+
+The role ships with a small set of bundled templates intended as safe building blocks rather than full application vhosts.
+
+#### `default`
+
+`layouts/debian/default` and `layouts/upstream/default` provide the stock catch-all server for the active layout. The role injects one `default` entry automatically, so you normally get it without defining anything in `nginx_servers`.
+
+Use cases:
+- keep a predictable fallback vhost after first install
+- explicitly control ordering via `symlink_prefix`
+- replace the built-in default with a definition that matches your overridden layout paths
+- remove the default altogether by declaring the same `name` with `state: absent`
+
+For structured removals of managed vhosts, you can declare the same `name` with `state: absent`. For ad-hoc cleanup of legacy or unstructured files, use `nginx_cleanup_paths`: the role processes this list at the end and removes each path explicitly.
+
+This is especially relevant during repository or layout migrations: package-provided defaults and old hand-made files may survive outside the role's managed server list. In that case, redefine or disable the managed `default` entry as needed, and use `nginx_cleanup_paths` as the final garbage collector for leftovers that do not map cleanly to `nginx_servers`.
+
+Examples:
+
+```yaml
+nginx_servers:
+  - name: "default"
+    symlink_prefix: "000_"
+    template: "layouts/upstream/default"
+```
+
+```yaml
+nginx_servers:
+  - name: "default"
+    state: "absent"
+```
+
+#### `status`
+
+`servers/status` renders a simple `stub_status` server. By default it:
+- listens on `80` and `[::]:80`
+- uses `localhost` as `server_name`
+- exposes `/`
+- allows only loopback clients unless you override access rules
+
+Supported template inputs include:
+- `listen`
+- `server_name`
+- `access_log`
+- `root`
+- `access`
+- `locations`
+
+Access rules are rendered exactly in the order you write them. This means you can intentionally mix `allow` and `deny`: for example, deny one specific host first, then allow its wider subnet, and still finish with a default `deny all`. Think of it as a plain ordered ACL list, not as a smart merge.
+
+Examples:
+
+```yaml
+nginx_servers:
+  - name: "status"
+    template: "servers/status"
+    filename: "status"
+    symlink_prefix: "010_"
+    listen:
+      - "127.0.0.1:8080"
+      - "[::1]:8080"
+```
+
+```yaml
+nginx_servers:
+  - name: "app-status"
+    template: "servers/status"
+    listen: "127.0.0.1:81"
+    server_name: "status.example.internal"
+    access_log: "off"
+    root: "/var/www/status.example.internal"
+    access:
+      - allow: "127.0.0.1"
+      - deny: "all"
+    locations:
+      - name: "/nginx-status"
+```
+
+```yaml
+nginx_servers:
+  - name: "multi-status"
+    template: "servers/status"
+    listen: "8080"
+    locations:
+      - name: "/status-local"
+        access:
+          - allow: "127.0.0.1"
+          - deny: "all"
+      - name: "/status-office"
+        access:
+          - allow: "192.0.2.0/24"
+          - deny: "all"
+```
+
+### Migration / Override Example
+
+It is possible to take packages from `nginx_org_mainline` but override the role into a Debian-like server layout. This is valid, but it is exactly the kind of configuration that should be reviewed line by line.
+
+The important detail is the built-in `default` server: once you override `nginx_server_dir` and symlink behavior, either redefine `default` so it lands in the same path scheme as the rest of your sites, or remove it explicitly.
+
+Example with a matching explicit `default` definition:
+
+```yaml
+nginx_repositories:
+  nginx_org_mainline:
+    enabled: true
+
+nginx_http_includes:
+  - "/etc/nginx/sites-enabled/*"
+
+nginx_server_dir: "/etc/nginx/sites-available"
+nginx_server_ext: ""
+nginx_server_symlink_enable: true
+nginx_server_symlink_dir: "/etc/nginx/sites-enabled"
+nginx_server_symlink_prefix: "050_"
+nginx_server_symlink_ext: ""
+
+nginx_servers:
+  - name: "default"
+    template: "layouts/upstream/default"
+    server_dir: "/etc/nginx/sites-available"
+    server_ext: ""
+    server_symlink_enable: true
+    server_symlink_dir: "/etc/nginx/sites-enabled"
+    server_symlink_prefix: ""
+    server_symlink_ext: ""
+```
+
+Alternative if you do not want the bundled fallback at all:
+
+```yaml
+nginx_repositories:
+  nginx_org_mainline:
+    enabled: true
+
+nginx_http_includes:
+  - "/etc/nginx/sites-enabled/*"
+
+nginx_server_dir: "/etc/nginx/sites-available"
+nginx_server_ext: ""
+nginx_server_symlink_enable: true
+nginx_server_symlink_dir: "/etc/nginx/sites-enabled"
+nginx_server_symlink_prefix: "050_"
+nginx_server_symlink_ext: ""
+
+nginx_servers:
+  - name: "default"
+    state: "absent"
+```
+
+### Includes and Generated Drop-ins
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_http_includes` | `[]` | Extra `include` directives appended to the layout defaults inside the `http` block. |
+
+Drop-ins are generated automatically in `/etc/nginx/conf.d/`:
+- `proxy.conf` when any `nginx_proxy_*` variable is defined
+- `gzip.conf` when any `nginx_gzip_*` variable is defined
+- `realip.conf` when any `nginx_real_ip_*` variable is defined
+
+### Handlers and Validation
+
+Every configuration-changing task notifies `Reload nginx`. The handler flow is:
+- run `nginx -t` using the active layout binary path
+- attempt a service reload
+- fall back to restart if reload fails
+
+`Restart nginx` also validates configuration first. Repository changes trigger an immediate APT cache refresh via a dedicated handler flush.
+
+## Example
+
+```yaml
+- name: Setup Nginx
+  hosts: webservers
+  roles:
+    - name: habr.linuxhost.nginx
+      vars:
+        nginx_repositories:
+          nginx_org:
+            enabled: true
+
+        nginx_ip_sets:
+          cdn:
+            - net: "203.0.113.0/24"
+            - net: "2001:db8::/32"
+          office_vpn:
+            - net: "192.0.2.0/24"
+
+        nginx_real_ip_lists:
+          - cdn
+          - office_vpn
+        nginx_real_ip_header: "X-Forwarded-For"
+        nginx_real_ip_recursive: true
+
+        nginx_proxy_read_timeout: "30s"
+        nginx_proxy_send_timeout: "30s"
+
+        nginx_ssl_dhparam_file: "/etc/nginx/ssl/dhparam.pem"
+
+        nginx_servers:
+          - name: "status"
+            template: "servers/status"
+            filename: "status"
+            symlink_prefix: "010_"
+            listen:
+              - "127.0.0.1:8080"
+              - "[::1]:8080"
+```

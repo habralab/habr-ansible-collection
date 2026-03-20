@@ -3,8 +3,7 @@
   ansible.builtin.set_fact:
     _nginx_repos_merged: "{{ __nginx_repositories_defaults | combine(nginx_repositories, recursive=True) }}"
   tags:
-    - nginx
-    - apt
+    - always
 
 - name: "Determine active repository"
   ansible.builtin.set_fact:
@@ -18,8 +17,7 @@
          | default('ubuntu', true)
       }}
   tags:
-    - nginx
-    - apt
+    - always
 
 - name: "Set active layout and runtime user/group from dictionary"
   ansible.builtin.set_fact:
@@ -33,8 +31,7 @@
         nginx_group | default(__nginx_layouts_config[_nginx_repos_merged[_nginx_active_repo].layout].runtime_group, true)
       }}
   tags:
-    - nginx
-    - apt
+    - always
 
 - name: "Validate input variables and repositories structure"
   ansible.builtin.assert:
@@ -171,6 +168,136 @@
     - nginx
     - nginx-config
 
+- name: "Merge default and user-defined servers"
+  ansible.builtin.set_fact:
+    _nginx_all_servers: >-
+      {{
+        (
+          (__nginx_layouts_config[_nginx_active_layout].default_servers | default([])) +
+          (nginx_servers | default([]))
+        )
+        | reverse
+        | unique(attribute='name')
+        | reverse
+        | list
+      }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Ensure Nginx server config directories exist"
+  ansible.builtin.file:
+    path: >-
+      {{ item.server_dir | default(nginx_server_dir | default(__nginx_layouts_config[_nginx_active_layout].server_dir)) }}
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ _nginx_all_servers }}"
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Ensure Nginx server symlink directories exist"
+  ansible.builtin.file:
+    path: >-
+      {{ item.server_symlink_dir | default(nginx_server_symlink_dir | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_dir)) }}
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ _nginx_all_servers }}"
+  when:
+    - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Deploy Nginx server templates"
+  ansible.builtin.template:
+    src: "{{ item.template | default(item.name) }}.j2"
+    dest: >-
+      {{ item.server_dir | default(nginx_server_dir | default(__nginx_layouts_config[_nginx_active_layout].server_dir)) }}/{{
+      item.filename | default(item.name) }}{{
+      item.server_ext | default(nginx_server_ext | default(__nginx_layouts_config[_nginx_active_layout].server_ext)) }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ _nginx_all_servers }}"
+  when: item.state | default('present') == 'present'
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Manage Nginx server symlinks"
+  ansible.builtin.file:
+    src: >-
+      {{ item.server_dir | default(nginx_server_dir | default(__nginx_layouts_config[_nginx_active_layout].server_dir)) }}/{{
+      item.filename | default(item.name) }}{{
+      item.server_ext | default(nginx_server_ext | default(__nginx_layouts_config[_nginx_active_layout].server_ext)) }}
+    dest: >-
+      {{ item.server_symlink_dir | default(nginx_server_symlink_dir | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_dir)) }}/{{
+      item.symlink_prefix | default(nginx_server_symlink_prefix | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_prefix)) }}{{
+      item.filename | default(item.name) }}{{
+      item.server_symlink_ext | default(nginx_server_symlink_ext | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_ext)) }}
+    state: link
+  loop: "{{ _nginx_all_servers }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
+  notify: Reload nginx
+  become: true
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Remove Nginx server symlinks (if absent)"
+  ansible.builtin.file:
+    path: >-
+      {{ item.server_symlink_dir | default(nginx_server_symlink_dir | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_dir)) }}/{{
+      item.symlink_prefix | default(nginx_server_symlink_prefix | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_prefix)) }}{{
+      item.filename | default(item.name) }}{{
+      item.server_symlink_ext | default(nginx_server_symlink_ext | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_ext)) }}
+    state: absent
+  loop: "{{ _nginx_all_servers }}"
+  when:
+    - item.state | default('present') == 'absent'
+    - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Remove Nginx server configs (if absent)"
+  ansible.builtin.file:
+    path: >-
+      {{ item.server_dir | default(nginx_server_dir | default(__nginx_layouts_config[_nginx_active_layout].server_dir)) }}/{{
+      item.filename | default(item.name) }}{{
+      item.server_ext | default(nginx_server_ext | default(__nginx_layouts_config[_nginx_active_layout].server_ext)) }}
+    state: absent
+  loop: "{{ _nginx_all_servers }}"
+  when: item.state | default('present') == 'absent'
+  notify: Reload nginx
+  become: true
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+# TBD
+
 - name: "Ensure directory for DH param exists"
   ansible.builtin.file:
     path: "{{ nginx_ssl_dhparam_file | dirname }}"
@@ -280,37 +407,3 @@
   tags:
     - nginx
     - nginx-config
-
-# started legacy tasks
-- name: "Create config files"
-  ansible.builtin.template:
-    src: "{{ item }}.j2"
-    dest: "/etc/nginx/{{ item }}"
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - 'sites-available/default'
-    - 'sites-available/status'
-  notify: Reload nginx
-  become: true
-  tags:
-    - nginx
-    - nginx_cfg
-
-- name: "Install default servernames"
-  ansible.builtin.file:
-    src: "/etc/nginx/sites-available/{{ item }}"
-    dest: "/etc/nginx/sites-enabled/{{ item }}"
-    state: link
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - default
-    - status
-  notify: Reload nginx
-  become: true
-  tags:
-    - nginx
-    - nginx_cfg

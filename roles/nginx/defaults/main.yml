@@ -13,6 +13,4 @@ nginx_ssl_dhparam_size: 2048
 nginx_working_dirs: []
 nginx_extra_groups: []
 nginx_cleanup_paths: []
-
-nginx_include_sites_enabled: true
-nginx_include_dirs: []
+nginx_http_includes: []

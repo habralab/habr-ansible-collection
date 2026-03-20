@@ -170,8 +170,10 @@ http {
 	# Virtual Host Configs
 	##
 
-	include /etc/nginx/conf.d/*.conf;
-	include /etc/nginx/sites-enabled/*;
+{% set _all_http_includes = (__nginx_layouts_config[_nginx_active_layout].http_includes | default([])) + (nginx_http_includes | default([])) %}
+{% for inc in _all_http_includes | unique %}
+	include {{ inc }};
+{% endfor %}
 }
 
 
