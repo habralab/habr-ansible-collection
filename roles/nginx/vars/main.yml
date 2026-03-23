@@ -165,6 +165,12 @@ __nginx_dropins:
     triggers:
       - "^nginx_maps$"
 
+__nginx_server_template_specs:
+  "servers/vhost":
+    vars_file: "server_vhost.yml"
+  "servers/vhost_mvp":
+    vars_file: "server_vhost.yml"
+
 __nginx_mime_types_defaults:
   "text/html": "html htm shtml"
   "text/css": "css"

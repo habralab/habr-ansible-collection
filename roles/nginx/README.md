@@ -13,7 +13,7 @@ The selected repository affects not only package origin and update cadence, but 
 - Manages server configs from a declarative `nginx_servers` list, including optional symlinks for Debian-style layouts.
 - Prepares runtime directories, logrotate configuration, DH parameters, runtime group membership, and cleanup of obsolete paths.
 
-**Out of Scope:** This role does not ship application-specific vhost templates beyond the built-in `default` and `status` examples. Custom websites should be provided as your own Jinja templates and referenced via `nginx_servers`.
+**Out of Scope:** This role does not ship application-specific website templates. It does ship a small set of bundled infrastructure-oriented templates, including the layout defaults, `servers/status`, and the declarative `servers/vhost` model. Highly application-specific sites should still be expressed either through your own Jinja templates or through the supported `servers/vhost` data model where it is sufficient.
 
 **Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_maps`, `nginx_proxy_*`, and `nginx_real_ip_*` are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
 
@@ -170,7 +170,7 @@ Official Nginx documentation: [HTTP Log module](https://nginx.org/en/docs/http/n
 | Variable | Role Default | Nginx Default | Description |
 |---|---|---|---|
 | `nginx_access_log` | `/var/log/nginx/access.log` | `logs/access.log` | Path to the default access log. |
-| `nginx_log_format` | `undefined` | `main` | List of dictionaries defining custom log formats. Supports `name`, `escape` (e.g., `json`), and `string` (list of format lines). |
+| `nginx_log_format` | `undefined` | `main` | List of dictionaries defining custom log formats. Supports `name`, `escape` (e.g., `json`), and `string` (list of format lines). When set, this list replaces the layout-provided log format declarations; include `main` explicitly if you still want it. |
 | `nginx_logrotate_frequency` | layout specific | `daily` | Frequency of log rotation (e.g., `daily`, `weekly`). |
 | `nginx_logrotate_rotate` | layout specific | `14` / `52` | Number of rotated log files to keep. |
 | `nginx_log_group` | layout specific | `adm` | Group ownership for log files. |
@@ -492,6 +492,7 @@ Built-in server templates:
 - `layouts/debian/default`
 - `layouts/upstream/default`
 - `servers/status`
+- `servers/vhost`
 
 ### Bundled Site Templates
 
@@ -587,6 +588,106 @@ nginx_servers:
           - allow: "192.0.2.0/24"
           - deny: "all"
 ```
+
+#### `vhost`
+
+`servers/vhost` is the role-native declarative HTTP vhost template.
+
+Unlike ad hoc legacy-style templates, `servers/vhost` is driven by an internal rendering model:
+- directive registry
+- logical block registry
+- render context registry (`server`, `location`)
+- internal template mode/debug switches used during template development
+
+Current model characteristics:
+- HTTP-only. Stream/TCP/UDP is outside the template model.
+- `server` and `location` contexts are rendered from internal registries rather than from hardcoded section branches.
+- ordering and spacing are part of the template data model
+- debug rendering can be enabled internally for template development, but production output is plain nginx syntax
+
+Implications for users:
+- common nginx HTTP vhost cases should be expressed through the supported data model
+- simple directive support is generally added through the internal registries
+- schema-driven or multi-line constructs still require explicit composite renderer support
+- `servers/vhost` is the preferred bundled path for role-native HTTP vhost management
+
+Common top-level fields supported by the template include:
+- `listen`
+- `http2`
+- `server_name`
+- `server_tokens`
+- `access_log`
+- `error_log`
+- `rewrite_log`
+- `ssl_files`
+- `auth_list`
+- `add_header`
+- `client_max_body_size`
+- `set`
+- `if`
+- `proxy_*`
+- `rewrite`
+- `root`
+- `alias`
+- `index`
+- `include`
+- `try_files`
+- `error_page`
+- `return`
+- `locations`
+- `upstreams`
+- `companion_servers`
+
+Location items support the same general model, with the usual nginx context restrictions applied by the directive registry.
+
+Minimal example:
+
+```yaml
+nginx_servers:
+  - name: "app.example.com"
+    template: "servers/vhost"
+    server_name: "app.example.com"
+    listen:
+      - "443 ssl"
+      - "[::]:443 ssl"
+    http2: true
+    ssl_files:
+      - certificate: "ssl/app.example.com/fullchain.pem"
+        key: "ssl/app.example.com/privkey.pem"
+    access_log:
+      - path: "/var/log/nginx/app.example.com_access.log"
+        format: "main"
+    locations:
+      - name: "/"
+        proxy_pass: "http://app_backend"
+```
+
+SSL handling in `servers/vhost` is currently split into two separate concerns:
+
+- `ssl_files`: authoritative runtime certificate paths rendered into nginx config
+- `ssl_provisioning`: future rollout/provisioning hook for certificate deployment workflows
+
+`ssl_files` is authoritative for rendered nginx paths:
+
+```yaml
+ssl_files:
+  - certificate: "ssl/example/fullchain.pem"
+    key: "ssl/example/privkey.pem"
+```
+
+`ssl_provisioning` currently exposes only a mock trigger for future rollout logic:
+
+```yaml
+ssl_provisioning:
+  enabled: true
+  name: "example.com"
+```
+
+Current contract:
+- if `ssl_files` is defined and non-empty, `servers/vhost` renders certificate paths from it
+- `ssl_provisioning` does not currently resolve or deploy certificate files automatically
+- if `ssl_provisioning.enabled: true` is present, the role only reports the request in tasks for now
+- this split is intentional so runtime nginx paths stay stable even if certificate lifecycle logic evolves later
 
 ### Migration / Override Example
 

@@ -269,6 +269,52 @@
     - nginx-config
     - nginx-servers
 
+- name: "Determine active server template spec files"
+  ansible.builtin.set_fact:
+    _nginx_active_server_template_spec_files: >-
+      {% set ns = namespace(files=[]) %}
+      {% for item in _nginx_all_servers %}
+      {% set template_name = item.template | default(item.name) %}
+      {% if item.state | default('present') == 'present' and __nginx_server_template_specs[template_name] is defined %}
+      {% set ns.files = ns.files + [__nginx_server_template_specs[template_name].vars_file] %}
+      {% endif %}
+      {% endfor %}
+      {{ ns.files | unique }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Load internal server template spec files"
+  ansible.builtin.include_vars:
+    file: "{{ item }}"
+  loop: "{{ (_nginx_active_server_template_spec_files | trim) | from_yaml }}"
+  when: _nginx_active_server_template_spec_files | trim | length > 0
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Report SSL provisioning requests (not implemented yet)"
+  ansible.builtin.debug:
+    msg: >-
+      SSL provisioning requested for server {{ item.name | default(item.server_name | default('unnamed')) }},
+      but provision tasks are not implemented yet. Request:
+      {{ item.ssl_provisioning | to_nice_json }}
+  loop: "{{ _nginx_all_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default('unnamed')) }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.ssl_provisioning is defined
+    - item.ssl_provisioning.enabled | default(false) | bool
+  changed_when: false
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+    - nginx-ssl
+
 - name: "Ensure Nginx server config directories exist"
   ansible.builtin.file:
     path: >-

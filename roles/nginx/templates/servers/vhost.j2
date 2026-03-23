@@ -1,0 +1,432 @@
+{#jinja2: trim_blocks: True, lstrip_blocks: True #}
+{# ============================================================================ #}
+{# Upstream Rendering                                                            #}
+{# ============================================================================ #}
+{%- macro render_upstreams(upstreams) -%}
+{% set ns = namespace(out='') %}
+{% if upstreams is defined and upstreams | length > 0 %}
+{% set ns.out = ns.out ~ '### Upstreams\n\n' %}
+{% for upstream in upstreams if upstream.name is defined and upstream.state | default('present') == 'present' %}
+{% set ns.out = ns.out ~ 'upstream ' ~ upstream.name ~ ' {\n' %}
+{% if upstream.ip_hash | default(false) | bool %}
+{% set ns.out = ns.out ~ '\tip_hash;\n' %}
+{% endif %}
+{% for host in upstream.hosts | default([]) if host.address is defined and host.state | default('present') == 'present' %}
+{% set ns.out = ns.out ~ '\tserver ' ~ host.address %}
+{% if host.backup | default(false) | bool %}{% set ns.out = ns.out ~ ' backup' %}{% endif %}
+{% if host.weight is defined %}{% set ns.out = ns.out ~ ' weight=' ~ (host.weight | string) %}{% endif %}
+{% if host.max_fails is defined %}{% set ns.out = ns.out ~ ' max_fails=' ~ (host.max_fails | string) %}{% endif %}
+{% if host.fail_timeout is defined %}{% set ns.out = ns.out ~ ' fail_timeout=' ~ host.fail_timeout %}{% endif %}
+{% set ns.out = ns.out ~ ';' %}
+{% if host.remark is defined %}{% set ns.out = ns.out ~ ' # ' ~ host.remark %}{% endif %}
+{% set ns.out = ns.out ~ '\n' %}
+{% endfor %}
+{% set ns.out = ns.out ~ '}\n' %}
+{% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% endfor %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Content Detection                                                             #}
+{# ============================================================================ #}
+{%- macro block_has_content(block, block_name) -%}
+{% set spec = __nginx_server_vhost_block_specs[block_name] %}
+{% set ns = namespace(found=false) %}
+{% for member in spec.members %}
+{% set value = block[member] if block[member] is defined else (__nginx_server_vhost_directive_specs[member].default if (__nginx_server_vhost_directive_specs[member] is defined and __nginx_server_vhost_directive_specs[member].default is defined) else none) %}
+{% if value is not none %}
+{% if value is string %}
+{% if value | length > 0 %}{% set ns.found = true %}{% endif %}
+{% elif value is sequence %}
+{% if value | length > 0 %}{% set ns.found = true %}{% endif %}
+{% else %}
+{% set ns.found = true %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{{- ns.found | ternary('1', '') -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Debug Rendering                                                               #}
+{# ============================================================================ #}
+{%- macro render_mock_marker(block_name, indent='') -%}
+{% set ns = namespace(out='') %}
+{% if __nginx_server_vhost_mode.debug.render_blocks | default(false) | bool %}
+{% set suffix = ' (unnamed)' if (__nginx_server_vhost_block_specs[block_name].title | default('')) == '' else '' %}
+{% set ns.out = indent ~ '# ' ~ (__nginx_server_vhost_mode.debug.block_prefix | default('debug block: ')) ~ (__nginx_server_vhost_block_specs[block_name].mock_name | default(block_name)) ~ suffix ~ '\n' %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Inline Debug Annotation                                                       #}
+{# ============================================================================ #}
+{%- macro append_debug_suffix(text, member, renderer, spacing) -%}
+{% set ns = namespace(out='') %}
+{% if not text %}
+{{- ns.out -}}
+{%- elif __nginx_server_vhost_mode.debug.render_members | default(false) | bool -%}
+{% set suffix = ' # debug: ' ~ member ~ ' [renderer=' ~ renderer ~ ', spacing=' ~ (spacing | ternary('true', 'false')) ~ ']' %}
+{% for line in text.split('\n') if line != '' %}
+{% set ns.out = ns.out ~ line ~ suffix ~ '\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = text %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Atomic Directive Renderers                                                    #}
+{# ============================================================================ #}
+{%- macro render_directive_member(block, member, context_name, indent='') -%}
+{% set ns = namespace(out='') %}
+{% set spec = __nginx_server_vhost_directive_specs[member] %}
+{% set value = block[member] if block[member] is defined else (spec.default if spec.default is defined else none) %}
+{% if value is not none and context_name in spec.contexts %}
+{% if spec.renderer == 'bool_on_off' %}
+{% set ns.out = indent ~ spec.directive ~ ' ' ~ (value | bool | ternary('on', 'off')) ~ ';\n' %}
+{% elif spec.renderer == 'scalar' %}
+{% set ns.out = indent ~ spec.directive ~ ' ' ~ value ~ ';\n' %}
+{% elif spec.renderer == 'repeatable' %}
+{% set entries = value if value is sequence and value is not string else [value] %}
+{% for entry in entries %}
+{% set ns.out = ns.out ~ indent ~ spec.directive ~ ' ' ~ entry ~ ';\n' %}
+{% endfor %}
+{% elif spec.renderer == 'join_space' %}
+{% set entries = value if value is sequence and value is not string else [value] %}
+{% set ns.out = indent ~ spec.directive ~ ' ' ~ (entries | join(' ')) ~ ';\n' %}
+{% elif spec.renderer == 'name_value_list' %}
+{% if value is sequence and value is not string %}
+{% for entry in value if entry.name is defined and entry.value is defined %}
+{% set ns.out = ns.out ~ indent ~ spec.directive ~ ' ' ~ entry.name ~ ' ' ~ entry.value ~ ';\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid name_value_list: ' ~ member ~ '\n' %}
+{% endif %}
+{% elif spec.renderer == 'proxy_buffers' %}
+{% if value is mapping %}
+{% set ns.out = indent ~ spec.directive ~ ' ' ~ (value.count | default(8) | string) ~ ' ' ~ (value.size | default('8k')) ~ ';\n' %}
+{% else %}
+{% set ns.out = indent ~ spec.directive ~ ' ' ~ value ~ ';\n' %}
+{% endif %}
+{% else %}
+{% set ns.out = indent ~ '# TODO render ' ~ spec.renderer ~ ': ' ~ member ~ '\n' %}
+{% endif %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Composite Directive Renderers                                                 #}
+{# ============================================================================ #}
+{%- macro render_composite_member(block, member, context_name, indent='') -%}
+{% set ns = namespace(out='') %}
+{% set value = block[member] if block[member] is defined else none %}
+{% if value is none %}
+{{- ns.out -}}
+{%- elif member == 'access_log' -%}
+{# --- composite: access_log -------------------------------------------------- #}
+{% set entries = value if value is sequence and value is not string else [value] %}
+{% for log in entries %}
+{% if log is string %}
+{% set ns.out = ns.out ~ indent ~ 'access_log ' ~ log ~ ';\n' %}
+{% elif log.path is defined %}
+{% set line = indent ~ 'access_log ' ~ log.path %}
+{% if log.format is defined %}{% set line = line ~ ' ' ~ log.format %}{% endif %}
+{% if log.buffer is defined %}{% set line = line ~ ' buffer=' ~ log.buffer %}{% endif %}
+{% if log.gzip is defined %}
+{% if log.gzip is boolean %}
+{% if log.gzip %}{% set line = line ~ ' gzip' %}{% endif %}
+{% else %}
+{% set line = line ~ ' gzip=' ~ log.gzip %}
+{% endif %}
+{% endif %}
+{% if log.flush is defined %}{% set line = line ~ ' flush=' ~ log.flush %}{% endif %}
+{% if log.if is defined %}{% set line = line ~ ' if=' ~ log.if %}{% endif %}
+{% set ns.out = ns.out ~ line ~ ';\n' %}
+{% endif %}
+{% endfor %}
+{%- elif member == 'error_log' -%}
+{# --- composite: error_log --------------------------------------------------- #}
+{% if value is string %}
+{% set ns.out = indent ~ 'error_log ' ~ value ~ ';\n' %}
+{% elif value is mapping and value.path is defined %}
+{% set ns.out = indent ~ 'error_log ' ~ value.path %}
+{% if value.level is defined %}{% set ns.out = ns.out ~ ' ' ~ value.level %}{% endif %}
+{% set ns.out = ns.out ~ ';\n' %}
+{% endif %}
+{%- elif member == 'proxy_set_header' -%}
+{# --- composite: proxy_set_header ------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for entry in value if entry.name is defined and entry.value is defined %}
+{% set ns.out = ns.out ~ indent ~ 'proxy_set_header ' ~ entry.name ~ ' ' ~ entry.value ~ ';\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: proxy_set_header\n' %}
+{% endif %}
+{%- elif member == 'add_header' -%}
+{# --- composite: add_header -------------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for header in value if header.name is defined and header.value is defined %}
+{% set quotes = header.quotes | default('double') %}
+{% set line = indent ~ 'add_header ' ~ header.name ~ ' ' %}
+{% if quotes == 'single' %}
+{% set line = line ~ "'" ~ header.value ~ "'" %}
+{% elif quotes == 'absent' %}
+{% set line = line ~ header.value %}
+{% else %}
+{% set line = line ~ '"' ~ header.value ~ '"' %}
+{% endif %}
+{% if header.always | default(false) | bool %}
+{% set line = line ~ ' always' %}
+{% endif %}
+{% set ns.out = ns.out ~ line ~ ';\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: add_header\n' %}
+{% endif %}
+{%- elif member == 'auth_list' -%}
+{# --- composite: auth_list --------------------------------------------------- #}
+{% set ns.out = indent ~ 'include /etc/nginx/includes/auth.' ~ value ~ '.include;\n' %}
+{%- elif member == 'error_page' -%}
+{# --- composite: error_page -------------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for page in value %}
+{% if page is string %}
+{% set ns.out = ns.out ~ indent ~ 'error_page ' ~ page ~ ';\n' %}
+{% elif page.codes is defined and page.target is defined %}
+{% set codes = page.codes if page.codes is sequence and page.codes is not string else [page.codes] %}
+{% set ns.out = ns.out ~ indent ~ 'error_page ' ~ (codes | join(' ')) ~ ' ' ~ page.target ~ ';\n' %}
+{% endif %}
+{% endfor %}
+{% elif value is string %}
+{% set ns.out = indent ~ 'error_page ' ~ value ~ ';\n' %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: error_page\n' %}
+{% endif %}
+{%- elif member == 'if' -%}
+{# --- composite: if ---------------------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for cond in value if cond.condition is defined %}
+{% set ns.out = ns.out ~ indent ~ 'if (' ~ cond.condition ~ ') {\n' %}
+{% if cond.set is defined and cond.set is sequence and cond.set is not string %}
+{% for entry in cond.set if entry.name is defined and entry.value is defined %}
+{% set ns.out = ns.out ~ indent ~ '\tset ' ~ entry.name ~ ' ' ~ entry.value ~ ';\n' %}
+{% endfor %}
+{% endif %}
+{% if cond.return is defined %}
+{% set ns.out = ns.out ~ render_composite_member({'return': cond.return}, 'return', 'if', indent ~ '\t') %}
+{% endif %}
+{% if cond.rewrite is defined %}
+{% set ns.out = ns.out ~ render_composite_member({'rewrite': cond.rewrite}, 'rewrite', 'if', indent ~ '\t') %}
+{% endif %}
+{% if cond.raw is defined %}
+{% set raw_lines = cond.raw if cond.raw is sequence and cond.raw is not string else [cond.raw] %}
+{% for line in raw_lines %}
+{% set ns.out = ns.out ~ indent ~ '\t' ~ line ~ ';\n' %}
+{% endfor %}
+{% endif %}
+{% set ns.out = ns.out ~ indent ~ '}\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: if\n' %}
+{% endif %}
+{%- elif member == 'index' -%}
+{# --- composite: index ------------------------------------------------------- #}
+{% set entries = value if value is sequence and value is not string else [value] %}
+{% set ns.out = indent ~ 'index ' ~ (entries | join(' ')) ~ ';\n' %}
+{%- elif member == 'proxy_pass' -%}
+{# --- composite: proxy_pass -------------------------------------------------- #}
+{% set ns.out = indent ~ 'proxy_pass ' ~ value ~ ';\n' %}
+{%- elif member == 'return' -%}
+{# --- composite: return ------------------------------------------------------ #}
+{% if value is string %}
+{% set ns.out = indent ~ 'return ' ~ value ~ ';\n' %}
+{% elif value is mapping %}
+{% if value.url is defined %}
+{% set ns.out = indent ~ 'return ' ~ (value.code | default(302) | string) ~ ' ' ~ value.url ~ ';\n' %}
+{% elif value.text is defined %}
+{% set text = value.text | string %}
+{% if "'" not in text %}
+{% set quoted = "'" ~ text ~ "'" %}
+{% elif '"' not in text %}
+{% set quoted = '"' ~ text ~ '"' %}
+{% else %}
+{% set quoted = '"' ~ (text | replace('\\', '\\\\') | replace('"', '\\"')) ~ '"' %}
+{% endif %}
+{% set ns.out = indent ~ 'return ' ~ (value.code | default(200) | string) ~ ' ' ~ quoted ~ ';\n' %}
+{% elif value.code is defined %}
+{% set ns.out = indent ~ 'return ' ~ (value.code | string) ~ ';\n' %}
+{% endif %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: return\n' %}
+{% endif %}
+{%- elif member == 'rewrite' -%}
+{# --- composite: rewrite ----------------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for rewrite in value if rewrite.regex is defined and rewrite.replacement is defined %}
+{% set regex = rewrite.regex | string %}
+{% if "'" not in regex %}
+{% set rendered_regex = "'" ~ regex ~ "'" %}
+{% elif '"' not in regex %}
+{% set rendered_regex = '"' ~ regex ~ '"' %}
+{% else %}
+{% set rendered_regex = '"' ~ (regex | replace('\\', '\\\\') | replace('"', '\\"')) ~ '"' %}
+{% endif %}
+{% set replacement = rewrite.replacement | string %}
+{% if "'" not in replacement %}
+{% set rendered_replacement = "'" ~ replacement ~ "'" %}
+{% elif '"' not in replacement %}
+{% set rendered_replacement = '"' ~ replacement ~ '"' %}
+{% else %}
+{% set rendered_replacement = '"' ~ (replacement | replace('\\', '\\\\') | replace('"', '\\"')) ~ '"' %}
+{% endif %}
+{% set ns.out = ns.out ~ indent ~ 'rewrite ' ~ rendered_regex ~ ' ' ~ rendered_replacement %}
+{% if rewrite.flag is defined %}{% set ns.out = ns.out ~ ' ' ~ rewrite.flag %}{% endif %}
+{% set ns.out = ns.out ~ ';\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: rewrite\n' %}
+{% endif %}
+{%- elif member == 'root' -%}
+{# --- composite: root -------------------------------------------------------- #}
+{% set ns.out = indent ~ 'root ' ~ value ~ ';\n' %}
+{%- elif member == 'ssl_files' -%}
+{# --- composite: ssl_files --------------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for ssl_file in value if ssl_file.certificate is defined and ssl_file.key is defined %}
+{% set ns.out = ns.out ~ indent ~ 'ssl_certificate ' ~ ssl_file.certificate ~ ';\n' %}
+{% set ns.out = ns.out ~ indent ~ 'ssl_certificate_key ' ~ ssl_file.key ~ ';\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: ssl_files\n' %}
+{% endif %}
+{%- elif member == 'try_files' -%}
+{# --- composite: try_files --------------------------------------------------- #}
+{% set ns.out = indent ~ 'try_files ' ~ value ~ ';\n' %}
+{% else %}
+{# --- composite: fallback TODO ------------------------------------------------ #}
+{% set ns.out = indent ~ '# TODO render composite: ' ~ member ~ '\n' %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Block Member Rendering                                                        #}
+{# ============================================================================ #}
+{%- macro render_members(block, block_name, context_name, indent='') -%}
+{% set ns = namespace(out='', first=true, prev_spacing=false) %}
+{% set block_spec = __nginx_server_vhost_block_specs[block_name] %}
+{% if not (__nginx_server_vhost_mode.render_directives | default(false) | bool) %}
+{{- ns.out -}}
+{%- else -%}
+{% for member in block_spec.members %}
+{% if member == 'locations' %}
+{% set spacing = __nginx_server_vhost_block_specs[block_name].spacing | default(false) %}
+{% if (not ns.first) and (ns.prev_spacing or spacing) %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% set rendered = indent ~ '# TODO render context_list: locations\n' %}
+{% set ns.out = ns.out ~ append_debug_suffix(rendered, member, 'context_list', spacing) %}
+{% set ns.first = false %}
+{% set ns.prev_spacing = spacing %}
+{% elif __nginx_server_vhost_directive_specs[member] is defined %}
+{% set spec = __nginx_server_vhost_directive_specs[member] %}
+{% set value = block[member] if block[member] is defined else (spec.default if spec.default is defined else none) %}
+{% if value is not none and context_name in spec.contexts %}
+{% set spacing = spec.spacing if spec.spacing is defined else (__nginx_server_vhost_block_specs[block_name].spacing | default(false)) %}
+{% if (not ns.first) and (ns.prev_spacing or spacing) %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% set rendered = render_directive_member(block, member, context_name, indent) %}
+{% set ns.out = ns.out ~ append_debug_suffix(rendered, member, spec.renderer, spacing) %}
+{% set ns.first = false %}
+{% set ns.prev_spacing = spacing %}
+{% endif %}
+{% elif block[member] is defined %}
+{% set spacing = __nginx_server_vhost_block_specs[block_name].spacing | default(false) %}
+{% if (not ns.first) and (ns.prev_spacing or spacing) %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% set rendered = render_composite_member(block, member, context_name, indent) %}
+{% set ns.out = ns.out ~ append_debug_suffix(rendered, member, 'composite', spacing) %}
+{% set ns.first = false %}
+{% set ns.prev_spacing = spacing %}
+{% endif %}
+{% endfor %}
+{{- ns.out -}}
+{%- endif -%}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Context Rendering: location                                                   #}
+{# ============================================================================ #}
+{%- macro render_mock_location(location) -%}
+{% set ctx = __nginx_server_vhost_context_specs.location %}
+{% set ns = namespace(out='', first=true) %}
+{% set location_name = location.name | default('/') %}
+{% set ns.out = ns.out ~ '\tlocation' %}
+{% if location.modifier is defined %}{% set ns.out = ns.out ~ ' ' ~ location.modifier %}{% endif %}
+{% set ns.out = ns.out ~ ' ' ~ location_name ~ ' {' %}
+{% for block_name in ctx.block_order %}
+{% if block_has_content(location, block_name) %}
+{% if ns.first %}
+{% set ns.out = ns.out ~ '\n' %}
+{% set ns.first = false %}
+{% else %}
+{% set ns.out = ns.out ~ '\n' %}
+{% endif %}
+{% set ns.out = ns.out ~ render_mock_marker(block_name, ctx.indent) %}
+{% set ns.out = ns.out ~ render_members(location, block_name, 'location', ctx.indent) %}
+{% endif %}
+{% endfor %}
+{% set ns.out = ns.out ~ '\t}' %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Context Rendering: server                                                     #}
+{# ============================================================================ #}
+{%- macro render_mock_server(block) -%}
+{% set ctx = __nginx_server_vhost_context_specs.server %}
+{% set ns = namespace(out='') %}
+{% set ns.out = ns.out ~ 'server {\n' %}
+{% for block_name in ctx.block_order %}
+{% if block_name == 'locations' and block.locations is defined and block.locations | length > 0 %}
+{% set ns.out = ns.out ~ '\n\t# ' ~ __nginx_server_vhost_block_specs[block_name].title ~ '\n' %}
+{% for location in block.locations %}
+{% set ns.out = ns.out ~ render_mock_location(location) ~ '\n' %}
+{% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% endfor %}
+{% elif block_has_content(block, block_name) %}
+{% set title = __nginx_server_vhost_block_specs[block_name].title %}
+{% if title %}
+{% set ns.out = ns.out ~ '\n\t# ' ~ title ~ '\n' %}
+{% elif ns.out != 'server {\n' %}
+{% set ns.out = ns.out ~ '\n' %}
+{% endif %}
+{% set ns.out = ns.out ~ render_mock_marker(block_name, '\t') %}
+{% if block_name != 'locations' %}
+{% set ns.out = ns.out ~ render_members(block, block_name, 'server', '\t') %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% set ns.out = ns.out ~ '}' %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
+{# Template Entry Point                                                          #}
+{# ============================================================================ #}
+{% set rendered_upstreams = render_upstreams(item.upstreams).lstrip('\n').rstrip() %}
+{% set rendered_server = render_mock_server(item).lstrip('\n').rstrip() %}
+{% if rendered_upstreams %}
+{{ rendered_upstreams }}
+
+{% endif %}
+{{ rendered_server }}
+{% if item.companion_servers is defined and item.companion_servers | length > 0 %}
+
+{% for companion in item.companion_servers if companion.state | default('present') == 'present' %}
+{{ render_mock_server(companion).lstrip('\n').rstrip() }}
+{% if not loop.last %}{% endif %}
+{% endfor %}
+{% endif %}
