@@ -29,6 +29,8 @@ ansible-galaxy collection install git+ssh://git@git.habralab.com/tools/habr-ansi
 
 Detailed documentation for each role is available in its respective `roles/<name>/README.md`.
 
+Some roles may also include a role-local `DEVELOPMENT.md` with internal design notes and contributor guidance for that specific role.
+
 - `apt_repo`: Helper role to manage APT repositories (supports legacy lists and deb822 sources).
 - `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
@@ -56,8 +58,9 @@ Reference roles using FQCN:
 
 ## Principles
 
-- **Idempotency**: All roles are safe to run multiple times.
-- **Minimalism**: Roles do one thing well with clear non-goals.
-- **Transparency**: Explicit secret handling and upstream documentation references.
+- **Idempotency**: Roles are designed to be safe to run repeatedly.
+- **Explicit Scope**: Each role should define clear operational boundaries and documented non-goals.
+- **Pragmatic Modeling**: Simple use cases should stay simple, but more complex infrastructure roles may use richer internal models when this reduces drift and improves operability.
+- **Transparency**: Public role contracts belong in role `README.md`; implementation-specific design rules may live in role-local `DEVELOPMENT.md`.
 
 This collection is maintained by **Habr infrastructure team**. For development guidelines, see [CONTRIBUTING.md](./CONTRIBUTING.md).
