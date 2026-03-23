@@ -181,6 +181,21 @@ This means:
 
 Keep this in mind when introducing new built-in servers or renaming existing ones.
 
+## Iterative Server Rollout Filter
+
+The role supports narrow rollout of server entries through `nginx_only_servers`.
+
+Rules:
+
+- treat it as an operational filter over the already-merged `nginx_servers` list
+- keep the public API CLI-first: a single pattern or a comma-separated string with shell-style `*`
+- continue accepting structured lists as a compatibility fallback
+- do not expose raw regex as the primary interface
+- match against `name`, `filename`, and `server_name`
+- apply the same filter to `present` and `absent` entries so targeted runs do not accidentally remove unrelated files
+
+If future selection needs become more complex, prefer adding one more explicit matching surface over turning the variable into a mini query language.
+
 ## Handler Semantics Matter
 
 The role validates config through `nginx -t` before reload or restart.

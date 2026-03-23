@@ -26,6 +26,7 @@ The selected repository affects not only package origin and update cadence, but 
 | `nginx_packages` | `[]` | Explicit list of packages to install. Overrides layout defaults. |
 | `nginx_remove_packages` | `[]` | List of packages to purge before installation. |
 | `nginx_repositories` | `{}` | Dictionary to configure/enable repositories (see overrides). |
+| `nginx_only_servers` | `[]` | Optional rollout filter for managed server entries. Intended primarily for CLI use with `-e`. Accepts a single shell-style pattern, a comma-separated string, or a list of patterns. Matches against server `name`, `filename`, and `server_name`. Only `*` wildcard is supported. |
 
 ### Repository Selection and Layouts
 
@@ -487,6 +488,35 @@ Global overrides for the same path mechanics are also supported:
 - `nginx_server_symlink_dir`
 - `nginx_server_symlink_ext`
 - `nginx_server_symlink_prefix`
+
+For iterative rollouts you can narrow the managed subset with `nginx_only_servers`.
+
+Rules:
+- leave it unset or empty to manage all server entries
+- prefer CLI use through `-e` during iterative rollout
+- pass either a single string or a comma-separated string such as `app.example.com,api-*`
+- YAML or JSON lists are still accepted as a compatibility fallback
+- patterns use shell-style `*`, not raw regex
+- matching is performed against each entry's `name`, `filename`, and `server_name`
+- absent-state entries are filtered through the same mechanism, so a narrow rollout will not remove unrelated server files
+
+Inline examples:
+
+```bash
+ansible-playbook -i inventory playbook.yml -l edge-0.example.net -e 'nginx_only_servers=app.example.com'
+```
+
+```bash
+ansible-playbook -i inventory playbook.yml -l edge-0.example.net -e 'nginx_only_servers=app.example.com,api-*'
+```
+
+Structured fallback example:
+
+```yaml
+nginx_only_servers:
+  - "app.example.com"
+  - "api-*"
+```
 
 Built-in server templates:
 - `layouts/debian/default`

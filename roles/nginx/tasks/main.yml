@@ -39,12 +39,14 @@
       - _nginx_repos_merged is mapping
       - nginx_packages is sequence and nginx_packages is not string
       - nginx_remove_packages is sequence and nginx_remove_packages is not string
+      - nginx_only_servers is string or (nginx_only_servers is sequence and nginx_only_servers is not string)
       - nginx_auth is sequence and nginx_auth is not string
       - nginx_auth_passwd_list is sequence and nginx_auth_passwd_list is not string
       - nginx_maps is sequence and nginx_maps is not string
     fail_msg: >-
       _nginx_repos_merged must be a dictionary.
       nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list, and nginx_maps must be lists.
+      nginx_only_servers must be a string or a list of strings.
   tags:
     - nginx
     - apt
@@ -269,6 +271,80 @@
     - nginx-config
     - nginx-servers
 
+- name: "Normalize server selection patterns"
+  ansible.builtin.set_fact:
+    _nginx_only_servers_patterns: >-
+      {% if nginx_only_servers is string %}
+      {{ nginx_only_servers.split(',') | map('trim') | reject('equalto', '') | list }}
+      {% else %}
+      {{ nginx_only_servers | default([]) }}
+      {% endif %}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Materialize server selection patterns list"
+  ansible.builtin.set_fact:
+    _nginx_only_servers_patterns: "{{ (_nginx_only_servers_patterns | trim) | from_yaml }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Filter selected servers"
+  ansible.builtin.set_fact:
+    _nginx_selected_servers: >-
+      {% set ns = namespace(items=[]) %}
+      {% for item in _nginx_all_servers %}
+      {% set identities = [
+        item.name | default(''),
+        item.filename | default(''),
+        item.server_name | default('')
+      ] | reject('equalto', '') | unique | list %}
+      {% set match_ns = namespace(matched=(_nginx_only_servers_patterns | length == 0)) %}
+      {% if not match_ns.matched %}
+      {% for pattern in _nginx_only_servers_patterns %}
+      {% set pattern_regex = '^'
+        ~ (pattern
+           | replace('\\', '\\\\')
+           | replace('.', '\\.')
+           | replace('[', '\\[')
+           | replace(']', '\\]')
+           | replace('(', '\\(')
+           | replace(')', '\\)')
+           | replace('{', '\\{')
+           | replace('}', '\\}')
+           | replace('+', '\\+')
+           | replace('?', '\\?')
+           | replace('^', '\\^')
+           | replace('$', '\\$')
+           | replace('|', '\\|')
+           | replace('*', '.*'))
+        ~ '$' %}
+      {% if identities | select('match', pattern_regex) | list | length > 0 %}
+      {% set match_ns.matched = true %}
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% if match_ns.matched %}
+      {% set ns.items = ns.items + [item] %}
+      {% endif %}
+      {% endfor %}
+      {{ ns.items }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Materialize selected servers list"
+  ansible.builtin.set_fact:
+    _nginx_selected_servers: "{{ (_nginx_selected_servers | trim) | from_yaml }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
 - name: "Determine active server template spec files"
   ansible.builtin.set_fact:
     _nginx_active_server_template_spec_files: >-
@@ -301,7 +377,7 @@
       SSL provisioning requested for server {{ item.name | default(item.server_name | default('unnamed')) }},
       but provision tasks are not implemented yet. Request:
       {{ item.ssl_provisioning | to_nice_json }}
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   loop_control:
     label: "{{ item.name | default(item.server_name | default('unnamed')) }}"
   when:
@@ -323,7 +399,7 @@
     owner: root
     group: root
     mode: "0755"
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   become: true
   tags:
     - nginx
@@ -338,7 +414,7 @@
     owner: root
     group: root
     mode: "0755"
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   when:
     - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
   become: true
@@ -357,7 +433,7 @@
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   when: item.state | default('present') == 'present'
   notify: Reload nginx
   become: true
@@ -378,7 +454,7 @@
       item.filename | default(item.name) }}{{
       item.server_symlink_ext | default(nginx_server_symlink_ext | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_ext)) }}
     state: link
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   when:
     - item.state | default('present') == 'present'
     - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
@@ -398,7 +474,7 @@
       item.filename | default(item.name) }}{{
       item.server_symlink_ext | default(nginx_server_symlink_ext | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_ext)) }}
     state: absent
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   when:
     - item.state | default('present') == 'absent'
     - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
@@ -416,7 +492,7 @@
       item.filename | default(item.name) }}{{
       item.server_ext | default(nginx_server_ext | default(__nginx_layouts_config[_nginx_active_layout].server_ext)) }}
     state: absent
-  loop: "{{ _nginx_all_servers }}"
+  loop: "{{ _nginx_selected_servers }}"
   when: item.state | default('present') == 'absent'
   notify: Reload nginx
   become: true
