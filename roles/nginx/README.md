@@ -17,6 +17,18 @@ The selected repository affects not only package origin and update cadence, but 
 
 **Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_maps`, `nginx_proxy_*`, and `nginx_real_ip_*` are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
 
+## Reading Guide
+
+If you are opening this README from scratch, this is probably not a one-coffee read. A practical reading order is:
+
+- [Variables](#variables)
+- [Repository Selection and Layouts](#repository-selection-and-layouts)
+- [`nginx_servers`](#server-management)
+- [`servers/vhost`](#vhost)
+- feature-specific sections only when you actually need them
+
+If you are extending the role rather than using it, continue with `DEVELOPMENT.md` after the public contract in this README.
+
 ## Variables
 
 ### Core Role Variables
@@ -656,6 +668,7 @@ Common top-level fields supported by the template include:
 - `set`
 - `if`
 - `proxy_*`
+- `proxy_cache_valid`
 - `rewrite`
 - `root`
 - `alias`
@@ -669,6 +682,20 @@ Common top-level fields supported by the template include:
 - `companion_servers`
 
 Location items support the same general model, with the usual nginx context restrictions applied by the directive registry.
+
+Selected structured fields have dedicated schema-aware renderers. For example, `proxy_cache_valid` accepts either raw nginx strings or structured entries:
+
+```yaml
+proxy_cache_valid:
+  - code: 200
+    time: "1d"
+  - codes: [301, 302, 307, 308]
+    time: "1d"
+```
+
+Currently supported proxy-related `servers/vhost` fields include: `proxy_http_version`, `proxy_next_upstream`, `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`, `proxy_buffering`, `proxy_request_buffering`, `proxy_buffer_size`, `proxy_buffers`, `proxy_max_temp_file_size`, `proxy_cache`, `proxy_cache_background_update`, `proxy_cache_bypass`, `proxy_cache_key`, `proxy_cache_min_uses`, `proxy_cache_status_header`, `proxy_cache_use_stale`, `proxy_cache_valid`, `proxy_no_cache`, `proxy_pass_header`, `proxy_hide_header`, `proxy_ignore_headers`, `proxy_intercept_errors`, `proxy_set_header`, and `proxy_pass`.
+
+`proxy_cache_status_header` is a template-level convenience field. `true` renders `add_header X-Proxy-Cache-Status $upstream_cache_status;`. You can also override the rendered value explicitly when needed.
 
 Minimal example:
 
@@ -690,6 +717,86 @@ nginx_servers:
     locations:
       - name: "/"
         proxy_pass: "http://app_backend"
+```
+
+Override the built-in `default` server by reusing its `name`:
+
+```yaml
+nginx_servers:
+  - name: "default"
+    template: "layouts/debian/default"
+    symlink_prefix: "000_"
+```
+
+Reverse proxy with an explicit upstream:
+
+```yaml
+nginx_servers:
+  - name: "app.example.com"
+    template: "servers/vhost"
+    server_name: "app.example.com"
+
+    upstreams:
+      - name: "app_backend"
+        hosts:
+          - address: "192.0.2.10:8080"
+            remark: "app-0"
+          - address: "192.0.2.11:8080"
+            remark: "app-1"
+
+    proxy_read_timeout: "20s"
+    proxy_send_timeout: "20s"
+    proxy_set_header:
+      - name: "Host"
+        value: "$host"
+      - name: "X-Forwarded-For"
+        value: "$proxy_add_x_forwarded_for"
+      - name: "X-Forwarded-Proto"
+        value: "$scheme"
+
+    locations:
+      - name: "/"
+        proxy_pass: "http://app_backend"
+```
+
+Cached reverse proxy example:
+
+```yaml
+nginx_servers:
+  - name: "cdn.example.com"
+    template: "servers/vhost"
+    server_name: "cdn.example.com"
+
+    cache:
+      - name: "main"
+        keys_zone_size: "64m"
+        max_size: "8g"
+        inactive: "1h"
+
+    upstreams:
+      - name: "cdn_backend"
+        hosts:
+          - address: "198.51.100.10:443"
+            remark: "edge-0"
+          - address: "198.51.100.11:443"
+            remark: "edge-1"
+
+    proxy_cache: "main"
+    proxy_cache_key: "$scheme$request_method$host$uri"
+    proxy_cache_min_uses: "1"
+    proxy_cache_background_update: true
+    proxy_cache_use_stale:
+      - "error"
+      - "timeout"
+      - "invalid_header"
+    proxy_cache_valid:
+      - "200 1d"
+      - "404 5m"
+    proxy_cache_status_header: true
+
+    locations:
+      - name: "/"
+        proxy_pass: "https://cdn_backend"
 ```
 
 SSL handling in `servers/vhost` is currently split into two separate concerns:

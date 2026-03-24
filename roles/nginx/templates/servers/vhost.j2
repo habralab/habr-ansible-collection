@@ -1,5 +1,39 @@
 {#jinja2: trim_blocks: True, lstrip_blocks: True #}
 {# ============================================================================ #}
+{# Cache Namespace Helpers                                                       #}
+{# ============================================================================ #}
+{%- macro render_cache_namespace(block) -%}
+{% set identity = block.cache_namespace | default(block.name | default(block.server_name | default(block.filename | default('')))) %}
+{{- identity | lower | regex_replace('[^a-z0-9]+', '_') | regex_replace('^_+', '') | regex_replace('_+$', '') -}}
+{%- endmacro -%}
+
+{%- macro render_proxy_cache_paths(block) -%}
+{% set ns = namespace(out='') %}
+{% if block.cache is defined and block.cache is sequence and block.cache is not string %}
+{% set cache_namespace = render_cache_namespace(block) %}
+{% if cache_namespace %}
+{% set first = true %}
+{% for cache in block.cache if cache.name is defined and cache.state | default('present') == 'present' %}
+{% if first %}
+{% set ns.out = ns.out ~ '### Proxy Cache Paths\n\n' %}
+{% set first = false %}
+{% endif %}
+{% set zone_name = cache_namespace ~ '_' ~ cache.name %}
+{% set cache_path = cache.directory | default(nginx_proxy_cache_root ~ '/' ~ zone_name) %}
+{% set ns.out = ns.out ~ 'proxy_cache_path ' ~ cache_path %}
+{% set ns.out = ns.out ~ ' levels=' ~ (cache.levels | default('1:2')) %}
+{% set ns.out = ns.out ~ ' keys_zone=' ~ zone_name ~ ':' ~ (cache.keys_zone_size | default(cache.mem_size | default('64m'))) %}
+{% set ns.out = ns.out ~ ' max_size=' ~ (cache.max_size | default(cache.disk_size | default('8g'))) %}
+{% set ns.out = ns.out ~ ' inactive=' ~ (cache.inactive | default('1h')) ~ ';' %}
+{% if cache.remark is defined %}{% set ns.out = ns.out ~ ' # ' ~ cache.remark %}{% endif %}
+{% set ns.out = ns.out ~ '\n' %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
 {# Upstream Rendering                                                            #}
 {# ============================================================================ #}
 {%- macro render_upstreams(upstreams) -%}
@@ -82,12 +116,28 @@
 {# ============================================================================ #}
 {# Atomic Directive Renderers                                                    #}
 {# ============================================================================ #}
-{%- macro render_directive_member(block, member, context_name, indent='') -%}
+{%- macro render_directive_member(block, member, context_name, indent='', root_block=none) -%}
 {% set ns = namespace(out='') %}
 {% set spec = __nginx_server_vhost_directive_specs[member] %}
 {% set value = block[member] if block[member] is defined else (spec.default if spec.default is defined else none) %}
 {% if value is not none and context_name in spec.contexts %}
-{% if spec.renderer == 'bool_on_off' %}
+{% if member == 'proxy_cache' %}
+{% if value == 'off' %}
+{% set ns.out = indent ~ spec.directive ~ ' off;\n' %}
+{% else %}
+{% set cache_owner = root_block if root_block is not none else block %}
+{% set cache_namespace = render_cache_namespace(cache_owner) %}
+{% set proxy_cache = namespace(resolved=value) %}
+{% if cache_owner.cache is defined and cache_owner.cache is sequence and cache_owner.cache is not string and cache_namespace %}
+{% for cache in cache_owner.cache if cache.name is defined and cache.state | default('present') == 'present' %}
+{% if cache.name == value %}
+{% set proxy_cache.resolved = cache_namespace ~ '_' ~ cache.name %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% set ns.out = indent ~ spec.directive ~ ' ' ~ proxy_cache.resolved ~ ';\n' %}
+{% endif %}
+{% elif spec.renderer == 'bool_on_off' %}
 {% set ns.out = indent ~ spec.directive ~ ' ' ~ (value | bool | ternary('on', 'off')) ~ ';\n' %}
 {% elif spec.renderer == 'scalar' %}
 {% set ns.out = indent ~ spec.directive ~ ' ' ~ value ~ ';\n' %}
@@ -189,6 +239,26 @@
 {% else %}
 {% set ns.out = indent ~ '# TODO invalid composite: add_header\n' %}
 {% endif %}
+{%- elif member == 'proxy_cache_status_header' -%}
+{# --- sugar: proxy_cache_status_header -------------------------------------- #}
+{% if value is boolean %}
+{% if value %}
+{% set header_value = block.xproxy_cache_status | default('$upstream_cache_status') %}
+{% set ns.out = indent ~ 'add_header X-Proxy-Cache-Status ' ~ header_value ~ ';\n' %}
+{% endif %}
+{% elif value is string %}
+{% if value | length > 0 %}
+{% set ns.out = indent ~ 'add_header X-Proxy-Cache-Status ' ~ value ~ ';\n' %}
+{% endif %}
+{% elif value is mapping and value.value is defined %}
+{% set line = indent ~ 'add_header X-Proxy-Cache-Status ' ~ value.value %}
+{% if value.always | default(false) | bool %}
+{% set line = line ~ ' always' %}
+{% endif %}
+{% set ns.out = line ~ ';\n' %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid sugar: proxy_cache_status_header\n' %}
+{% endif %}
 {%- elif member == 'auth_list' -%}
 {# --- composite: auth_list --------------------------------------------------- #}
 {% set ns.out = indent ~ 'include /etc/nginx/includes/auth.' ~ value ~ '.include;\n' %}
@@ -242,6 +312,23 @@
 {%- elif member == 'proxy_pass' -%}
 {# --- composite: proxy_pass -------------------------------------------------- #}
 {% set ns.out = indent ~ 'proxy_pass ' ~ value ~ ';\n' %}
+{%- elif member == 'proxy_cache_valid' -%}
+{# --- composite: proxy_cache_valid ------------------------------------------ #}
+{% if value is sequence and value is not string %}
+{% for entry in value %}
+{% if entry is string %}
+{% set ns.out = ns.out ~ indent ~ 'proxy_cache_valid ' ~ entry ~ ';\n' %}
+{% elif entry.time is defined and (entry.code is defined or entry.codes is defined) %}
+{% set codes = entry.codes if entry.codes is defined else entry.code %}
+{% set codes_list = codes if codes is sequence and codes is not string else [codes] %}
+{% set ns.out = ns.out ~ indent ~ 'proxy_cache_valid ' ~ (codes_list | map('string') | join(' ')) ~ ' ' ~ entry.time ~ ';\n' %}
+{% endif %}
+{% endfor %}
+{% elif value is string %}
+{% set ns.out = indent ~ 'proxy_cache_valid ' ~ value ~ ';\n' %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: proxy_cache_valid\n' %}
+{% endif %}
 {%- elif member == 'return' -%}
 {# --- composite: return ------------------------------------------------------ #}
 {% if value is string %}
@@ -318,7 +405,7 @@
 {# ============================================================================ #}
 {# Block Member Rendering                                                        #}
 {# ============================================================================ #}
-{%- macro render_members(block, block_name, context_name, indent='') -%}
+{%- macro render_members(block, block_name, context_name, indent='', root_block=none) -%}
 {% set ns = namespace(out='', first=true, prev_spacing=false) %}
 {% set block_spec = __nginx_server_vhost_block_specs[block_name] %}
 {% if not (__nginx_server_vhost_mode.render_directives | default(false) | bool) %}
@@ -338,7 +425,7 @@
 {% if value is not none and context_name in spec.contexts %}
 {% set spacing = spec.spacing if spec.spacing is defined else (__nginx_server_vhost_block_specs[block_name].spacing | default(false)) %}
 {% if (not ns.first) and (ns.prev_spacing or spacing) %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
-{% set rendered = render_directive_member(block, member, context_name, indent) %}
+{% set rendered = render_directive_member(block, member, context_name, indent, root_block) %}
 {% set ns.out = ns.out ~ append_debug_suffix(rendered, member, spec.renderer, spacing) %}
 {% set ns.first = false %}
 {% set ns.prev_spacing = spacing %}
@@ -359,7 +446,7 @@
 {# ============================================================================ #}
 {# Context Rendering: location                                                   #}
 {# ============================================================================ #}
-{%- macro render_mock_location(location) -%}
+{%- macro render_mock_location(location, root_block) -%}
 {% set ctx = __nginx_server_vhost_context_specs.location %}
 {% set ns = namespace(out='', first=true) %}
 {% set location_name = location.name | default('/') %}
@@ -375,7 +462,7 @@
 {% set ns.out = ns.out ~ '\n' %}
 {% endif %}
 {% set ns.out = ns.out ~ render_mock_marker(block_name, ctx.indent) %}
-{% set ns.out = ns.out ~ render_members(location, block_name, 'location', ctx.indent) %}
+{% set ns.out = ns.out ~ render_members(location, block_name, 'location', ctx.indent, root_block) %}
 {% endif %}
 {% endfor %}
 {% set ns.out = ns.out ~ '\t}' %}
@@ -393,7 +480,7 @@
 {% if block_name == 'locations' and block.locations is defined and block.locations | length > 0 %}
 {% set ns.out = ns.out ~ '\n\t# ' ~ __nginx_server_vhost_block_specs[block_name].title ~ '\n' %}
 {% for location in block.locations %}
-{% set ns.out = ns.out ~ render_mock_location(location) ~ '\n' %}
+{% set ns.out = ns.out ~ render_mock_location(location, block) ~ '\n' %}
 {% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
 {% endfor %}
 {% elif block_has_content(block, block_name) %}
@@ -405,7 +492,7 @@
 {% endif %}
 {% set ns.out = ns.out ~ render_mock_marker(block_name, '\t') %}
 {% if block_name != 'locations' %}
-{% set ns.out = ns.out ~ render_members(block, block_name, 'server', '\t') %}
+{% set ns.out = ns.out ~ render_members(block, block_name, 'server', '\t', block) %}
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -417,7 +504,12 @@
 {# Template Entry Point                                                          #}
 {# ============================================================================ #}
 {% set rendered_upstreams = render_upstreams(item.upstreams).lstrip('\n').rstrip() %}
+{% set rendered_proxy_cache_paths = render_proxy_cache_paths(item).lstrip('\n').rstrip() %}
 {% set rendered_server = render_mock_server(item).lstrip('\n').rstrip() %}
+{% if rendered_proxy_cache_paths %}
+{{ rendered_proxy_cache_paths }}
+
+{% endif %}
 {% if rendered_upstreams %}
 {{ rendered_upstreams }}
 

@@ -15,6 +15,7 @@ nginx_extra_groups: []
 nginx_cleanup_paths: []
 nginx_http_includes: []
 nginx_only_servers: []
+nginx_proxy_cache_root: "/var/cache/nginx"
 
 nginx_auth: []
 nginx_auth_passwd_list: []

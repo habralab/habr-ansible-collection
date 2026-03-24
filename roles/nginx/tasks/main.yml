@@ -371,6 +371,60 @@
     - nginx-config
     - nginx-servers
 
+- name: "Materialize proxy cache directories for selected servers"
+  ansible.builtin.set_fact:
+    _nginx_selected_proxy_cache_dirs: >-
+      {% set ns = namespace(items=[]) %}
+      {% for item in _nginx_selected_servers if item.state | default('present') == 'present' %}
+      {% if item.cache is defined and item.cache is sequence and item.cache is not string %}
+      {% set namespace_source = item.cache_namespace | default(item.name | default(item.server_name | default(item.filename | default('')))) %}
+      {% set namespace = namespace_source
+        | lower
+        | regex_replace('[^a-z0-9]+', '_')
+        | regex_replace('^_+', '')
+        | regex_replace('_+$', '') %}
+      {% if namespace | length > 0 %}
+      {% for cache in item.cache if cache.name is defined and cache.state | default('present') == 'present' %}
+      {% set zone_name = namespace ~ '_' ~ cache.name %}
+      {% set ns.items = ns.items + [{
+        'path': cache.directory | default(nginx_proxy_cache_root ~ '/' ~ zone_name),
+        'owner': cache.owner | default(_nginx_runtime_user),
+        'group': cache.group | default(_nginx_runtime_group),
+        'mode': cache.mode | default('0755'),
+        'recurse': false
+      }] %}
+      {% endfor %}
+      {% endif %}
+      {% endif %}
+      {% endfor %}
+      {{ ns.items | unique(attribute='path') }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Normalize proxy cache directories list"
+  ansible.builtin.set_fact:
+    _nginx_selected_proxy_cache_dirs: "{{ (_nginx_selected_proxy_cache_dirs | trim) | from_yaml }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Merge effective working directories"
+  ansible.builtin.set_fact:
+    _nginx_effective_working_dirs: >-
+      {{
+        __nginx_layouts_config[_nginx_active_layout].working_dirs
+        + _nginx_selected_proxy_cache_dirs
+        + (((nginx_working_dirs | trim) | from_yaml) if nginx_working_dirs is string else nginx_working_dirs)
+      }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+    - user
+
 - name: "Report SSL provisioning requests (not implemented yet)"
   ansible.builtin.debug:
     msg: >-
@@ -538,11 +592,12 @@
     group: "{{ item.group | default(_nginx_runtime_group) }}"
     mode: "{{ item.mode | default('0755') }}"
     recurse: "{{ item.recurse | default(false) | bool }}"
-  loop: "{{ __nginx_layouts_config[_nginx_active_layout].working_dirs + nginx_working_dirs }}"
+  loop: "{{ _nginx_effective_working_dirs }}"
   become: true
   tags:
     - nginx
     - nginx-config
+    - nginx-servers
     - user
 
 - name: "Ensure runtime user is in required extra groups"

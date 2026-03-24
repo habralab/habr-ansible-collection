@@ -46,7 +46,7 @@ The goal is explicitness without painting the role into a corner.
 
 ## Registry-Driven Role Design
 
-This role is built around internal dictionaries more than around ad hoc task branches.
+This role is built around internal dictionaries plus explicit materialization more than around ad hoc task branches.
 
 Important registries live in `vars/main.yml`:
 
@@ -62,6 +62,8 @@ When adding a feature, first decide which registry it belongs to:
 - singleton HTTP config rendered into `conf.d`: drop-ins registry
 
 If a feature requires many scattered `when` conditions, it is usually a sign that it wants a dictionary-backed registry instead.
+
+When registry data is not yet in directly renderable form, add an explicit materialization step in tasks rather than pushing more ownership-heavy logic into templates.
 
 ## Layout First, Conditions Second
 
@@ -256,6 +258,12 @@ Supporting files:
 - `vars/server_vhost.yml`
 - `templates/servers/vhost.j2`
 
+The template also relies on task-level materialization for some derived runtime objects. Current examples include:
+
+- `_nginx_selected_servers`
+- `_nginx_selected_proxy_cache_dirs`
+- `_nginx_effective_working_dirs`
+
 ### Extension Rules
 
 When extending `servers/vhost`, prefer:
@@ -265,6 +273,37 @@ When extending `servers/vhost`, prefer:
 3. extend composite rendering only when a normal renderer type is insufficient
 
 Do not add another hardcoded template branch unless the current data model genuinely cannot express the behavior.
+
+If a feature needs derived runtime objects before rendering, materialize them in tasks first and keep the template focused on rendering already-resolved structures.
+
+### Generated Companion Artifacts
+
+`servers/vhost` may emit HTTP-level companion artifacts outside `server {}` when they are still owned by the same server item.
+
+Current examples:
+
+- `upstreams`
+- `proxy_cache_path`
+
+Rules:
+
+- keep companion artifacts deterministic
+- derive generated names from stable server identity
+- allow explicit namespace override when operational stability matters more than automatic naming
+- keep creation of role-owned companion directories in task materialization, not inline template logic
+
+### Naming and Namespace Rules
+
+Generated identifiers should prefer stable user intent over incidental rendering details.
+
+Current precedence for generated cache namespaces is:
+
+1. explicit namespace override
+2. `name`
+3. `server_name`
+4. `filename`
+
+After choosing the identity source, normalize it into a safe nginx-facing identifier and keep that normalization stable over time.
 
 ### Renderer Categories
 
@@ -279,6 +318,21 @@ Current renderer categories used by `servers/vhost` include:
 - composite renderers for schema-driven or multi-line constructs
 
 Use a composite renderer only when a normal typed renderer is insufficient.
+
+### Sugar Rules
+
+Small compatibility or ergonomics helpers are acceptable when they compile into a narrow and explicit nginx construct.
+
+Current example:
+
+- `proxy_cache_status_header`
+
+Rules:
+
+- keep sugar template-specific, not role-global
+- prefer explicit composite/template rendering over ad hoc task conditionals
+- do not introduce sugar when the generated behavior materially obscures routing, ownership, or lifecycle
+- when a sugar field becomes complex enough to carry real schema, promote it into a first-class modeled structure
 
 ### Escape Hatches
 
@@ -299,6 +353,16 @@ Current implementation facts:
 - inline debug annotations are the preferred form once a renderer becomes usable
 
 This is template-internal machinery, not a role-wide API guarantee.
+
+### Cache Path Ownership
+
+Cache definitions may materialize role-owned runtime directories.
+
+Current contract:
+
+- cache paths may be rendered from server-scoped cache definitions
+- corresponding directories may be created by role tasks
+- automatic orphan cleanup is intentionally deferred until ownership and cleanup semantics are explicit
 
 ### Current Status Boundary
 

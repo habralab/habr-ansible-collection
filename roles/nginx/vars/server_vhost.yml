@@ -167,6 +167,69 @@ __nginx_server_vhost_directive_specs:
       - "location"
     spacing: false
 
+  # proxy_cache zone | off;
+  proxy_cache:
+    directive: "proxy_cache"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: true
+
+  # proxy_cache_background_update on | off;
+  proxy_cache_background_update:
+    directive: "proxy_cache_background_update"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_key string;
+  proxy_cache_key:
+    directive: "proxy_cache_key"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_bypass string ...;
+  proxy_cache_bypass:
+    directive: "proxy_cache_bypass"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_min_uses number;
+  proxy_cache_min_uses:
+    directive: "proxy_cache_min_uses"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_use_stale error timeout ...;
+  proxy_cache_use_stale:
+    directive: "proxy_cache_use_stale"
+    renderer: "join_space"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_no_cache string ...;
+  proxy_no_cache:
+    directive: "proxy_no_cache"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
   # proxy_connect_timeout time;
   proxy_connect_timeout:
     directive: "proxy_connect_timeout"
@@ -212,6 +275,33 @@ __nginx_server_vhost_directive_specs:
       - "location"
     spacing: true
 
+  # proxy_intercept_errors on | off;
+  proxy_intercept_errors:
+    directive: "proxy_intercept_errors"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_max_temp_file_size size;
+  proxy_max_temp_file_size:
+    directive: "proxy_max_temp_file_size"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_next_upstream error timeout ...;
+  proxy_next_upstream:
+    directive: "proxy_next_upstream"
+    renderer: "join_space"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
   # proxy_read_timeout time;
   proxy_read_timeout:
     directive: "proxy_read_timeout"
@@ -245,6 +335,15 @@ __nginx_server_vhost_directive_specs:
     renderer: "bool_on_off"
     contexts:
       - "server"
+    spacing: false
+
+  # recursive_error_pages on | off;
+  recursive_error_pages:
+    directive: "recursive_error_pages"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
     spacing: false
 
   # satisfy all | any;
@@ -354,6 +453,7 @@ __nginx_server_vhost_block_specs:
     members:
       - add_header
       - expires
+      - proxy_cache_status_header
 
   tuning:
     title: "Tuning"
@@ -384,6 +484,7 @@ __nginx_server_vhost_block_specs:
     spacing: true
     members:
       - proxy_http_version
+      - proxy_next_upstream
       - proxy_connect_timeout
       - proxy_read_timeout
       - proxy_send_timeout
@@ -391,9 +492,19 @@ __nginx_server_vhost_block_specs:
       - proxy_request_buffering
       - proxy_buffer_size
       - proxy_buffers
+      - proxy_max_temp_file_size
+      - proxy_cache
+      - proxy_cache_bypass
+      - proxy_cache_key
+      - proxy_cache_min_uses
+      - proxy_cache_background_update
+      - proxy_no_cache
+      - proxy_cache_use_stale
+      - proxy_cache_valid
       - proxy_pass_header
       - proxy_hide_header
       - proxy_ignore_headers
+      - proxy_intercept_errors
       - proxy_set_header
       - proxy_pass
       - fastcgi_pass
@@ -427,6 +538,7 @@ __nginx_server_vhost_block_specs:
     spacing: true
     members:
       - error_page
+      - recursive_error_pages
 
   return:
     title: ""
@@ -491,11 +603,11 @@ __nginx_server_vhost_context_specs:
       - tuning
       - sets
       - conditions
+      - proxy
+      - errors
       - rewrites
       - routing
-      - errors
       - return
-      - proxy
       - extra
 
 __nginx_server_vhost_mode:
