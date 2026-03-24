@@ -2,7 +2,8 @@
 # {{ item.value['description'] | default('Global HTTP Map Blocks') }}
 ##
 
-{% for map in nginx_maps if map.state | default('present') == 'present' %}
+{% set rendered_maps = _nginx_maps_registry.materialized | default(nginx_maps) %}
+{% for map in rendered_maps if map.state | default('present') == 'present' %}
 map {{ map.source }} {{ map.target }} {
 {% if map.hostnames | default(false) | bool %}
 	hostnames;

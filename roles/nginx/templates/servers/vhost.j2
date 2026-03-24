@@ -34,6 +34,36 @@
 {%- endmacro -%}
 
 {# ============================================================================ #}
+{# Map Rendering                                                                 #}
+{# ============================================================================ #}
+{%- macro render_maps(maps) -%}
+{% set ns = namespace(out='') %}
+{% if maps is defined and maps | length > 0 %}
+{% set ns.out = ns.out ~ '### Maps\n\n' %}
+{% for map in maps if map.source is defined and map.target is defined and map.state | default('present') == 'present' %}
+{% set ns.out = ns.out ~ 'map ' ~ map.source ~ ' ' ~ map.target ~ ' {\n' %}
+{% if map.hostnames | default(false) | bool %}
+{% set ns.out = ns.out ~ '\thostnames;\n' %}
+{% endif %}
+{% if map.volatile | default(false) | bool %}
+{% set ns.out = ns.out ~ '\tvolatile;\n' %}
+{% endif %}
+{% if map.default is defined %}
+{% set ns.out = ns.out ~ "\tdefault '" ~ map.default ~ "';\n" %}
+{% endif %}
+{% if map.entries is defined and map.entries | length > 0 %}
+{% for entry in map.entries if entry.match is defined and entry.value is defined %}
+{% set ns.out = ns.out ~ "\t'" ~ entry.match ~ "' '" ~ entry.value ~ "';\n" %}
+{% endfor %}
+{% endif %}
+{% set ns.out = ns.out ~ '}\n' %}
+{% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% endfor %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
 {# Upstream Rendering                                                            #}
 {# ============================================================================ #}
 {%- macro render_upstreams(upstreams) -%}
@@ -176,6 +206,9 @@
 {%- macro render_composite_member(block, member, context_name, indent='') -%}
 {% set ns = namespace(out='') %}
 {% set value = block[member] if block[member] is defined else none %}
+{% if member == 'proxy_set_header' and block._nginx_proxy_set_header_registry is defined %}
+{% set value = block._nginx_proxy_set_header_registry.materialized %}
+{% endif %}
 {% if value is none %}
 {{- ns.out -}}
 {%- elif member == 'access_log' -%}
@@ -503,11 +536,16 @@
 {# ============================================================================ #}
 {# Template Entry Point                                                          #}
 {# ============================================================================ #}
-{% set rendered_upstreams = render_upstreams(item.upstreams).lstrip('\n').rstrip() %}
+{% set rendered_maps = render_maps(item._nginx_maps_registry.materialized | default(item.maps)).lstrip('\n').rstrip() %}
+{% set rendered_upstreams = render_upstreams(item._nginx_upstreams_registry.materialized | default(item.upstreams)).lstrip('\n').rstrip() %}
 {% set rendered_proxy_cache_paths = render_proxy_cache_paths(item).lstrip('\n').rstrip() %}
 {% set rendered_server = render_mock_server(item).lstrip('\n').rstrip() %}
 {% if rendered_proxy_cache_paths %}
 {{ rendered_proxy_cache_paths }}
+
+{% endif %}
+{% if rendered_maps %}
+{{ rendered_maps }}
 
 {% endif %}
 {% if rendered_upstreams %}
