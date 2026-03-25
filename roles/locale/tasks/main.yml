@@ -1,0 +1,116 @@
+---
+- name: Validate locale role input types
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - locale_generated is sequence
+      - locale_generated is not string
+      - locale_default is string
+      - locale_generated | select('string') | list | length == locale_generated | length
+    fail_msg: >-
+      This role supports Ubuntu. locale_generated must be a list of strings and
+      locale_default must be a string.
+  tags:
+    - locale
+
+- name: Validate locale_generated entry syntax
+  ansible.builtin.assert:
+    that:
+      - item is match('^[A-Za-z0-9_.@-]+\\s+[A-Za-z0-9_-]+$')
+    fail_msg: "Each locale_generated item must look like 'en_US.UTF-8 UTF-8'."
+  loop: "{{ locale_generated }}"
+  loop_control:
+    label: "{{ item }}"
+  tags:
+    - locale
+
+- name: Validate locale_default syntax
+  ansible.builtin.assert:
+    that:
+      - locale_default | length == 0 or locale_default is match('^[A-Za-z0-9_.@-]+$')
+    fail_msg: "locale_default must look like 'en_US.UTF-8'."
+  tags:
+    - locale
+
+- name: Validate that locale_default is included in locale_generated
+  ansible.builtin.assert:
+    that:
+      - locale_default in (locale_generated | map('split', ' ') | map('first') | list)
+    fail_msg: "locale_default must match one of the locale names declared in locale_generated."
+  when:
+    - locale_default | length > 0
+    - locale_generated | length > 0
+  tags:
+    - locale
+
+- name: Ensure requested locale entries are enabled in /etc/locale.gen
+  ansible.builtin.lineinfile:
+    path: "/etc/locale.gen"
+    regexp: "^#?\\s*{{ (item | split(' ') | first) | regex_escape() }}\\s+{{ (item | split(' ') | last) | regex_escape() }}$"
+    line: "{{ item }}"
+    state: present
+  loop: "{{ locale_generated }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _locale_gen_entries
+  when: locale_generated | length > 0
+  become: true
+  notify: Generate locales
+  tags:
+    - locale
+
+- name: Flush locale generation handler immediately
+  ansible.builtin.meta: flush_handlers
+  when: locale_generated | length > 0
+  tags:
+    - locale
+
+- name: Set default LANG in /etc/default/locale
+  ansible.builtin.lineinfile:
+    path: "/etc/default/locale"
+    regexp: "^LANG="
+    line: "LANG={{ locale_default }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: locale_default | length > 0
+  become: true
+  tags:
+    - locale
+
+- name: Query generated locales
+  ansible.builtin.command:
+    cmd: "locale -a"
+  register: _locale_available
+  changed_when: false
+  when: locale_generated | length > 0 or locale_default | length > 0
+  tags:
+    - locale
+
+- name: Validate that requested locales are available after generation
+  ansible.builtin.assert:
+    that:
+      - >-
+        ((item | split(' ') | first) | lower | replace('-', '') | replace('_', ''))
+        in
+        (_locale_available.stdout_lines | map('lower') | map('replace', '-', '') | map('replace', '_', '') | list)
+    fail_msg: "Requested locale was not found in locale -a after generation."
+  loop: "{{ locale_generated }}"
+  loop_control:
+    label: "{{ item }}"
+  when: locale_generated | length > 0
+  tags:
+    - locale
+
+- name: Validate that locale_default is available after generation
+  ansible.builtin.assert:
+    that:
+      - >-
+        (locale_default | lower | replace('-', '') | replace('_', ''))
+        in
+        (_locale_available.stdout_lines | map('lower') | map('replace', '-', '') | map('replace', '_', '') | list)
+    fail_msg: "locale_default was not found in locale -a after generation."
+  when: locale_default | length > 0
+  tags:
+    - locale
