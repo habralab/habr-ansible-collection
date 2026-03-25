@@ -38,6 +38,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nvm`: Multi-user Node Version Manager (NVM) installation from git.
 - `packages`: Declarative management of APT packages and .deb URLs.
+- `timezone`: Declarative management of the system timezone.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
 
 ## Usage Example
