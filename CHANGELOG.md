@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.7.0] - 2026-03-25
+
+### Added
+- `locale`: Add a declarative role for managing generated locales and default `LANG`.
+- `timezone`: Add a declarative role for managing the system timezone.
+
+### Changed
+- `docs`: Refine collection contribution guidance and role development notes.
+
 ## [1.6.0] - 2026-03-06
 
 ### Added
