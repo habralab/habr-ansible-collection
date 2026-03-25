@@ -25,6 +25,9 @@ We use a feature-branch workflow. All changes must go through Merge Requests to 
 5. Update documentation:
    - Role README: `roles/<role_name>/README.md`
    - Collection index: Add to the table in `README.md`.
+6. If the role contains `DEVELOPMENT.md`, treat it as the primary internal design note for that role:
+   - `README.md` documents the public contract
+   - `DEVELOPMENT.md` documents internal architecture, invariants, and extension rules
 
 ## Release Process
 
@@ -46,3 +49,6 @@ We use a feature-branch workflow. All changes must go through Merge Requests to 
 - Use FQCN (Fully Qualified Collection Names) for all module calls.
 - Always include `meta/main.yml` with correct metadata.
 - Ensure `check_mode` support where possible.
+- Keep the public contract as small and explicit as practical.
+- Prefer simple data models by default, but do not force artificial simplicity onto roles that manage inherently complex infrastructure.
+- When a role grows a richer internal model, document the internal invariants in a role-local `DEVELOPMENT.md` instead of leaking them into the public README.
