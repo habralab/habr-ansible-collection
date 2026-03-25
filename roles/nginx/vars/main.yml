@@ -159,6 +159,11 @@ __nginx_dropins:
     template: "realip"
     triggers:
       - "^nginx_real_ip_"
+  geos:
+    description: "Global HTTP Geo Blocks"
+    template: "geos"
+    triggers:
+      - "^nginx_geos$"
   maps:
     description: "Global HTTP Map Blocks"
     template: "maps"

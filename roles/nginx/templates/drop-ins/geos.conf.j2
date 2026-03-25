@@ -1,0 +1,50 @@
+##
+# {{ item.value['description'] | default('Global HTTP Geo Blocks') }}
+##
+
+{% set rendered_geos = _nginx_geos_registry.materialized | default(nginx_geos) %}
+{% for geo in rendered_geos if geo.target is defined and geo.state | default('present') == 'present' %}
+{% if geo.source is defined and geo.source %}
+geo {{ geo.source }} {{ geo.target }} {
+{% else %}
+geo {{ geo.target }} {
+{% endif %}
+{% if geo.ranges | default(false) | bool %}
+	ranges;
+{% endif %}
+{% if geo.proxy is defined %}
+{% if geo.proxy is string %}
+	proxy {{ geo.proxy }};
+{% elif geo.proxy is sequence %}
+{% for proxy_network in geo.proxy %}
+	proxy {{ proxy_network }};
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if geo.proxy_recursive is defined %}
+	proxy_recursive {{ geo.proxy_recursive | bool | ternary('on', 'off') }};
+{% endif %}
+{% if geo.volatile | default(false) | bool %}
+	volatile;
+{% endif %}
+{% if geo.default is defined %}
+	default {{ geo.default }};
+{% endif %}
+{% if geo.includes is defined %}
+{% for include_file in geo.includes if include_file %}
+	include {{ include_file }};
+{% endfor %}
+{% endif %}
+{% if geo.deletes is defined %}
+{% for delete_network in geo.deletes if delete_network %}
+	delete {{ delete_network }};
+{% endfor %}
+{% endif %}
+{% if geo.entries is defined and geo.entries | length > 0 %}
+{% for entry in geo.entries if entry.match is defined and entry.value is defined %}
+	{{ entry.match }} {{ entry.value }};
+{% endfor %}
+{% endif %}
+}
+
+{% endfor %}

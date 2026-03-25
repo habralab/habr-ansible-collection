@@ -264,9 +264,44 @@
       {% endif %}
 
       {# --------------------------------------------------------------------- #}
+      {# Final geo registry source                                             #}
+      {# --------------------------------------------------------------------- #}
+      {% set input_geos = item.geos | default([]) %}
+      {% set namespaced_input_geos_ns = namespace(items=[]) %}
+      {% for geo in input_geos %}
+      {% set geo_target_suffix = '' %}
+      {% if geo.target is defined and (geo.target | string | length > 0) %}
+      {% set geo_target_suffix = (geo.target | string)
+        | regex_replace('^\\$', '')
+        | lower
+        | regex_replace('[^a-z0-9_]+', '_')
+        | regex_replace('^_+', '')
+        | regex_replace('_+$', '') %}
+      {% elif geo.name is defined and (geo.name | string | length > 0) %}
+      {% set geo_target_suffix = (geo.name | string)
+        | lower
+        | regex_replace('[^a-z0-9_]+', '_')
+        | regex_replace('^_+', '')
+        | regex_replace('_+$', '') %}
+      {% endif %}
+      {% if generated_namespace | length > 0 and geo_target_suffix | length > 0 %}
+      {% set namespaced_input_geos_ns.items = namespaced_input_geos_ns.items + [geo | combine({
+        'target': '$' ~ generated_namespace ~ '_' ~ geo_target_suffix
+      })] %}
+      {% else %}
+      {% set namespaced_input_geos_ns.items = namespaced_input_geos_ns.items + [geo] %}
+      {% endif %}
+      {% endfor %}
+      {% set derived_geos = item._nginx_derived_geos | default([]) %}
+
+      {# --------------------------------------------------------------------- #}
       {# Final registries                                                       #}
       {# --------------------------------------------------------------------- #}
       {% set final_registry_sources = {
+        'geos': {
+          'input': namespaced_input_geos_ns.items,
+          'derived': derived_geos
+        },
         'maps': {
           'input': item.maps | default([]),
           'derived': derived_maps_ns.items
@@ -306,6 +341,7 @@
       {% if server_key %}
       {% set ns.items = ns.items | combine({
         server_key: {
+          'geos_registry': final_registries.items.geos,
           'maps_registry': final_registries.items.maps,
           'upstreams_registry': final_registries.items.upstreams,
           'upstream_members_registry': base_registries.items.upstream_members,

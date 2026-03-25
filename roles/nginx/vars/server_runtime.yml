@@ -23,6 +23,9 @@ __nginx_server_runtime_registry_specs:
       key_field: "name"
       runtime_key: "upstream_selection_registry"
   final:
+    geos:
+      key_field: "target"
+      runtime_key: "geos_registry"
     maps:
       key_field: "target"
       runtime_key: "maps_registry"

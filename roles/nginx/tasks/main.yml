@@ -42,10 +42,11 @@
       - nginx_only_servers is string or (nginx_only_servers is sequence and nginx_only_servers is not string)
       - nginx_auth is sequence and nginx_auth is not string
       - nginx_auth_passwd_list is sequence and nginx_auth_passwd_list is not string
+      - nginx_geos is sequence and nginx_geos is not string
       - nginx_maps is sequence and nginx_maps is not string
     fail_msg: >-
       _nginx_repos_merged must be a dictionary.
-      nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list, and nginx_maps must be lists.
+      nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list, nginx_geos, and nginx_maps must be lists.
       nginx_only_servers must be a string or a list of strings.
   tags:
     - nginx
@@ -68,6 +69,30 @@
         {
           'input': input_maps,
           'derived': derived_maps,
+          'materialized': merge_ns.items
+        }
+      }}
+  tags:
+    - nginx
+    - nginx-config
+
+- name: "Assemble global geos registry"
+  ansible.builtin.set_fact:
+    _nginx_geos_registry: >-
+      {% set input_geos = nginx_geos | default([]) %}
+      {% set derived_geos = [] %}
+      {% set merge_ns = namespace(items=[], keys=[]) %}
+      {% for geo in ((input_geos + derived_geos) | reverse) %}
+      {% set geo_key = geo.target | default(geo.name | default('')) %}
+      {% if geo_key and geo_key not in merge_ns.keys %}
+      {% set merge_ns.items = [geo] + merge_ns.items %}
+      {% set merge_ns.keys = merge_ns.keys + [geo_key] %}
+      {% endif %}
+      {% endfor %}
+      {{
+        {
+          'input': input_geos,
+          'derived': derived_geos,
           'materialized': merge_ns.items
         }
       }}
@@ -193,6 +218,7 @@
   loop: "{{ __nginx_dropins | dict2items }}"
   when:
     - q('varnames', item.value.triggers | join('|')) | length > 0
+    - item.key != 'geos' or (_nginx_geos_registry.materialized | default(nginx_geos) | length > 0)
     - item.key != 'maps' or (_nginx_maps_registry.materialized | default(nginx_maps) | length > 0)
   notify: Reload nginx
   become: true
@@ -208,6 +234,10 @@
   loop: "{{ __nginx_dropins | dict2items }}"
   when: >-
     q('varnames', item.value.triggers | join('|')) | length == 0 or
+    (
+      item.key == 'geos' and
+      (_nginx_geos_registry.materialized | default(nginx_geos) | length == 0)
+    ) or
     (
       item.key == 'maps' and
       (_nginx_maps_registry.materialized | default(nginx_maps) | length == 0)

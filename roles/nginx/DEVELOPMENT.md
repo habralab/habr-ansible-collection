@@ -283,6 +283,7 @@ If a feature needs derived runtime objects before rendering, materialize them in
 
 Current examples:
 
+- `geos`
 - `maps`
 - `upstreams`
 - `proxy_cache_path`

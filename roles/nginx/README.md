@@ -15,7 +15,7 @@ The selected repository affects not only package origin and update cadence, but 
 
 **Out of Scope:** This role does not ship application-specific website templates. It does ship a small set of bundled infrastructure-oriented templates, including the layout defaults, `servers/status`, and the declarative `servers/vhost` model. Highly application-specific sites should still be expressed either through your own Jinja templates or through the supported `servers/vhost` data model where it is sufficient.
 
-**Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_maps`, `nginx_proxy_*`, and `nginx_real_ip_*` are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
+**Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_geos`, `nginx_maps`, `nginx_proxy_*`, and `nginx_real_ip_*` are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
 
 ## Reading Guide
 
@@ -474,6 +474,56 @@ Regex quoting note:
 - In YAML, regex-heavy `match` strings should usually be wrapped in single quotes so backslashes and `{m,n}` fragments survive parsing unchanged.
 - The role renderer also wraps `default`, `match`, and `value` in single quotes inside the generated nginx config, following the safer legacy behavior for complex map patterns.
 
+### Geos
+Managed `geo` blocks for the `http` context.
+
+Official Nginx documentation: [HTTP Geo module](https://nginx.org/en/docs/http/ngx_http_geo_module.html)
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_geos` | `[]` | List of managed geo definitions. Each item may define `name`, `source`, `target`, `entries`, `default`, `ranges`, `proxy`, `proxy_recursive`, `includes`, `deletes`, `volatile`, and optional `state`. |
+
+Rendered files:
+- `/etc/nginx/conf.d/geos.conf` when `nginx_geos` is non-empty
+
+`nginx_geos` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | no | Optional logical identifier used only inside the data model. |
+| `source` | no | Optional source variable for the two-argument form `geo $source $target`. When omitted, nginx uses the default client address source. |
+| `target` | yes | Target variable set by the geo block, including the leading `$`. |
+| `entries` | no | Ordered list of geo entries. Each item defines `match` and `value`. |
+| `default` | no | `default` clause for the geo block. |
+| `ranges` | no | Enables the `ranges;` flag. |
+| `proxy` | no | One network or a list of networks rendered as `proxy ...;` directives. |
+| `proxy_recursive` | no | Enables `proxy_recursive on|off;`. |
+| `includes` | no | One or more include files rendered as `include ...;`. |
+| `deletes` | no | One or more deleted networks rendered as `delete ...;`. |
+| `volatile` | no | Enables the `volatile;` flag. |
+| `state` | no | `present` or `absent`. Defaults to `present`. |
+
+`nginx_geos[*].entries[]` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `match` | yes | CIDR, range, or other valid geo match expression. |
+| `value` | yes | Result assigned when the entry matches. |
+
+Minimal example:
+
+```yaml
+nginx_geos:
+  - name: "maintenance_prefixes"
+    target: "$maintenance_prefixes"
+    default: "0"
+    entries:
+      - match: "127.0.0.0/8"
+        value: "1"
+      - match: "10.0.0.0/8"
+        value: "1"
+```
+
 ### Server Configuration Model
 
 Server files are managed through `nginx_servers`. The role combines built-in defaults with your entries, deduplicates them by `name`, and lets the last definition win. Layout defaults also inject a `default` server automatically.
@@ -678,6 +728,7 @@ Common top-level fields supported by the template include:
 - `error_page`
 - `return`
 - `locations`
+- `geos`
 - `upstreams`
 - `upstream_members`
 - `upstream_pools`
@@ -714,6 +765,8 @@ Currently supported proxy-related `servers/vhost` fields include: `proxy_http_ve
 - optional `scheme`
 
 User-defined `upstreams` are materialized into stable generated runtime names and may still be referenced through their short declarative names from `proxy_pass`. Higher-level structures such as `upstream_members`, `upstream_pools`, and `upstream_selection` compile into namespaced upstream or map primitives before rendering.
+
+`geos` is the server-owned companion form of the same HTTP primitive. These blocks are rendered outside `server {}` but are still owned by the same `servers/vhost` item. Server-owned geo targets are materialized into namespaced runtime variables to avoid collisions between vhosts.
 
 Minimal example:
 

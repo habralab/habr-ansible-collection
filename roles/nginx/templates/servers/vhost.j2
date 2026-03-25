@@ -34,6 +34,62 @@
 {%- endmacro -%}
 
 {# ============================================================================ #}
+{# Geo Rendering                                                                 #}
+{# ============================================================================ #}
+{%- macro render_geos(geos) -%}
+{% set ns = namespace(out='') %}
+{% if geos is defined and geos | length > 0 %}
+{% set ns.out = ns.out ~ '### Geos\n\n' %}
+{% for geo in geos if geo.target is defined and geo.state | default('present') == 'present' %}
+{% if geo.source is defined and geo.source %}
+{% set ns.out = ns.out ~ 'geo ' ~ geo.source ~ ' ' ~ geo.target ~ ' {\n' %}
+{% else %}
+{% set ns.out = ns.out ~ 'geo ' ~ geo.target ~ ' {\n' %}
+{% endif %}
+{% if geo.ranges | default(false) | bool %}
+{% set ns.out = ns.out ~ '\tranges;\n' %}
+{% endif %}
+{% if geo.proxy is defined %}
+{% if geo.proxy is string %}
+{% set ns.out = ns.out ~ '\tproxy ' ~ geo.proxy ~ ';\n' %}
+{% elif geo.proxy is sequence %}
+{% for proxy_network in geo.proxy %}
+{% set ns.out = ns.out ~ '\tproxy ' ~ proxy_network ~ ';\n' %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if geo.proxy_recursive is defined %}
+{% set ns.out = ns.out ~ '\tproxy_recursive ' ~ (geo.proxy_recursive | bool | ternary('on', 'off')) ~ ';\n' %}
+{% endif %}
+{% if geo.volatile | default(false) | bool %}
+{% set ns.out = ns.out ~ '\tvolatile;\n' %}
+{% endif %}
+{% if geo.default is defined %}
+{% set ns.out = ns.out ~ '\tdefault ' ~ (geo.default | string) ~ ';\n' %}
+{% endif %}
+{% if geo.includes is defined %}
+{% for include_file in geo.includes if include_file %}
+{% set ns.out = ns.out ~ '\tinclude ' ~ include_file ~ ';\n' %}
+{% endfor %}
+{% endif %}
+{% if geo.deletes is defined %}
+{% for delete_network in geo.deletes if delete_network %}
+{% set ns.out = ns.out ~ '\tdelete ' ~ delete_network ~ ';\n' %}
+{% endfor %}
+{% endif %}
+{% if geo.entries is defined and geo.entries | length > 0 %}
+{% for entry in geo.entries if entry.match is defined and entry.value is defined %}
+{% set ns.out = ns.out ~ '\t' ~ entry.match ~ ' ' ~ (entry.value | string) ~ ';\n' %}
+{% endfor %}
+{% endif %}
+{% set ns.out = ns.out ~ '}\n' %}
+{% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
+{% endfor %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
 {# Map Rendering                                                                 #}
 {# ============================================================================ #}
 {%- macro render_maps(maps) -%}
@@ -640,12 +696,17 @@
 {# ============================================================================ #}
 {# Template Entry Point                                                          #}
 {# ============================================================================ #}
+{% set rendered_geos = render_geos(nginx_server_runtime.geos_registry.materialized | default(item.geos)).lstrip('\n').rstrip() %}
 {% set rendered_maps = render_maps(nginx_server_runtime.maps_registry.materialized | default(item.maps)).lstrip('\n').rstrip() %}
 {% set rendered_upstreams = render_upstreams(nginx_server_runtime.upstreams_registry.materialized | default(item.upstreams)).lstrip('\n').rstrip() %}
 {% set rendered_proxy_cache_paths = render_proxy_cache_paths(item).lstrip('\n').rstrip() %}
 {% set rendered_server = render_mock_server(item).lstrip('\n').rstrip() %}
 {% if rendered_proxy_cache_paths %}
 {{ rendered_proxy_cache_paths }}
+
+{% endif %}
+{% if rendered_geos %}
+{{ rendered_geos }}
 
 {% endif %}
 {% if rendered_maps %}

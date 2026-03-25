@@ -19,4 +19,5 @@ nginx_proxy_cache_root: "/var/cache/nginx"
 
 nginx_auth: []
 nginx_auth_passwd_list: []
+nginx_geos: []
 nginx_maps: []
