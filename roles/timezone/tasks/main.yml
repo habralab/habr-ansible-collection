@@ -1,0 +1,51 @@
+---
+- name: Validate timezone role inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == "Ubuntu"
+      - timezone_name is string
+    fail_msg: >-
+      This role supports Ubuntu and expects timezone_name to be a string.
+  tags:
+    - timezone
+
+- name: Check that the requested timezone exists
+  ansible.builtin.stat:
+    path: "/usr/share/zoneinfo/{{ timezone_name }}"
+  register: _timezone_zoneinfo
+  when: timezone_name | length > 0
+  tags:
+    - timezone
+
+- name: Validate requested timezone
+  ansible.builtin.assert:
+    that:
+      - _timezone_zoneinfo.stat.exists
+      - _timezone_zoneinfo.stat.isreg or _timezone_zoneinfo.stat.islnk
+    fail_msg: "timezone_name must point to a valid zoneinfo entry."
+  when: timezone_name | length > 0
+  tags:
+    - timezone
+
+- name: Write /etc/timezone
+  ansible.builtin.copy:
+    content: "{{ timezone_name }}\n"
+    dest: "/etc/timezone"
+    owner: root
+    group: root
+    mode: "0644"
+  when: timezone_name | length > 0
+  become: true
+  tags:
+    - timezone
+
+- name: Link /etc/localtime to selected zoneinfo entry
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ timezone_name }}"
+    dest: "/etc/localtime"
+    state: link
+    force: true
+  when: timezone_name | length > 0
+  become: true
+  tags:
+    - timezone
