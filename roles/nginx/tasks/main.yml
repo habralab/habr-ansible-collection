@@ -191,7 +191,9 @@
     group: root
     mode: "0644"
   loop: "{{ __nginx_dropins | dict2items }}"
-  when: q('varnames', item.value.triggers | join('|')) | length > 0
+  when:
+    - q('varnames', item.value.triggers | join('|')) | length > 0
+    - item.key != 'maps' or (_nginx_maps_registry.materialized | default(nginx_maps) | length > 0)
   notify: Reload nginx
   become: true
   tags:
@@ -204,7 +206,12 @@
     path: "/etc/nginx/conf.d/{{ item.key }}.conf"
     state: absent
   loop: "{{ __nginx_dropins | dict2items }}"
-  when: q('varnames', item.value.triggers | join('|')) | length == 0
+  when: >-
+    q('varnames', item.value.triggers | join('|')) | length == 0 or
+    (
+      item.key == 'maps' and
+      (_nginx_maps_registry.materialized | default(nginx_maps) | length == 0)
+    )
   notify: Reload nginx
   become: true
   tags:
