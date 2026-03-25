@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.1] - 2026-03-25
+
+### Fixed
+- `locale`: Skip runtime locale availability post-checks in `check_mode`.
+
 ## [1.7.0] - 2026-03-25
 
 ### Added
