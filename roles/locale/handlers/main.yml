@@ -1,0 +1,6 @@
+---
+- name: Generate locales
+  ansible.builtin.command:
+    cmd: "locale-gen"
+  changed_when: false
+  become: true
