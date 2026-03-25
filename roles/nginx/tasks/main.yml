@@ -295,171 +295,16 @@
     - nginx-config
     - nginx-servers
 
-- name: "Normalize server selection patterns"
-  ansible.builtin.set_fact:
-    _nginx_only_servers_patterns: >-
-      {% if nginx_only_servers is string %}
-      {{ nginx_only_servers.split(',') | map('trim') | reject('equalto', '') | list }}
-      {% else %}
-      {{ nginx_only_servers | default([]) }}
-      {% endif %}
+- name: "Load server runtime compiler variables"
+  ansible.builtin.include_vars:
+    file: "server_runtime.yml"
   tags:
     - nginx
     - nginx-config
     - nginx-servers
 
-- name: "Materialize server selection patterns list"
-  ansible.builtin.set_fact:
-    _nginx_only_servers_patterns: "{{ (_nginx_only_servers_patterns | trim) | from_yaml }}"
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-
-- name: "Filter selected servers"
-  ansible.builtin.set_fact:
-    _nginx_selected_servers: >-
-      {% set ns = namespace(items=[]) %}
-      {% for item in _nginx_all_servers %}
-      {% set identities = [
-        item.name | default(''),
-        item.filename | default(''),
-        item.server_name | default('')
-      ] | reject('equalto', '') | unique | list %}
-      {% set match_ns = namespace(matched=(_nginx_only_servers_patterns | length == 0)) %}
-      {% if not match_ns.matched %}
-      {% for pattern in _nginx_only_servers_patterns %}
-      {% set pattern_regex = '^'
-        ~ (pattern
-           | replace('\\', '\\\\')
-           | replace('.', '\\.')
-           | replace('[', '\\[')
-           | replace(']', '\\]')
-           | replace('(', '\\(')
-           | replace(')', '\\)')
-           | replace('{', '\\{')
-           | replace('}', '\\}')
-           | replace('+', '\\+')
-           | replace('?', '\\?')
-           | replace('^', '\\^')
-           | replace('$', '\\$')
-           | replace('|', '\\|')
-           | replace('*', '.*'))
-        ~ '$' %}
-      {% if identities | select('match', pattern_regex) | list | length > 0 %}
-      {% set match_ns.matched = true %}
-      {% endif %}
-      {% endfor %}
-      {% endif %}
-      {% if match_ns.matched %}
-      {% set ns.items = ns.items + [item] %}
-      {% endif %}
-      {% endfor %}
-      {{ ns.items }}
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-
-- name: "Materialize selected servers list"
-  ansible.builtin.set_fact:
-    _nginx_selected_servers: "{{ (_nginx_selected_servers | trim) | from_yaml }}"
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-
-- name: "Assemble server primitive registries"
-  ansible.builtin.set_fact:
-    _nginx_selected_servers: >-
-      {% set ns = namespace(items=[]) %}
-      {% for item in _nginx_selected_servers %}
-      {% set namespace_source = item.cache_namespace | default(item.name | default(item.server_name | default(item.filename | default('')))) %}
-      {% set generated_namespace = namespace_source
-        | lower
-        | regex_replace('[^a-z0-9]+', '_')
-        | regex_replace('^_+', '')
-        | regex_replace('_+$', '') %}
-      {% set recursive_scheme_header = item.recursive_scheme_header | default(false) | bool %}
-      {% set input_maps = item.maps | default([]) %}
-      {% set derived_maps = item._nginx_derived_maps | default([]) %}
-      {% if recursive_scheme_header and generated_namespace | length > 0 %}
-      {% set derived_maps = derived_maps + [{
-        'name': 'recursive_scheme',
-        'source': item.recursive_scheme_source | default('$http_x_forwarded_proto'),
-        'target': '$' ~ generated_namespace ~ '_request_scheme',
-        'default': item.recursive_scheme_default | default('$scheme'),
-        'entries': item.recursive_scheme_entries | default([
-          {'match': 'http', 'value': 'http'},
-          {'match': 'https', 'value': 'https'}
-        ])
-      }] %}
-      {% endif %}
-      {% set map_merge = namespace(items=[], keys=[]) %}
-      {% for map in ((input_maps + derived_maps) | reverse) %}
-      {% set map_key = map.target | default(map.name | default('')) %}
-      {% if map_key and map_key not in map_merge.keys %}
-      {% set map_merge.items = [map] + map_merge.items %}
-      {% set map_merge.keys = map_merge.keys + [map_key] %}
-      {% endif %}
-      {% endfor %}
-      {% set input_upstreams = item.upstreams | default([]) %}
-      {% set derived_upstreams = item._nginx_derived_upstreams | default([]) %}
-      {% set upstream_merge = namespace(items=[], keys=[]) %}
-      {% for upstream in ((input_upstreams + derived_upstreams) | reverse) %}
-      {% set upstream_key = upstream.name | default('') %}
-      {% if upstream_key and upstream_key not in upstream_merge.keys %}
-      {% set upstream_merge.items = [upstream] + upstream_merge.items %}
-      {% set upstream_merge.keys = upstream_merge.keys + [upstream_key] %}
-      {% endif %}
-      {% endfor %}
-      {% set input_proxy_set_headers = item.proxy_set_header | default([]) %}
-      {% set derived_proxy_set_headers = item._nginx_derived_proxy_set_header | default([]) %}
-      {% if recursive_scheme_header and generated_namespace | length > 0 %}
-      {% set derived_proxy_set_headers = derived_proxy_set_headers + [{
-        'name': 'X-Forwarded-Proto',
-        'value': '$' ~ generated_namespace ~ '_request_scheme'
-      }] %}
-      {% endif %}
-      {% set proxy_set_header_merge = namespace(items=[], keys=[]) %}
-      {% for header in ((derived_proxy_set_headers + input_proxy_set_headers) | reverse) %}
-      {% set header_key = header.name | default('') %}
-      {% if header_key and header_key not in proxy_set_header_merge.keys %}
-      {% set proxy_set_header_merge.items = [header] + proxy_set_header_merge.items %}
-      {% set proxy_set_header_merge.keys = proxy_set_header_merge.keys + [header_key] %}
-      {% endif %}
-      {% endfor %}
-      {% set ns.items = ns.items + [item | combine({
-        '_nginx_maps_registry': {
-          'input': input_maps,
-          'derived': derived_maps,
-          'materialized': map_merge.items
-        },
-        '_nginx_upstreams_registry': {
-          'input': input_upstreams,
-          'derived': derived_upstreams,
-          'materialized': upstream_merge.items
-        },
-        '_nginx_proxy_set_header_registry': {
-          'input': input_proxy_set_headers,
-          'derived': derived_proxy_set_headers,
-          'materialized': proxy_set_header_merge.items
-        }
-      }, recursive=True)] %}
-      {% endfor %}
-      {{ ns.items }}
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-
-- name: "Normalize server primitive registries"
-  ansible.builtin.set_fact:
-    _nginx_selected_servers: "{{ (_nginx_selected_servers | trim) | from_yaml }}"
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
+- name: "Materialize server runtime"
+  ansible.builtin.import_tasks: "materialize_server_runtime.yml"
 
 - name: "Determine active server template spec files"
   ansible.builtin.set_fact:
@@ -471,7 +316,7 @@
       {% set ns.files = ns.files + [__nginx_server_template_specs[template_name].vars_file] %}
       {% endif %}
       {% endfor %}
-      {{ ns.files | unique }}
+      {{ ns.files | unique | to_json }}
   tags:
     - nginx
     - nginx-config
@@ -480,66 +325,15 @@
 - name: "Load internal server template spec files"
   ansible.builtin.include_vars:
     file: "{{ item }}"
-  loop: "{{ (_nginx_active_server_template_spec_files | trim) | from_yaml }}"
+  loop: "{{ (_nginx_active_server_template_spec_files | trim) | from_json }}"
   when: _nginx_active_server_template_spec_files | trim | length > 0
   tags:
     - nginx
     - nginx-config
     - nginx-servers
 
-- name: "Materialize proxy cache directories for selected servers"
-  ansible.builtin.set_fact:
-    _nginx_selected_proxy_cache_dirs: >-
-      {% set ns = namespace(items=[]) %}
-      {% for item in _nginx_selected_servers if item.state | default('present') == 'present' %}
-      {% if item.cache is defined and item.cache is sequence and item.cache is not string %}
-      {% set namespace_source = item.cache_namespace | default(item.name | default(item.server_name | default(item.filename | default('')))) %}
-      {% set namespace = namespace_source
-        | lower
-        | regex_replace('[^a-z0-9]+', '_')
-        | regex_replace('^_+', '')
-        | regex_replace('_+$', '') %}
-      {% if namespace | length > 0 %}
-      {% for cache in item.cache if cache.name is defined and cache.state | default('present') == 'present' %}
-      {% set zone_name = namespace ~ '_' ~ cache.name %}
-      {% set ns.items = ns.items + [{
-        'path': cache.directory | default(nginx_proxy_cache_root ~ '/' ~ zone_name),
-        'owner': cache.owner | default(_nginx_runtime_user),
-        'group': cache.group | default(_nginx_runtime_group),
-        'mode': cache.mode | default('0755'),
-        'recurse': false
-      }] %}
-      {% endfor %}
-      {% endif %}
-      {% endif %}
-      {% endfor %}
-      {{ ns.items | unique(attribute='path') }}
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-
-- name: "Normalize proxy cache directories list"
-  ansible.builtin.set_fact:
-    _nginx_selected_proxy_cache_dirs: "{{ (_nginx_selected_proxy_cache_dirs | trim) | from_yaml }}"
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-
-- name: "Merge effective working directories"
-  ansible.builtin.set_fact:
-    _nginx_effective_working_dirs: >-
-      {{
-        __nginx_layouts_config[_nginx_active_layout].working_dirs
-        + _nginx_selected_proxy_cache_dirs
-        + (((nginx_working_dirs | trim) | from_yaml) if nginx_working_dirs is string else nginx_working_dirs)
-      }}
-  tags:
-    - nginx
-    - nginx-config
-    - nginx-servers
-    - user
+- name: "Materialize server runtime cache directories"
+  ansible.builtin.import_tasks: "materialize_server_runtime_cache.yml"
 
 - name: "Report SSL provisioning requests (not implemented yet)"
   ansible.builtin.debug:
@@ -570,6 +364,8 @@
     group: root
     mode: "0755"
   loop: "{{ _nginx_selected_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default(item.filename | default('unnamed'))) }}"
   become: true
   tags:
     - nginx
@@ -585,6 +381,8 @@
     group: root
     mode: "0755"
   loop: "{{ _nginx_selected_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default(item.filename | default('unnamed'))) }}"
   when:
     - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
   become: true
@@ -604,6 +402,15 @@
     group: root
     mode: "0644"
   loop: "{{ _nginx_selected_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default(item.filename | default('unnamed'))) }}"
+  vars:
+    nginx_server_runtime: >-
+      {{
+        _nginx_server_runtime[
+          item.name | default(item.server_name | default(item.filename | default('')))
+        ] | default({})
+      }}
   when: item.state | default('present') == 'present'
   notify: Reload nginx
   become: true
@@ -625,6 +432,8 @@
       item.server_symlink_ext | default(nginx_server_symlink_ext | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_ext)) }}
     state: link
   loop: "{{ _nginx_selected_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default(item.filename | default('unnamed'))) }}"
   when:
     - item.state | default('present') == 'present'
     - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
@@ -645,6 +454,8 @@
       item.server_symlink_ext | default(nginx_server_symlink_ext | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_ext)) }}
     state: absent
   loop: "{{ _nginx_selected_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default(item.filename | default('unnamed'))) }}"
   when:
     - item.state | default('present') == 'absent'
     - item.server_symlink_enable | default(nginx_server_symlink_enable | default(__nginx_layouts_config[_nginx_active_layout].server_symlink_enable)) | bool
@@ -663,6 +474,8 @@
       item.server_ext | default(nginx_server_ext | default(__nginx_layouts_config[_nginx_active_layout].server_ext)) }}
     state: absent
   loop: "{{ _nginx_selected_servers }}"
+  loop_control:
+    label: "{{ item.name | default(item.server_name | default(item.filename | default('unnamed'))) }}"
   when: item.state | default('present') == 'absent'
   notify: Reload nginx
   become: true

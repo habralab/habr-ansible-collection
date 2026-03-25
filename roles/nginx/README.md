@@ -679,6 +679,10 @@ Common top-level fields supported by the template include:
 - `return`
 - `locations`
 - `upstreams`
+- `upstream_members`
+- `upstream_pools`
+- `upstream_selection`
+- `cache`
 - `companion_servers`
 
 Location items support the same general model, with the usual nginx context restrictions applied by the directive registry.
@@ -696,6 +700,20 @@ proxy_cache_valid:
 Currently supported proxy-related `servers/vhost` fields include: `proxy_http_version`, `proxy_next_upstream`, `proxy_connect_timeout`, `proxy_read_timeout`, `proxy_send_timeout`, `proxy_buffering`, `proxy_request_buffering`, `proxy_buffer_size`, `proxy_buffers`, `proxy_max_temp_file_size`, `proxy_cache`, `proxy_cache_background_update`, `proxy_cache_bypass`, `proxy_cache_key`, `proxy_cache_min_uses`, `proxy_cache_status_header`, `proxy_cache_use_stale`, `proxy_cache_valid`, `proxy_no_cache`, `proxy_pass_header`, `proxy_hide_header`, `proxy_ignore_headers`, `proxy_intercept_errors`, `proxy_set_header`, and `proxy_pass`.
 
 `proxy_cache_status_header` is a template-level convenience field. `true` renders `add_header X-Proxy-Cache-Status $upstream_cache_status;`. You can also override the rendered value explicitly when needed.
+
+`proxy_pass` supports both raw nginx-style strings and a structured consumer form. Current supported forms are:
+
+- raw string, for example `"http://app_backend"`
+- `"default"` to use `upstream_default_scheme` plus `upstream_default_target`
+- object form with one of:
+  - `upstream` / `upstream_name`
+  - `pool`
+  - `member`
+  - `map`
+  - `target`
+- optional `scheme`
+
+User-defined `upstreams` are materialized into stable generated runtime names and may still be referenced through their short declarative names from `proxy_pass`. Higher-level structures such as `upstream_members`, `upstream_pools`, and `upstream_selection` compile into namespaced upstream or map primitives before rendering.
 
 Minimal example:
 
@@ -757,6 +775,68 @@ nginx_servers:
     locations:
       - name: "/"
         proxy_pass: "http://app_backend"
+```
+
+Reverse proxy using the structured `proxy_pass` consumer form:
+
+```yaml
+nginx_servers:
+  - name: "app.example.com"
+    template: "servers/vhost"
+    server_name: "app.example.com"
+
+    upstream_default_scheme: "http"
+    upstream_default_target: "app_backend"
+
+    upstreams:
+      - name: "app_backend"
+        hosts:
+          - address: "192.0.2.10:8080"
+            remark: "app-0"
+
+    locations:
+      - name: "/"
+        proxy_pass: "default"
+```
+
+Derived upstream pools and selection maps:
+
+```yaml
+nginx_servers:
+  - name: "cdn.example.com"
+    template: "servers/vhost"
+    server_name: "cdn.example.com"
+
+    upstream_members:
+      - name: "cdn_local_0"
+        address: "198.51.100.10:443"
+        remark: "edge-0"
+      - name: "cdn_local_1"
+        address: "198.51.100.11:443"
+        remark: "edge-1"
+
+    upstream_pools:
+      - name: "cdn_pool"
+        members: ["cdn_local_0", "cdn_local_1"]
+        max_fails: 3
+        fail_timeout: "10s"
+
+    upstream_selection:
+      - name: "cdn_route"
+        source:
+          cookie: "upstream_route"
+        default_target: "cdn_pool"
+        selectors:
+          - value: "single"
+            target: "cdn_local_0"
+          - value: "pool"
+            target: "cdn_pool"
+
+    locations:
+      - name: "/"
+        proxy_pass:
+          scheme: "https"
+          map: "cdn_route"
 ```
 
 Cached reverse proxy example:

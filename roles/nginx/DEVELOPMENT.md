@@ -261,7 +261,8 @@ Supporting files:
 The template also relies on task-level materialization for some derived runtime objects. Current examples include:
 
 - `_nginx_selected_servers`
-- `_nginx_selected_proxy_cache_dirs`
+- `_nginx_server_runtime`
+- `_nginx_server_runtime_cache_dirs`
 - `_nginx_effective_working_dirs`
 
 ### Extension Rules
@@ -282,6 +283,7 @@ If a feature needs derived runtime objects before rendering, materialize them in
 
 Current examples:
 
+- `maps`
 - `upstreams`
 - `proxy_cache_path`
 
@@ -291,6 +293,14 @@ Rules:
 - derive generated names from stable server identity
 - allow explicit namespace override when operational stability matters more than automatic naming
 - keep creation of role-owned companion directories in task materialization, not inline template logic
+
+This is now part of the `servers/vhost` contract. The template may own HTTP-level companion primitives when they are tightly coupled to the same server model and compile from deterministic input.
+
+When adding a new companion primitive:
+
+1. decide whether it is a first-class primitive (`map`, `upstream`, etc.) or only derived syntax
+2. if it is first-class, materialize it into a registry and render it through the shared primitive renderer
+3. if a higher-level sugar produces it, keep the sugar as a producer of derived registry entries rather than as a separate renderer path
 
 ### Naming and Namespace Rules
 
@@ -304,6 +314,45 @@ Current precedence for generated cache namespaces is:
 4. `filename`
 
 After choosing the identity source, normalize it into a safe nginx-facing identifier and keep that normalization stable over time.
+
+### Sidecar Runtime
+
+Compiled runtime state for `servers/vhost` should live in a sidecar structure, not inside the user-facing server item itself.
+
+Current pattern:
+
+- `_nginx_selected_servers` contains the merged public server objects
+- `_nginx_server_runtime` contains per-server compiled runtime state
+
+This keeps loop output readable and preserves a cleaner boundary between:
+
+- public declarative input
+- derived implementation state
+
+The sidecar runtime is also the intended expansion point for future materialization steps.
+
+### Compile Specs
+
+The current materialization flow uses small dictionary-backed specs from `vars/server_runtime.yml` for mergeable registries and feature defaults.
+
+Current examples:
+
+- `__nginx_server_runtime_registry_specs`
+- `__nginx_server_runtime_feature_defaults`
+- `__nginx_server_runtime_identity_fields`
+
+Use these specs to reduce repeated merge logic and hardcoded defaults inside tasks.
+
+Do not try to force every inter-registry transform into pure data. A good rule of thumb is:
+
+- merge mechanics and defaults may be spec-driven
+- inter-registry producers may stay explicit when they encode real logic
+
+Internal Jinja-built list/dict payloads are serialized through JSON roundtrips during task materialization.
+
+- prefer `to_json` / `from_json` for internal compiler payloads
+- keep `from_yaml` for user-authored YAML-like string inputs
+- do not mix the two styles for the same internal pipeline without a specific reason
 
 ### Renderer Categories
 

@@ -93,6 +93,105 @@
 {%- endmacro -%}
 
 {# ============================================================================ #}
+{# Proxy Pass Helpers                                                           #}
+{# ============================================================================ #}
+{%- macro resolve_runtime_namespace(block, root_block=none) -%}
+{% set owner = root_block if root_block is not none else block %}
+{{- render_cache_namespace(owner) -}}
+{%- endmacro -%}
+
+{%- macro resolve_runtime_upstream_name(name, block, root_block=none) -%}
+{% set ns = namespace(value=name | default(''), exact_match=false, original_match=false, namespaced_match=false) %}
+{% set runtime_namespace = resolve_runtime_namespace(block, root_block) %}
+{% set runtime_upstreams = nginx_server_runtime.upstreams_registry.materialized | default([]) %}
+{% if ns.value %}
+{% for upstream in runtime_upstreams if upstream.name is defined %}
+{% if upstream.name == ns.value %}
+{% set ns.value = upstream.name %}
+{% set ns.exact_match = true %}
+{% endif %}
+{% if upstream.original_name is defined and upstream.original_name == name %}
+{% set ns.value = upstream.name %}
+{% set ns.original_match = true %}
+{% endif %}
+{% if runtime_namespace and upstream.name == runtime_namespace ~ '_' ~ name %}
+{% set ns.value = upstream.name %}
+{% set ns.namespaced_match = true %}
+{% endif %}
+{% endfor %}
+{% if runtime_namespace and (not ns.exact_match) and (not ns.original_match) and ns.value == name %}
+{% set ns.value = runtime_namespace ~ '_' ~ name %}
+{% endif %}
+{% endif %}
+{{- ns.value -}}
+{%- endmacro -%}
+
+{%- macro resolve_runtime_map_target(name, block, root_block=none) -%}
+{% set ns = namespace(value='') %}
+{% if name is string and name.startswith('$') %}
+{% set ns.value = name %}
+{% else %}
+{% set runtime_maps = nginx_server_runtime.maps_registry.materialized | default([]) %}
+{% for runtime_map in runtime_maps if runtime_map.state | default('present') == 'present' %}
+{% if runtime_map.name is defined and runtime_map.name == name and runtime_map.target is defined %}
+{% set ns.value = runtime_map.target %}
+{% endif %}
+{% if runtime_map.target is defined and runtime_map.target == name %}
+{% set ns.value = runtime_map.target %}
+{% endif %}
+{% endfor %}
+{% if not ns.value and name %}
+{% set runtime_namespace = resolve_runtime_namespace(block, root_block) %}
+{% if runtime_namespace %}
+{% set ns.value = '$' ~ runtime_namespace ~ '_upstream_selection_' ~ name %}
+{% endif %}
+{% endif %}
+{% endif %}
+{{- ns.value -}}
+{%- endmacro -%}
+
+{%- macro render_proxy_pass_target(value, block, root_block=none) -%}
+{% set ns = namespace(out='') %}
+{% set runtime_namespace = resolve_runtime_namespace(block, root_block) %}
+{% set default_scheme = block.upstream_default_scheme
+  | default((root_block.upstream_default_scheme if root_block is not none and root_block.upstream_default_scheme is defined else none))
+  | default('http') %}
+{% set default_target = block.upstream_default_target
+  | default((root_block.upstream_default_target if root_block is not none and root_block.upstream_default_target is defined else none))
+  | default('main') %}
+{% if value is string %}
+{% if value == 'default' %}
+{% set ns.out = default_scheme ~ '://' ~ resolve_runtime_upstream_name(default_target, block, root_block) %}
+{% else %}
+{% set ns.out = value %}
+{% endif %}
+{% elif value is mapping %}
+{% set scheme = value.scheme | default(default_scheme) %}
+{% if value.default | default(false) | bool %}
+{% set ns.out = scheme ~ '://' ~ resolve_runtime_upstream_name(default_target, block, root_block) %}
+{% elif value.target is defined %}
+{% set ns.out = scheme ~ '://' ~ value.target %}
+{% elif value.map is defined %}
+{% set map_target = resolve_runtime_map_target(value.map, block, root_block) %}
+{% if map_target %}
+{% set ns.out = scheme ~ '://' ~ map_target %}
+{% endif %}
+{% elif value.upstream is defined %}
+{% set ns.out = scheme ~ '://' ~ resolve_runtime_upstream_name(value.upstream, block, root_block) %}
+{% elif value.upstream_name is defined %}
+{% set ns.out = scheme ~ '://' ~ resolve_runtime_upstream_name(value.upstream_name, block, root_block) %}
+{% elif value.pool is defined %}
+{% set ns.out = scheme ~ '://' ~ resolve_runtime_upstream_name(value.pool, block, root_block) %}
+{% elif value.member is defined %}
+{% set ns.out = scheme ~ '://' ~ resolve_runtime_upstream_name(value.member, block, root_block) %}
+{% elif value.name is defined %}
+{% set ns.out = scheme ~ '://' ~ resolve_runtime_upstream_name(value.name, block, root_block) %}
+{% endif %}
+{% endif %}
+{{- ns.out -}}
+{%- endmacro -%}
+
+{# ============================================================================ #}
 {# Content Detection                                                             #}
 {# ============================================================================ #}
 {%- macro block_has_content(block, block_name) -%}
@@ -203,11 +302,11 @@
 {# ============================================================================ #}
 {# Composite Directive Renderers                                                 #}
 {# ============================================================================ #}
-{%- macro render_composite_member(block, member, context_name, indent='') -%}
+{%- macro render_composite_member(block, member, context_name, indent='', root_block=none) -%}
 {% set ns = namespace(out='') %}
 {% set value = block[member] if block[member] is defined else none %}
-{% if member == 'proxy_set_header' and block._nginx_proxy_set_header_registry is defined %}
-{% set value = block._nginx_proxy_set_header_registry.materialized %}
+{% if member == 'proxy_set_header' and nginx_server_runtime.proxy_set_header_registry is defined %}
+{% set value = nginx_server_runtime.proxy_set_header_registry.materialized %}
 {% endif %}
 {% if value is none %}
 {{- ns.out -}}
@@ -344,7 +443,12 @@
 {% set ns.out = indent ~ 'index ' ~ (entries | join(' ')) ~ ';\n' %}
 {%- elif member == 'proxy_pass' -%}
 {# --- composite: proxy_pass -------------------------------------------------- #}
-{% set ns.out = indent ~ 'proxy_pass ' ~ value ~ ';\n' %}
+{% set proxy_pass_target = render_proxy_pass_target(value, block, root_block) %}
+{% if proxy_pass_target %}
+{% set ns.out = indent ~ 'proxy_pass ' ~ proxy_pass_target ~ ';\n' %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: proxy_pass\n' %}
+{% endif %}
 {%- elif member == 'proxy_cache_valid' -%}
 {# --- composite: proxy_cache_valid ------------------------------------------ #}
 {% if value is sequence and value is not string %}
@@ -466,7 +570,7 @@
 {% elif block[member] is defined %}
 {% set spacing = __nginx_server_vhost_block_specs[block_name].spacing | default(false) %}
 {% if (not ns.first) and (ns.prev_spacing or spacing) %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
-{% set rendered = render_composite_member(block, member, context_name, indent) %}
+{% set rendered = render_composite_member(block, member, context_name, indent, root_block) %}
 {% set ns.out = ns.out ~ append_debug_suffix(rendered, member, 'composite', spacing) %}
 {% set ns.first = false %}
 {% set ns.prev_spacing = spacing %}
@@ -536,8 +640,8 @@
 {# ============================================================================ #}
 {# Template Entry Point                                                          #}
 {# ============================================================================ #}
-{% set rendered_maps = render_maps(item._nginx_maps_registry.materialized | default(item.maps)).lstrip('\n').rstrip() %}
-{% set rendered_upstreams = render_upstreams(item._nginx_upstreams_registry.materialized | default(item.upstreams)).lstrip('\n').rstrip() %}
+{% set rendered_maps = render_maps(nginx_server_runtime.maps_registry.materialized | default(item.maps)).lstrip('\n').rstrip() %}
+{% set rendered_upstreams = render_upstreams(nginx_server_runtime.upstreams_registry.materialized | default(item.upstreams)).lstrip('\n').rstrip() %}
 {% set rendered_proxy_cache_paths = render_proxy_cache_paths(item).lstrip('\n').rstrip() %}
 {% set rendered_server = render_mock_server(item).lstrip('\n').rstrip() %}
 {% if rendered_proxy_cache_paths %}

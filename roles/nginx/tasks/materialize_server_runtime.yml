@@ -1,0 +1,331 @@
+---
+- name: "Normalize server selection patterns"
+  ansible.builtin.set_fact:
+    _nginx_only_servers_patterns: >-
+      {% if nginx_only_servers is string %}
+      {{ nginx_only_servers.split(',') | map('trim') | reject('equalto', '') | list | to_json }}
+      {% else %}
+      {{ nginx_only_servers | default([]) | to_json }}
+      {% endif %}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Materialize server selection patterns list"
+  ansible.builtin.set_fact:
+    _nginx_only_servers_patterns: "{{ (_nginx_only_servers_patterns | trim) | from_json }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Filter selected servers"
+  ansible.builtin.set_fact:
+    _nginx_selected_servers: >-
+      {% set ns = namespace(items=[]) %}
+      {% for item in _nginx_all_servers %}
+      {% set identities = [
+        item.name | default(''),
+        item.filename | default(''),
+        item.server_name | default('')
+      ] | reject('equalto', '') | unique | list %}
+      {% set match_ns = namespace(matched=(_nginx_only_servers_patterns | length == 0)) %}
+      {% if not match_ns.matched %}
+      {% for pattern in _nginx_only_servers_patterns %}
+      {% set pattern_regex = '^'
+        ~ (pattern
+           | replace('\\', '\\\\')
+           | replace('.', '\\.')
+           | replace('[', '\\[')
+           | replace(']', '\\]')
+           | replace('(', '\\(')
+           | replace(')', '\\)')
+           | replace('{', '\\{')
+           | replace('}', '\\}')
+           | replace('+', '\\+')
+           | replace('?', '\\?')
+           | replace('^', '\\^')
+           | replace('$', '\\$')
+           | replace('|', '\\|')
+           | replace('*', '.*'))
+        ~ '$' %}
+      {% if identities | select('match', pattern_regex) | list | length > 0 %}
+      {% set match_ns.matched = true %}
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% if match_ns.matched %}
+      {% set ns.items = ns.items + [item] %}
+      {% endif %}
+      {% endfor %}
+      {{ ns.items | to_json }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Materialize selected servers list"
+  ansible.builtin.set_fact:
+    _nginx_selected_servers: "{{ (_nginx_selected_servers | trim) | from_json }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Assemble server runtime"
+  ansible.builtin.set_fact:
+    _nginx_server_runtime: >-
+      {% set ns = namespace(items={}) %}
+      {% for item in _nginx_selected_servers %}
+      {# --------------------------------------------------------------------- #}
+      {# Identity and feature toggles                                          #}
+      {# --------------------------------------------------------------------- #}
+      {% set server_key = item.name | default(item.server_name | default(item.filename | default(''))) %}
+      {% set identity_ns = namespace(value='') %}
+      {% for identity_field in __nginx_server_runtime_identity_fields %}
+      {% if identity_ns.value == '' and item[identity_field] is defined %}
+      {% set identity_ns.value = item[identity_field] %}
+      {% endif %}
+      {% endfor %}
+      {% set namespace_source = identity_ns.value %}
+      {% set generated_namespace = namespace_source
+        | lower
+        | regex_replace('[^a-z0-9]+', '_')
+        | regex_replace('^_+', '')
+        | regex_replace('_+$', '') %}
+      {% set recursive_scheme_header = item.recursive_scheme_header | default(false) | bool %}
+      {% set recursive_scheme_header_defaults = __nginx_server_runtime_feature_defaults.recursive_scheme_header %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Base registries                                                        #}
+      {# --------------------------------------------------------------------- #}
+      {% set input_upstreams = item.upstreams | default([]) %}
+      {% set namespaced_input_upstreams_ns = namespace(items=[]) %}
+      {% for upstream in input_upstreams %}
+      {% if upstream.name is defined and generated_namespace | length > 0 and not (upstream.name | string).startswith(generated_namespace ~ '_') %}
+      {% set namespaced_input_upstreams_ns.items = namespaced_input_upstreams_ns.items + [upstream | combine({
+        'name': generated_namespace ~ '_' ~ upstream.name,
+        'original_name': upstream.name
+      })] %}
+      {% else %}
+      {% set namespaced_input_upstreams_ns.items = namespaced_input_upstreams_ns.items + [upstream] %}
+      {% endif %}
+      {% endfor %}
+      {% set base_registries = namespace(items={}) %}
+      {% for registry_name, registry_spec in __nginx_server_runtime_registry_specs.base.items() %}
+      {% set input_items = item[registry_spec.input_field] | default([]) %}
+      {% set derived_items = item[registry_spec.derived_field] | default([]) %}
+      {% set merged = namespace(items=[], keys=[]) %}
+      {% for entry in ((input_items + derived_items) | reverse) %}
+      {% set entry_key = entry[registry_spec.key_field] if entry[registry_spec.key_field] is defined else '' %}
+      {% if entry_key and entry_key not in merged.keys %}
+      {% set merged.items = [entry] + merged.items %}
+      {% set merged.keys = merged.keys + [entry_key] %}
+      {% endif %}
+      {% endfor %}
+      {% set base_registries.items = base_registries.items | combine({
+        registry_name: {
+          'input': input_items,
+          'derived': derived_items,
+          'materialized': merged.items
+        }
+      }, recursive=True) %}
+      {% endfor %}
+      {% set input_upstream_members = base_registries.items.upstream_members.input %}
+      {% set derived_upstream_members = base_registries.items.upstream_members.derived %}
+      {% set upstream_member_merge = namespace(items=base_registries.items.upstream_members.materialized) %}
+      {% set input_upstream_pools = base_registries.items.upstream_pools.input %}
+      {% set derived_upstream_pools = base_registries.items.upstream_pools.derived %}
+      {% set upstream_pool_merge = namespace(items=base_registries.items.upstream_pools.materialized) %}
+      {% set input_upstream_selection = base_registries.items.upstream_selection.input %}
+      {% set derived_upstream_selection = base_registries.items.upstream_selection.derived %}
+      {% set upstream_selection_merge = namespace(items=base_registries.items.upstream_selection.materialized) %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Derived upstreams from members and pools                              #}
+      {# --------------------------------------------------------------------- #}
+      {% set derived_upstreams_ns = namespace(items=(item._nginx_derived_upstreams | default([]))) %}
+      {% if generated_namespace | length > 0 %}
+      {% for member in upstream_member_merge.items if member.name is defined and member.address is defined and member.state | default('present') == 'present' %}
+      {% set derived_upstreams_ns.items = derived_upstreams_ns.items + [{
+        'name': generated_namespace ~ '_' ~ member.name,
+        'hosts': [{
+          'address': member.address,
+          'remark': member.remark | default(member.name)
+        }]
+      }] %}
+      {% endfor %}
+      {% for pool in upstream_pool_merge.items if pool.name is defined and pool.state | default('present') == 'present' %}
+      {% set pool_hosts_ns = namespace(items=[]) %}
+      {% for member_name in pool.members | default([]) %}
+      {% for member in upstream_member_merge.items if member.name is defined and member.name == member_name and member.address is defined and member.state | default('present') == 'present' %}
+      {% set pool_host = {
+        'address': member.address,
+        'remark': member.remark | default(member.name),
+        'backup': member.backup | default(false)
+      } %}
+      {% if member.weight is defined %}
+      {% set pool_host = pool_host | combine({'weight': member.weight}) %}
+      {% endif %}
+      {% if pool.max_fails is defined %}
+      {% set pool_host = pool_host | combine({'max_fails': pool.max_fails}) %}
+      {% elif member.max_fails is defined %}
+      {% set pool_host = pool_host | combine({'max_fails': member.max_fails}) %}
+      {% endif %}
+      {% if pool.fail_timeout is defined %}
+      {% set pool_host = pool_host | combine({'fail_timeout': pool.fail_timeout}) %}
+      {% elif member.fail_timeout is defined %}
+      {% set pool_host = pool_host | combine({'fail_timeout': member.fail_timeout}) %}
+      {% endif %}
+      {% set pool_hosts_ns.items = pool_hosts_ns.items + [pool_host] %}
+      {% endfor %}
+      {% endfor %}
+      {% set derived_upstreams_ns.items = derived_upstreams_ns.items + [{
+        'name': generated_namespace ~ '_' ~ pool.name,
+        'ip_hash': pool.ip_hash | default(false),
+        'hosts': pool_hosts_ns.items
+      }] %}
+      {% endfor %}
+      {% endif %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Derived maps: direct input, recursive scheme, upstream selection      #}
+      {# --------------------------------------------------------------------- #}
+      {% set derived_maps_ns = namespace(items=(item._nginx_derived_maps | default([]))) %}
+      {% if recursive_scheme_header and generated_namespace | length > 0 %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': 'recursive_scheme',
+        'source': item.recursive_scheme_source | default(recursive_scheme_header_defaults.source),
+        'target': '$' ~ generated_namespace ~ '_' ~ recursive_scheme_header_defaults.target_suffix,
+        'default': item.recursive_scheme_default | default(recursive_scheme_header_defaults.default),
+        'entries': item.recursive_scheme_entries | default(recursive_scheme_header_defaults.entries)
+      }] %}
+      {% endif %}
+      {% if generated_namespace | length > 0 %}
+      {% for selection in upstream_selection_merge.items if selection.name is defined and selection.state | default('present') == 'present' %}
+      {% if selection.source is defined and selection.source.expression is defined %}
+      {% set selection_source = selection.source.expression %}
+      {% else %}
+      {% set selection_cookie_name = 'backend_override' %}
+      {% if selection.source is defined and selection.source.cookie is defined %}
+      {% set selection_cookie_name = selection.source.cookie %}
+      {% elif selection.source is defined and selection.source.name is defined %}
+      {% set selection_cookie_name = selection.source.name %}
+      {% endif %}
+      {% set selection_source = '$cookie_' ~ selection_cookie_name %}
+      {% endif %}
+      {% set default_target_ns = namespace(value=selection.default_target | default('')) %}
+      {% for pool in upstream_pool_merge.items if pool.name is defined and pool.name == default_target_ns.value %}
+      {% set default_target_ns.value = generated_namespace ~ '_' ~ pool.name %}
+      {% endfor %}
+      {% for member in upstream_member_merge.items if member.name is defined and member.name == default_target_ns.value %}
+      {% set default_target_ns.value = generated_namespace ~ '_' ~ member.name %}
+      {% endfor %}
+      {% for upstream in ((namespaced_input_upstreams_ns.items + derived_upstreams_ns.items)) if upstream.name is defined and (upstream.name == default_target_ns.value or (upstream.original_name is defined and upstream.original_name == default_target_ns.value)) %}
+      {% set default_target_ns.value = upstream.name %}
+      {% endfor %}
+      {% set entries_ns = namespace(items=[]) %}
+      {% for selector in selection.selectors | default([]) if selector.value is defined and selector.target is defined %}
+      {% set selector_target_ns = namespace(value=selector.target) %}
+      {% for pool in upstream_pool_merge.items if pool.name is defined and pool.name == selector_target_ns.value %}
+      {% set selector_target_ns.value = generated_namespace ~ '_' ~ pool.name %}
+      {% endfor %}
+      {% for member in upstream_member_merge.items if member.name is defined and member.name == selector_target_ns.value %}
+      {% set selector_target_ns.value = generated_namespace ~ '_' ~ member.name %}
+      {% endfor %}
+      {% for upstream in ((namespaced_input_upstreams_ns.items + derived_upstreams_ns.items)) if upstream.name is defined and (upstream.name == selector_target_ns.value or (upstream.original_name is defined and upstream.original_name == selector_target_ns.value)) %}
+      {% set selector_target_ns.value = upstream.name %}
+      {% endfor %}
+      {% set entries_ns.items = entries_ns.items + [{
+        'match': selector.value,
+        'value': selector_target_ns.value
+      }] %}
+      {% endfor %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': selection.name,
+        'source': selection_source,
+        'target': '$' ~ generated_namespace ~ '_upstream_selection_' ~ selection.name,
+        'default': default_target_ns.value,
+        'entries': entries_ns.items
+      }] %}
+      {% endfor %}
+      {% endif %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Derived proxy_set_header entries                                      #}
+      {# --------------------------------------------------------------------- #}
+      {% set derived_proxy_set_headers = item._nginx_derived_proxy_set_header | default([]) %}
+      {% if recursive_scheme_header and generated_namespace | length > 0 %}
+      {% set derived_proxy_set_headers = derived_proxy_set_headers + [{
+        'name': recursive_scheme_header_defaults.proxy_set_header_name,
+        'value': '$' ~ generated_namespace ~ '_' ~ recursive_scheme_header_defaults.target_suffix
+      }] %}
+      {% endif %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Final registries                                                       #}
+      {# --------------------------------------------------------------------- #}
+      {% set final_registry_sources = {
+        'maps': {
+          'input': item.maps | default([]),
+          'derived': derived_maps_ns.items
+        },
+        'upstreams': {
+          'input': namespaced_input_upstreams_ns.items,
+          'derived': derived_upstreams_ns.items
+        },
+        'proxy_set_header': {
+          'input': item.proxy_set_header | default([]),
+          'derived': derived_proxy_set_headers
+        }
+      } %}
+      {% set final_registries = namespace(items={}) %}
+      {% for registry_name, registry_spec in __nginx_server_runtime_registry_specs.final.items() %}
+      {% set source = final_registry_sources[registry_name] %}
+      {% set merged = namespace(items=[], keys=[]) %}
+      {% for entry in ((source.input + source.derived) | reverse) %}
+      {% set entry_key = entry[registry_spec.key_field] if entry[registry_spec.key_field] is defined else '' %}
+      {% if entry_key and entry_key not in merged.keys %}
+      {% set merged.items = [entry] + merged.items %}
+      {% set merged.keys = merged.keys + [entry_key] %}
+      {% endif %}
+      {% endfor %}
+      {% set final_registries.items = final_registries.items | combine({
+        registry_name: {
+          'input': source.input,
+          'derived': source.derived,
+          'materialized': merged.items
+        }
+      }, recursive=True) %}
+      {% endfor %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Final sidecar runtime payload                                         #}
+      {# --------------------------------------------------------------------- #}
+      {% if server_key %}
+      {% set ns.items = ns.items | combine({
+        server_key: {
+          'maps_registry': final_registries.items.maps,
+          'upstreams_registry': final_registries.items.upstreams,
+          'upstream_members_registry': base_registries.items.upstream_members,
+          'upstream_pools_registry': base_registries.items.upstream_pools,
+          'upstream_selection_registry': base_registries.items.upstream_selection,
+          'proxy_set_header_registry': final_registries.items.proxy_set_header
+        }
+      }, recursive=True) %}
+      {% endif %}
+      {% endfor %}
+      {{ ns.items | to_json }}
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
+
+- name: "Normalize server runtime"
+  ansible.builtin.set_fact:
+    _nginx_server_runtime: "{{ (_nginx_server_runtime | trim) | from_json }}"
+  tags:
+    - nginx
+    - nginx-config
+    - nginx-servers
