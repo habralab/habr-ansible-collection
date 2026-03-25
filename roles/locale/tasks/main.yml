@@ -84,7 +84,9 @@
     cmd: "locale -a"
   register: _locale_available
   changed_when: false
-  when: locale_generated | length > 0 or locale_default | length > 0
+  when:
+    - not ansible_check_mode
+    - locale_generated | length > 0 or locale_default | length > 0
   tags:
     - locale
 
@@ -99,7 +101,9 @@
   loop: "{{ locale_generated }}"
   loop_control:
     label: "{{ item }}"
-  when: locale_generated | length > 0
+  when:
+    - not ansible_check_mode
+    - locale_generated | length > 0
   tags:
     - locale
 
@@ -111,6 +115,8 @@
         in
         (_locale_available.stdout_lines | map('lower') | map('replace', '-', '') | map('replace', '_', '') | list)
     fail_msg: "locale_default was not found in locale -a after generation."
-  when: locale_default | length > 0
+  when:
+    - not ansible_check_mode
+    - locale_default | length > 0
   tags:
     - locale
