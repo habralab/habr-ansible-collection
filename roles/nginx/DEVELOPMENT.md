@@ -286,7 +286,7 @@ Current examples:
 - `geos`
 - `maps`
 - `upstreams`
-- `proxy_cache_path`
+- `cache_zones` rendered as `proxy_cache_path`
 
 Rules:
 

@@ -18,6 +18,7 @@ nginx_only_servers: []
 nginx_proxy_cache_root: "/var/cache/nginx"
 nginx_server_location_presets: {}
 nginx_server_location_preset_defaults: {}
+nginx_server_maintenance: {}
 
 nginx_auth: []
 nginx_auth_passwd_list: []

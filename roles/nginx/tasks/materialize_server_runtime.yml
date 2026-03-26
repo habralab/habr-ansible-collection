@@ -94,8 +94,55 @@
         | regex_replace('[^a-z0-9]+', '_')
         | regex_replace('^_+', '')
         | regex_replace('_+$', '') %}
-      {% set recursive_scheme_header = item.recursive_scheme_header | default(false) | bool %}
+      {% set recursive_scheme_header_raw = item.recursive_scheme_header | default(false) %}
+      {% set recursive_scheme_header_config = recursive_scheme_header_raw if recursive_scheme_header_raw is mapping else {} %}
+      {% set recursive_scheme_header = (recursive_scheme_header_config.enabled | default(true)) | bool if recursive_scheme_header_raw is mapping else recursive_scheme_header_raw | bool %}
       {% set recursive_scheme_header_defaults = __nginx_server_runtime_feature_defaults.recursive_scheme_header %}
+      {% set recursive_scheme_source = recursive_scheme_header_config.source
+        | default(item.recursive_scheme_source | default(recursive_scheme_header_defaults.source)) %}
+      {% set recursive_scheme_default = recursive_scheme_header_config.default
+        | default(item.recursive_scheme_default | default(recursive_scheme_header_defaults.default)) %}
+      {% set recursive_scheme_allowed_values = recursive_scheme_header_config.allowed_values
+        | default(item.recursive_scheme_allowed_values | default(recursive_scheme_header_defaults.allowed_values)) %}
+      {% set recursive_scheme_case_sensitive = recursive_scheme_header_config.case_sensitive
+        | default(item.recursive_scheme_case_sensitive | default(recursive_scheme_header_defaults.case_sensitive)) | bool %}
+      {% set recursive_scheme_entries_ns = namespace(items=[]) %}
+      {% if item.recursive_scheme_entries is defined %}
+      {% set recursive_scheme_entries_ns.items = item.recursive_scheme_entries %}
+      {% elif recursive_scheme_header_config.entries is defined %}
+      {% set recursive_scheme_entries_ns.items = recursive_scheme_header_config.entries %}
+      {% else %}
+      {% for allowed_value in recursive_scheme_allowed_values if allowed_value is not none %}
+      {% set allowed_value_string = allowed_value | string %}
+      {% set allowed_value_regex = allowed_value_string
+        | replace('\\', '\\\\')
+        | replace('.', '\\.')
+        | replace('[', '\\[')
+        | replace(']', '\\]')
+        | replace('(', '\\(')
+        | replace(')', '\\)')
+        | replace('{', '\\{')
+        | replace('}', '\\}')
+        | replace('+', '\\+')
+        | replace('?', '\\?')
+        | replace('^', '\\^')
+        | replace('$', '\\$')
+        | replace('|', '\\|')
+        | replace('*', '\\*') %}
+      {% if recursive_scheme_case_sensitive %}
+      {% set recursive_scheme_entries_ns.items = recursive_scheme_entries_ns.items + [{
+        'match': allowed_value_string,
+        'value': allowed_value_string
+      }] %}
+      {% else %}
+      {% set recursive_scheme_entries_ns.items = recursive_scheme_entries_ns.items + [{
+        'match': '~*^' ~ allowed_value_regex ~ '$',
+        'value': allowed_value_string,
+        'raw_match': true
+      }] %}
+      {% endif %}
+      {% endfor %}
+      {% endif %}
 
       {# --------------------------------------------------------------------- #}
       {# Base registries                                                        #}
@@ -196,10 +243,10 @@
       {% if recursive_scheme_header and generated_namespace | length > 0 %}
       {% set derived_maps_ns.items = derived_maps_ns.items + [{
         'name': 'recursive_scheme',
-        'source': item.recursive_scheme_source | default(recursive_scheme_header_defaults.source),
+        'source': recursive_scheme_source,
         'target': '$' ~ generated_namespace ~ '_' ~ recursive_scheme_header_defaults.target_suffix,
-        'default': item.recursive_scheme_default | default(recursive_scheme_header_defaults.default),
-        'entries': item.recursive_scheme_entries | default(recursive_scheme_header_defaults.entries)
+        'default': recursive_scheme_default,
+        'entries': recursive_scheme_entries_ns.items
       }] %}
       {% endif %}
       {% if generated_namespace | length > 0 %}
@@ -264,12 +311,160 @@
       {% endif %}
 
       {# --------------------------------------------------------------------- #}
-      {# Derived locations from reusable presets                               #}
+      {# Derived maintenance artifacts                                          #}
       {# --------------------------------------------------------------------- #}
+      {% set derived_if_ns = namespace(items=(item._nginx_derived_if | default([]))) %}
+      {% set derived_error_pages_ns = namespace(items=(item._nginx_derived_error_page | default([]))) %}
+      {% set derived_geos_ns = namespace(items=(item._nginx_derived_geos | default([]))) %}
       {% set preset_definitions = nginx_server_location_presets | default({}) %}
       {% set preset_default_configs = nginx_server_location_preset_defaults | default({}) %}
       {% set server_preset_configs = item.location_presets | default({}) %}
       {% set derived_locations_ns = namespace(items=(item._nginx_derived_locations | default([]))) %}
+      {% if item.maintenance is defined and generated_namespace | length > 0 %}
+      {% set maintenance_defaults = nginx_server_maintenance | default({}) %}
+      {% set maintenance = maintenance_defaults | combine(item.maintenance | default({}), recursive=True) %}
+      {% set maintenance_enabled = maintenance.enabled | default(false) | bool %}
+      {% set maintenance_file = maintenance.file | default('/stub_files/503.html') %}
+      {% set maintenance_triggers = maintenance.triggers | default([]) %}
+      {% set maintenance_bypass_vars_ns = namespace(items=[]) %}
+      {% for trigger in maintenance_triggers if trigger.type is defined %}
+      {% set trigger_name = (trigger.name | default(trigger.type ~ '_' ~ loop.index))
+        | lower
+        | regex_replace('[^a-z0-9_]+', '_')
+        | regex_replace('^_+', '')
+        | regex_replace('_+$', '') %}
+      {% set trigger_target = '$' ~ generated_namespace ~ '_maintenance_bypass_' ~ trigger_name %}
+      {% if trigger.type == 'ip_sets' %}
+      {% set trigger_entries_ns = namespace(items=[]) %}
+      {% for ip_set_name in trigger.ip_sets | default([]) %}
+      {% for ip_entry in (nginx_ip_sets[ip_set_name] | default([])) %}
+      {% if ip_entry.net is defined %}
+      {% set trigger_entries_ns.items = trigger_entries_ns.items + [{
+        'match': ip_entry.net,
+        'value': '1'
+      }] %}
+      {% elif ip_entry is string %}
+      {% set trigger_entries_ns.items = trigger_entries_ns.items + [{
+        'match': ip_entry,
+        'value': '1'
+      }] %}
+      {% endif %}
+      {% endfor %}
+      {% endfor %}
+      {% set derived_geos_ns.items = derived_geos_ns.items + [{
+        'name': trigger_name,
+        'target': trigger_target,
+        'default': '0',
+        'entries': trigger_entries_ns.items
+      }] %}
+      {% set maintenance_bypass_vars_ns.items = maintenance_bypass_vars_ns.items + [trigger_target] %}
+      {% elif trigger.type == 'cookie' and trigger.cookie is defined and trigger.cookie.name is defined %}
+      {% set allow_values = trigger.cookie.allow_values | default(['1']) %}
+      {% set allow_entries_ns = namespace(items=[]) %}
+      {% for allow_value in allow_values %}
+      {% set allow_entries_ns.items = allow_entries_ns.items + [{
+        'match': allow_value | string,
+        'value': '1'
+      }] %}
+      {% endfor %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': trigger_name,
+        'source': '$cookie_' ~ trigger.cookie.name,
+        'target': trigger_target,
+        'default': '0',
+        'entries': allow_entries_ns.items
+      }] %}
+      {% set maintenance_bypass_vars_ns.items = maintenance_bypass_vars_ns.items + [trigger_target] %}
+      {% elif trigger.type == 'map' and trigger.variable is defined %}
+      {% set allow_values = trigger.allow_values | default(['1']) %}
+      {% set allow_entries_ns = namespace(items=[]) %}
+      {% for allow_value in allow_values %}
+      {% set allow_entries_ns.items = allow_entries_ns.items + [{
+        'match': allow_value | string,
+        'value': '1'
+      }] %}
+      {% endfor %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': trigger_name,
+        'source': trigger.variable,
+        'target': trigger_target,
+        'default': '0',
+        'entries': allow_entries_ns.items
+      }] %}
+      {% set maintenance_bypass_vars_ns.items = maintenance_bypass_vars_ns.items + [trigger_target] %}
+      {% endif %}
+      {% endfor %}
+      {% set maintenance_switch_target = '$' ~ generated_namespace ~ '_maintenance_switch' %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': 'maintenance_switch',
+        'source': '$request_method',
+        'target': maintenance_switch_target,
+        'default': (maintenance_enabled | ternary('1', '0')),
+        'entries': []
+      }] %}
+      {% set maintenance_bypass_var = '' %}
+      {% if maintenance_bypass_vars_ns.items | length == 1 %}
+      {% set maintenance_bypass_var = maintenance_bypass_vars_ns.items[0] %}
+      {% elif maintenance_bypass_vars_ns.items | length > 1 %}
+      {% set combined_bypass_ns = namespace(current=maintenance_bypass_vars_ns.items[0]) %}
+      {% for combine_right in maintenance_bypass_vars_ns.items[1:] %}
+      {% set combine_target = '$' ~ generated_namespace ~ '_maintenance_bypass_combined_' ~ loop.index %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': 'maintenance_bypass_combined_' ~ loop.index,
+        'source': '"' ~ combined_bypass_ns.current ~ ':' ~ combine_right ~ '"',
+        'target': combine_target,
+        'default': '0',
+        'entries': [
+          {'match': '1:0', 'value': '1'},
+          {'match': '0:1', 'value': '1'},
+          {'match': '1:1', 'value': '1'}
+        ]
+      }] %}
+      {% set combined_bypass_ns.current = combine_target %}
+      {% endfor %}
+      {% set maintenance_bypass_var = combined_bypass_ns.current %}
+      {% endif %}
+      {% set maintenance_active_target = '$' ~ generated_namespace ~ '_maintenance_active' %}
+      {% if maintenance_bypass_var %}
+      {% set maintenance_active_source = '"' ~ maintenance_switch_target ~ ':' ~ maintenance_bypass_var ~ '"' %}
+      {% set maintenance_active_entries = [
+        {'match': '1:0', 'value': '1'},
+        {'match': '1:1', 'value': '0'}
+      ] %}
+      {% else %}
+      {% set maintenance_active_source = maintenance_switch_target %}
+      {% set maintenance_active_entries = [
+        {'match': '1', 'value': '1'}
+      ] %}
+      {% endif %}
+      {% set derived_maps_ns.items = derived_maps_ns.items + [{
+        'name': 'maintenance_active',
+        'source': maintenance_active_source,
+        'target': maintenance_active_target,
+        'default': '0',
+        'entries': maintenance_active_entries
+      }] %}
+      {% set derived_if_ns.items = derived_if_ns.items + [{
+        'condition': maintenance_active_target ~ ' = 1',
+        'return': {'code': 503}
+      }] %}
+      {% set derived_error_pages_ns.items = derived_error_pages_ns.items + [{
+        'codes': 503,
+        'target': '@maintenance'
+      }] %}
+      {% set derived_locations_ns.items = derived_locations_ns.items + [{
+        'name': '@maintenance',
+        'rewrite': [{
+          'regex': '^(.*)$',
+          'replacement': maintenance_file,
+          'flag': 'break'
+        }]
+      }] %}
+      {% endif %}
+
+      {# --------------------------------------------------------------------- #}
+      {# Derived locations from reusable presets                               #}
+      {# --------------------------------------------------------------------- #}
       {% for preset_name, preset_definition in preset_definitions.items() %}
       {% set preset_default_config = preset_default_configs[preset_name] if preset_default_configs[preset_name] is defined else {} %}
       {% set server_preset_config = server_preset_configs[preset_name] if server_preset_configs[preset_name] is defined else {} %}
@@ -294,6 +489,24 @@
       {% if location_key and location_key not in materialized_locations_merge.keys %}
       {% set materialized_locations_merge.items = [location] + materialized_locations_merge.items %}
       {% set materialized_locations_merge.keys = materialized_locations_merge.keys + [location_key] %}
+      {% endif %}
+      {% endfor %}
+      {% set materialized_if = derived_if_ns.items + (item['if'] | default([])) %}
+      {% set explicit_error_pages = item.error_page | default([]) %}
+      {% set materialized_error_pages_merge = namespace(items=[], keys=[]) %}
+      {% for page in ((derived_error_pages_ns.items + explicit_error_pages) | reverse) %}
+      {% if page is mapping and page.target is defined and (page.codes is defined or page.code is defined) %}
+      {% set page_codes = page.codes if page.codes is defined else page.code %}
+      {% set page_codes_list = page_codes if page_codes is sequence and page_codes is not string else [page_codes] %}
+      {% set page_key = (page_codes_list | map('string') | join(' ')) ~ '|' ~ page.target %}
+      {% elif page is string %}
+      {% set page_key = page %}
+      {% else %}
+      {% set page_key = '' %}
+      {% endif %}
+      {% if page_key and page_key not in materialized_error_pages_merge.keys %}
+      {% set materialized_error_pages_merge.items = [page] + materialized_error_pages_merge.items %}
+      {% set materialized_error_pages_merge.keys = materialized_error_pages_merge.keys + [page_key] %}
       {% endif %}
       {% endfor %}
 
@@ -326,15 +539,13 @@
       {% set namespaced_input_geos_ns.items = namespaced_input_geos_ns.items + [geo] %}
       {% endif %}
       {% endfor %}
-      {% set derived_geos = item._nginx_derived_geos | default([]) %}
-
       {# --------------------------------------------------------------------- #}
       {# Final registries                                                       #}
       {# --------------------------------------------------------------------- #}
       {% set final_registry_sources = {
         'geos': {
           'input': namespaced_input_geos_ns.items,
-          'derived': derived_geos
+          'derived': derived_geos_ns.items
         },
         'maps': {
           'input': item.maps | default([]),
@@ -382,6 +593,8 @@
           'upstream_pools_registry': base_registries.items.upstream_pools,
           'upstream_selection_registry': base_registries.items.upstream_selection,
           'proxy_set_header_registry': final_registries.items.proxy_set_header,
+          'if': materialized_if,
+          'error_page': materialized_error_pages_merge.items,
           'locations': materialized_locations_merge.items
         }
       }, recursive=True) %}

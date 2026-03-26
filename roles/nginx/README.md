@@ -746,10 +746,67 @@ Common top-level fields supported by the template include:
 - `upstream_members`
 - `upstream_pools`
 - `upstream_selection`
-- `cache`
+- `cache_zones`
+  These declare named proxy cache zones owned by the server. `proxy_cache` then selects which declared zone to consume.
 - `companion_servers`
+  These declare additional server blocks owned by the same `servers/vhost` item, for example HTTP-to-HTTPS redirects or wildcard redirect companions.
+
+`companion_servers` should be used for simple sidecar server blocks that belong to the same host identity and do not carry deep standalone routing logic.
+
+Good fits:
+- HTTP-to-HTTPS redirects
+- `www` or apex redirect companions
+- wildcard guard redirects or wildcard catch-all companions
+- small hostname guards that make sense only next to the main server
+
+Use with caution:
+- small groups of very similar redirect-only domains that are still clearly part of the same main host policy
+
+Not recommended:
+- large redirect meshes
+- domain packs with their own independent routing policy
+- complex redirect logic that would be easier to understand as its own dedicated template or standalone server set
+
+If the companion block stops making sense without the main server, it is probably a good fit. If it starts to look like its own product or redirect policy surface, it probably is not.
+
+The main operational risk of overusing `companion_servers` is that the rendered nginx file becomes a vhost-monolith whose filename no longer clearly explains every hostname it serves. That can make diagnostics and incident response slower, especially when operators inspect `sites-available` or `sites-enabled` and expect filename-to-hostname correspondence to stay obvious.
 
 Location items support the same general model, with the usual nginx context restrictions applied by the directive registry.
+
+`recursive_scheme_header` may be either a boolean or a structured object. When enabled, it injects a namespaced `map` from the incoming proto header to `$<ns>_request_scheme` and wires `proxy_set_header X-Forwarded-Proto` to that derived variable.
+
+Boolean form:
+
+```yaml
+recursive_scheme_header: true
+```
+
+This is equivalent to:
+
+```yaml
+recursive_scheme_header:
+  enabled: true
+  allowed_values:
+    - "http"
+    - "https"
+  case_sensitive: false
+```
+
+Structured form:
+
+```yaml
+recursive_scheme_header:
+  enabled: true
+  allowed_values:
+    - "http"
+    - "https"
+  case_sensitive: false
+```
+
+Semantics:
+- values outside `allowed_values` fall back to `$scheme`
+- `case_sensitive: false` renders case-insensitive `map` matches
+- legacy low-level overrides like `recursive_scheme_source`, `recursive_scheme_default`, and `recursive_scheme_entries` remain supported
 
 Selected structured fields have dedicated schema-aware renderers. For example, `proxy_cache_valid` accepts either raw nginx strings or structured entries:
 
@@ -782,6 +839,50 @@ User-defined `upstreams` are materialized into stable generated runtime names an
 `geos` is the server-owned companion form of the same HTTP primitive. These blocks are rendered outside `server {}` but are still owned by the same `servers/vhost` item. Server-owned geo targets are materialized into namespaced runtime variables to avoid collisions between vhosts.
 
 `location_presets` is a server-level sugar layer. It does not introduce a new nginx primitive. Instead, it compiles reusable preset definitions into ordinary `locations` before rendering. Preset-derived locations are weaker than explicit `locations` on the same server.
+
+`maintenance` is a server-level sugar layer that compiles into ordinary nginx companion primitives and server directives:
+- trigger producers (`geo` or `map`) that yield maintenance bypass variables
+- a small generated maintenance switch
+- a final `$<ns>_maintenance_active` variable
+- server-owned `if`, `error_page`, and `location @maintenance`
+
+Global defaults may be declared in `nginx_server_maintenance`, while per-server overrides live in `maintenance`.
+
+Minimal shape:
+
+```yaml
+nginx_server_maintenance:
+  file: "/stub_files/503.html"
+  triggers:
+    - type: "ip_sets"
+      ip_sets:
+        - "localhost"
+        - "private"
+
+nginx_servers:
+  - name: "app.example.com"
+    template: "servers/vhost"
+    maintenance:
+      enabled: false
+```
+
+Supported trigger types:
+- `ip_sets`
+- `cookie`
+- `map`
+
+Minimal enabled override:
+
+```yaml
+maintenance:
+  enabled: true
+  file: "/stub_files/503.html"
+  triggers:
+    - type: "ip_sets"
+      ip_sets:
+        - "localhost"
+        - "private"
+```
 
 Minimal example:
 
@@ -915,7 +1016,7 @@ nginx_servers:
     template: "servers/vhost"
     server_name: "cdn.example.com"
 
-    cache:
+    cache_zones:
       - name: "main"
         keys_zone_size: "64m"
         max_size: "8g"
@@ -945,6 +1046,29 @@ nginx_servers:
     locations:
       - name: "/"
         proxy_pass: "https://cdn_backend"
+
+Companion wildcard redirect example:
+
+```yaml
+nginx_servers:
+  - name: "assets.example.com"
+    template: "servers/vhost"
+    server_name: "assets.example.com"
+
+    companion_servers:
+      - server_name: "*.assets.example.com"
+        listen:
+          - "80"
+          - "[::]:80"
+          - "443 ssl"
+          - "[::]:443 ssl"
+        ssl_files:
+          - certificate: "ssl/assets.example.com/fullchain.pem"
+            key: "ssl/assets.example.com/privkey.pem"
+        return:
+          code: 301
+          url: "https://assets.example.com$request_uri"
+```
 ```
 
 SSL handling in `servers/vhost` is currently split into two separate concerns:

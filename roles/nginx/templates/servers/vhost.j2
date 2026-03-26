@@ -9,14 +9,14 @@
 
 {%- macro render_proxy_cache_paths(block) -%}
 {% set ns = namespace(out='') %}
-{% if block.cache is defined and block.cache is sequence and block.cache is not string %}
+{% if block.cache_zones is defined and block.cache_zones is sequence and block.cache_zones is not string %}
 {% set cache_namespace = render_cache_namespace(block) %}
 {% if cache_namespace %}
-{% set first = true %}
-{% for cache in block.cache if cache.name is defined and cache.state | default('present') == 'present' %}
-{% if first %}
+{% set cache_paths_ns = namespace(first=true) %}
+{% for cache in block.cache_zones if cache.name is defined and cache.state | default('present') == 'present' %}
+{% if cache_paths_ns.first %}
 {% set ns.out = ns.out ~ '### Proxy Cache Paths\n\n' %}
-{% set first = false %}
+{% set cache_paths_ns.first = false %}
 {% endif %}
 {% set zone_name = cache_namespace ~ '_' ~ cache.name %}
 {% set cache_path = cache.directory | default(nginx_proxy_cache_root ~ '/' ~ zone_name) %}
@@ -109,7 +109,11 @@
 {% endif %}
 {% if map.entries is defined and map.entries | length > 0 %}
 {% for entry in map.entries if entry.match is defined and entry.value is defined %}
+{% if entry.raw_match | default(false) | bool %}
+{% set ns.out = ns.out ~ "\t" ~ entry.match ~ " '" ~ entry.value ~ "';\n" %}
+{% else %}
 {% set ns.out = ns.out ~ "\t'" ~ entry.match ~ "' '" ~ entry.value ~ "';\n" %}
+{% endif %}
 {% endfor %}
 {% endif %}
 {% set ns.out = ns.out ~ '}\n' %}
@@ -313,8 +317,8 @@
 {% set cache_owner = root_block if root_block is not none else block %}
 {% set cache_namespace = render_cache_namespace(cache_owner) %}
 {% set proxy_cache = namespace(resolved=value) %}
-{% if cache_owner.cache is defined and cache_owner.cache is sequence and cache_owner.cache is not string and cache_namespace %}
-{% for cache in cache_owner.cache if cache.name is defined and cache.state | default('present') == 'present' %}
+{% if cache_owner.cache_zones is defined and cache_owner.cache_zones is sequence and cache_owner.cache_zones is not string and cache_namespace %}
+{% for cache in cache_owner.cache_zones if cache.name is defined and cache.state | default('present') == 'present' %}
 {% if cache.name == value %}
 {% set proxy_cache.resolved = cache_namespace ~ '_' ~ cache.name %}
 {% endif %}
@@ -673,16 +677,26 @@
 {% set ctx = __nginx_server_vhost_context_specs.server %}
 {% set ns = namespace(out='') %}
 {% set runtime_block = server_runtime if server_runtime is not none else {} %}
-{% set effective_locations = runtime_block.locations | default(block.locations | default([])) %}
+{% set effective_block = block %}
+{% if runtime_block['if'] is defined %}
+{% set effective_block = effective_block | combine({'if': runtime_block['if']}, recursive=True) %}
+{% endif %}
+{% if runtime_block.error_page is defined %}
+{% set effective_block = effective_block | combine({'error_page': runtime_block.error_page}, recursive=True) %}
+{% endif %}
+{% if runtime_block.locations is defined %}
+{% set effective_block = effective_block | combine({'locations': runtime_block.locations}, recursive=True) %}
+{% endif %}
+{% set effective_locations = effective_block.locations | default([]) %}
 {% set ns.out = ns.out ~ 'server {\n' %}
 {% for block_name in ctx.block_order %}
 {% if block_name == 'locations' and effective_locations | length > 0 %}
 {% set ns.out = ns.out ~ '\n\t# ' ~ __nginx_server_vhost_block_specs[block_name].title ~ '\n' %}
 {% for location in effective_locations %}
-{% set ns.out = ns.out ~ render_mock_location(location, block) ~ '\n' %}
+{% set ns.out = ns.out ~ render_mock_location(location, effective_block) ~ '\n' %}
 {% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
 {% endfor %}
-{% elif block_has_content(block, block_name) %}
+{% elif block_has_content(effective_block, block_name) %}
 {% set title = __nginx_server_vhost_block_specs[block_name].title %}
 {% if title %}
 {% set ns.out = ns.out ~ '\n\t# ' ~ title ~ '\n' %}
@@ -691,7 +705,7 @@
 {% endif %}
 {% set ns.out = ns.out ~ render_mock_marker(block_name, '\t') %}
 {% if block_name != 'locations' %}
-{% set ns.out = ns.out ~ render_members(block, block_name, 'server', '\t', block) %}
+{% set ns.out = ns.out ~ render_members(effective_block, block_name, 'server', '\t', effective_block) %}
 {% endif %}
 {% endif %}
 {% endfor %}

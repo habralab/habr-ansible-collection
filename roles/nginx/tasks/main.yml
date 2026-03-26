@@ -42,13 +42,14 @@
       - nginx_only_servers is string or (nginx_only_servers is sequence and nginx_only_servers is not string)
       - nginx_server_location_presets is mapping
       - nginx_server_location_preset_defaults is mapping
+      - nginx_server_maintenance is mapping
       - nginx_auth is sequence and nginx_auth is not string
       - nginx_auth_passwd_list is sequence and nginx_auth_passwd_list is not string
       - nginx_geos is sequence and nginx_geos is not string
       - nginx_maps is sequence and nginx_maps is not string
     fail_msg: >-
       _nginx_repos_merged must be a dictionary.
-      nginx_server_location_presets and nginx_server_location_preset_defaults must be dictionaries.
+      nginx_server_location_presets, nginx_server_location_preset_defaults, and nginx_server_maintenance must be dictionaries.
       nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list, nginx_geos, and nginx_maps must be lists.
       nginx_only_servers must be a string or a list of strings.
   tags:
@@ -634,5 +635,4 @@
   become: true
   notify: Reload nginx
   tags:
-    - nginx
-    - nginx-config
+    - always

@@ -41,9 +41,8 @@ __nginx_server_runtime_feature_defaults:
     source: "$http_x_forwarded_proto"
     target_suffix: "request_scheme"
     default: "$scheme"
+    allowed_values:
+      - "http"
+      - "https"
+    case_sensitive: false
     proxy_set_header_name: "X-Forwarded-Proto"
-    entries:
-      - match: "http"
-        value: "http"
-      - match: "https"
-        value: "https"

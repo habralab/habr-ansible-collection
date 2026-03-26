@@ -4,7 +4,7 @@
     _nginx_server_runtime_cache_dirs: >-
       {% set ns = namespace(items=[]) %}
       {% for item in _nginx_selected_servers if item.state | default('present') == 'present' %}
-      {% if item.cache is defined and item.cache is sequence and item.cache is not string %}
+      {% if item.cache_zones is defined and item.cache_zones is sequence and item.cache_zones is not string %}
       {% set namespace_source = item.cache_namespace | default(item.name | default(item.server_name | default(item.filename | default('')))) %}
       {% set namespace = namespace_source
         | lower
@@ -12,7 +12,7 @@
         | regex_replace('^_+', '')
         | regex_replace('_+$', '') %}
       {% if namespace | length > 0 %}
-      {% for cache in item.cache if cache.name is defined and cache.state | default('present') == 'present' %}
+      {% for cache in item.cache_zones if cache.name is defined and cache.state | default('present') == 'present' %}
       {% set zone_name = namespace ~ '_' ~ cache.name %}
       {% set ns.items = ns.items + [{
         'path': cache.directory | default(nginx_proxy_cache_root ~ '/' ~ zone_name),
