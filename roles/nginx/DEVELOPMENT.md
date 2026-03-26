@@ -303,6 +303,8 @@ When adding a new companion primitive:
 2. if it is first-class, materialize it into a registry and render it through the shared primitive renderer
 3. if a higher-level sugar produces it, keep the sugar as a producer of derived registry entries rather than as a separate renderer path
 
+Location preset sugar follows the third rule above: it should compile into ordinary `locations` rather than introducing a parallel location renderer path.
+
 ### Naming and Namespace Rules
 
 Generated identifiers should prefer stable user intent over incidental rendering details.

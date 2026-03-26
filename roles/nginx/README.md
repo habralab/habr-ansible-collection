@@ -15,7 +15,7 @@ The selected repository affects not only package origin and update cadence, but 
 
 **Out of Scope:** This role does not ship application-specific website templates. It does ship a small set of bundled infrastructure-oriented templates, including the layout defaults, `servers/status`, and the declarative `servers/vhost` model. Highly application-specific sites should still be expressed either through your own Jinja templates or through the supported `servers/vhost` data model where it is sufficient.
 
-**Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_geos`, `nginx_maps`, `nginx_proxy_*`, and `nginx_real_ip_*` are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
+**Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_geos`, `nginx_maps`, `nginx_proxy_*`, `nginx_real_ip_*`, and server-level location preset sugars are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
 
 ## Reading Guide
 
@@ -524,6 +524,18 @@ nginx_geos:
         value: "1"
 ```
 
+### Server Location Presets
+Reusable location presets for `servers/vhost`.
+
+These variables let you define shared location blocks once, enable them globally by default, and then disable or override them per server without duplicating full location objects.
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_server_location_presets` | `{}` | Registry of named preset definitions. Each item may be a location object directly or an object with a nested `location` field. |
+| `nginx_server_location_preset_defaults` | `{}` | Global activation and override defaults for preset keys. Each item may define `enabled` and optional nested `location` overrides. |
+
+Preset activation happens only inside `servers/vhost`. Explicit `locations` defined on a server remain authoritative and win over preset-derived locations with the same `name`.
+
 ### Server Configuration Model
 
 Server files are managed through `nginx_servers`. The role combines built-in defaults with your entries, deduplicates them by `name`, and lets the last definition win. Layout defaults also inject a `default` server automatically.
@@ -728,6 +740,7 @@ Common top-level fields supported by the template include:
 - `error_page`
 - `return`
 - `locations`
+- `location_presets`
 - `geos`
 - `upstreams`
 - `upstream_members`
@@ -767,6 +780,8 @@ Currently supported proxy-related `servers/vhost` fields include: `proxy_http_ve
 User-defined `upstreams` are materialized into stable generated runtime names and may still be referenced through their short declarative names from `proxy_pass`. Higher-level structures such as `upstream_members`, `upstream_pools`, and `upstream_selection` compile into namespaced upstream or map primitives before rendering.
 
 `geos` is the server-owned companion form of the same HTTP primitive. These blocks are rendered outside `server {}` but are still owned by the same `servers/vhost` item. Server-owned geo targets are materialized into namespaced runtime variables to avoid collisions between vhosts.
+
+`location_presets` is a server-level sugar layer. It does not introduce a new nginx primitive. Instead, it compiles reusable preset definitions into ordinary `locations` before rendering. Preset-derived locations are weaker than explicit `locations` on the same server.
 
 Minimal example:
 

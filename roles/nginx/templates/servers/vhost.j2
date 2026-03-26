@@ -324,6 +324,10 @@
 {% endif %}
 {% elif spec.renderer == 'bool_on_off' %}
 {% set ns.out = indent ~ spec.directive ~ ' ' ~ (value | bool | ternary('on', 'off')) ~ ';\n' %}
+{% elif spec.renderer == 'bare' %}
+{% if value | bool %}
+{% set ns.out = indent ~ spec.directive ~ ';\n' %}
+{% endif %}
 {% elif spec.renderer == 'scalar' %}
 {% set ns.out = indent ~ spec.directive ~ ' ' ~ value ~ ';\n' %}
 {% elif spec.renderer == 'repeatable' %}
@@ -665,14 +669,16 @@
 {# ============================================================================ #}
 {# Context Rendering: server                                                     #}
 {# ============================================================================ #}
-{%- macro render_mock_server(block) -%}
+{%- macro render_mock_server(block, server_runtime=none) -%}
 {% set ctx = __nginx_server_vhost_context_specs.server %}
 {% set ns = namespace(out='') %}
+{% set runtime_block = server_runtime if server_runtime is not none else {} %}
+{% set effective_locations = runtime_block.locations | default(block.locations | default([])) %}
 {% set ns.out = ns.out ~ 'server {\n' %}
 {% for block_name in ctx.block_order %}
-{% if block_name == 'locations' and block.locations is defined and block.locations | length > 0 %}
+{% if block_name == 'locations' and effective_locations | length > 0 %}
 {% set ns.out = ns.out ~ '\n\t# ' ~ __nginx_server_vhost_block_specs[block_name].title ~ '\n' %}
-{% for location in block.locations %}
+{% for location in effective_locations %}
 {% set ns.out = ns.out ~ render_mock_location(location, block) ~ '\n' %}
 {% if not loop.last %}{% set ns.out = ns.out ~ '\n' %}{% endif %}
 {% endfor %}
@@ -700,7 +706,7 @@
 {% set rendered_maps = render_maps(nginx_server_runtime.maps_registry.materialized | default(item.maps)).lstrip('\n').rstrip() %}
 {% set rendered_upstreams = render_upstreams(nginx_server_runtime.upstreams_registry.materialized | default(item.upstreams)).lstrip('\n').rstrip() %}
 {% set rendered_proxy_cache_paths = render_proxy_cache_paths(item).lstrip('\n').rstrip() %}
-{% set rendered_server = render_mock_server(item).lstrip('\n').rstrip() %}
+{% set rendered_server = render_mock_server(item, nginx_server_runtime).lstrip('\n').rstrip() %}
 {% if rendered_proxy_cache_paths %}
 {{ rendered_proxy_cache_paths }}
 

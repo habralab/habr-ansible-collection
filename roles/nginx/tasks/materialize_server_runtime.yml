@@ -264,6 +264,40 @@
       {% endif %}
 
       {# --------------------------------------------------------------------- #}
+      {# Derived locations from reusable presets                               #}
+      {# --------------------------------------------------------------------- #}
+      {% set preset_definitions = nginx_server_location_presets | default({}) %}
+      {% set preset_default_configs = nginx_server_location_preset_defaults | default({}) %}
+      {% set server_preset_configs = item.location_presets | default({}) %}
+      {% set derived_locations_ns = namespace(items=(item._nginx_derived_locations | default([]))) %}
+      {% for preset_name, preset_definition in preset_definitions.items() %}
+      {% set preset_default_config = preset_default_configs[preset_name] if preset_default_configs[preset_name] is defined else {} %}
+      {% set server_preset_config = server_preset_configs[preset_name] if server_preset_configs[preset_name] is defined else {} %}
+      {% set preset_explicit_config = (preset_default_configs[preset_name] is defined) or (server_preset_configs[preset_name] is defined) %}
+      {% set preset_effective_config = preset_default_config | combine(server_preset_config, recursive=True) %}
+      {% set preset_enabled = preset_effective_config.enabled | default(preset_explicit_config) | bool %}
+      {% if preset_definition.location is defined %}
+      {% set preset_location = preset_definition.location %}
+      {% else %}
+      {% set preset_location = preset_definition %}
+      {% endif %}
+      {% set preset_override_location = preset_effective_config.location | default({}) %}
+      {% set preset_materialized_location = preset_location | combine(preset_override_location, recursive=True) %}
+      {% if preset_enabled and preset_materialized_location.name is defined %}
+      {% set derived_locations_ns.items = derived_locations_ns.items + [preset_materialized_location] %}
+      {% endif %}
+      {% endfor %}
+      {% set explicit_locations = item.locations | default([]) %}
+      {% set materialized_locations_merge = namespace(items=[], keys=[]) %}
+      {% for location in ((derived_locations_ns.items + explicit_locations) | reverse) %}
+      {% set location_key = location.name if location.name is defined else '' %}
+      {% if location_key and location_key not in materialized_locations_merge.keys %}
+      {% set materialized_locations_merge.items = [location] + materialized_locations_merge.items %}
+      {% set materialized_locations_merge.keys = materialized_locations_merge.keys + [location_key] %}
+      {% endif %}
+      {% endfor %}
+
+      {# --------------------------------------------------------------------- #}
       {# Final geo registry source                                             #}
       {# --------------------------------------------------------------------- #}
       {% set input_geos = item.geos | default([]) %}
@@ -347,7 +381,8 @@
           'upstream_members_registry': base_registries.items.upstream_members,
           'upstream_pools_registry': base_registries.items.upstream_pools,
           'upstream_selection_registry': base_registries.items.upstream_selection,
-          'proxy_set_header_registry': final_registries.items.proxy_set_header
+          'proxy_set_header_registry': final_registries.items.proxy_set_header,
+          'locations': materialized_locations_merge.items
         }
       }, recursive=True) %}
       {% endif %}

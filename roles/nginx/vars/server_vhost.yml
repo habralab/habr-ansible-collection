@@ -51,6 +51,15 @@ __nginx_server_vhost_directive_specs:
       - "location"
     spacing: false
 
+  # empty_gif;
+  empty_gif:
+    directive: "empty_gif"
+    renderer: "bare"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
   # expires [modified] time | epoch | max | off;
   expires:
     directive: "expires"
