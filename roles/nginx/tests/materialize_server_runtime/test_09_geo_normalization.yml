@@ -1,0 +1,206 @@
+---
+# Tests for geo target normalization on input geos.
+# Input geos go through namespace prefixing:
+#   target suffix derived from geo.target ($ stripped, slugified)
+#   OR from geo.name (slugified) if target absent
+# Final target = '$' + generated_namespace + '_' + suffix
+
+- name: "GEO | target with $ prefix: stripped and namespaced"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        geos:
+          - target: "$allow_office"
+            default: "0"
+            entries:
+              - match: "10.0.0.0/8"
+                value: "1"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: "{{ _nginx_server_runtime.myapp.geos_registry.input | first }}"
+    - name: "Geo target"
+      ansible.builtin.assert:
+        that:
+          # $ stripped from allow_office, prefixed with namespace
+          - nginx_t_geo.target == '$myapp_allow_office'
+        success_msg: "PASS: geo target '$allow_office' → '$myapp_allow_office'"
+        fail_msg: "FAIL: geo target={{ nginx_t_geo.target }}"
+
+
+- name: "GEO | target without $ prefix: slugified and namespaced"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        geos:
+          - target: "allow_office"
+            default: "0"
+            entries: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: "{{ _nginx_server_runtime.myapp.geos_registry.input | first }}"
+    - name: "Geo target without $ also gets namespace prefix"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo.target == '$myapp_allow_office'
+        success_msg: "PASS: geo target without $ also gets namespace prefix"
+        fail_msg: "FAIL: geo target={{ nginx_t_geo.target }}"
+
+
+- name: "GEO | target with special chars: slugified before namespacing"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        geos:
+          - target: "$allow-office.vpn"
+            default: "0"
+            entries: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: "{{ _nginx_server_runtime.myapp.geos_registry.input | first }}"
+    - name: "Slug allow-office.vpn to allow_office_vpn with namespace prefix"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo.target == '$myapp_allow_office_vpn'
+        success_msg: "PASS: 'allow-office.vpn' slugified to 'allow_office_vpn', prefixed"
+        fail_msg: "FAIL: geo target={{ nginx_t_geo.target }}"
+
+
+- name: "GEO | no target, has name: name used as suffix"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        geos:
+          - name: office_access
+            default: "0"
+            entries: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: "{{ _nginx_server_runtime.myapp.geos_registry.input | first }}"
+    - name: "Geo without target uses name"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo.target == '$myapp_office_access'
+        success_msg: "PASS: geo without target uses name 'office_access' as suffix"
+        fail_msg: "FAIL: geo={{ nginx_t_geo | to_nice_json }}"
+
+
+- name: "GEO | both target and name: target takes priority"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        geos:
+          - name: should_be_ignored
+            target: "$use_this_target"
+            default: "0"
+            entries: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: "{{ _nginx_server_runtime.myapp.geos_registry.input | first }}"
+    - name: "Geo.target takes priority over geo.name"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo.target == '$myapp_use_this_target'
+          - "'should_be_ignored' not in nginx_t_geo.target"
+        success_msg: "PASS: geo.target takes priority over geo.name"
+        fail_msg: "FAIL: geo target={{ nginx_t_geo.target }}"
+
+
+- name: "GEO | empty namespace: geo passed through unchanged"
+  # Server with no name/server_name/filename → generated_namespace = ''
+  # Geo without namespace prefix is passed through as-is
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - geos:
+          - target: "$global_allow"
+            default: "0"
+            entries: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Server with no identity fields produces no runtime entry"
+      ansible.builtin.assert:
+        that:
+          # server_key is '' → not added to runtime (server_key check: {% if server_key %})
+          - _nginx_server_runtime | length == 0
+        success_msg: "PASS: server with no identity fields produces no runtime entry"
+        fail_msg: "FAIL: runtime={{ _nginx_server_runtime }}"

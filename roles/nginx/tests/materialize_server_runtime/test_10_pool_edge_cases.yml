@@ -1,0 +1,316 @@
+---
+# Tests for pool resolution edge cases.
+# Focus: what happens when pool references are broken or incomplete.
+
+- name: "POOLS | pool references nonexistent member → upstream generated with empty hosts"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+        upstream_pools:
+          - name: web
+            members: [web1, nonexistent]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_pool"
+      ansible.builtin.set_fact:
+        nginx_t_pool: >-
+          {{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+             | selectattr('name', 'equalto', 'myapp_web') | first }}
+    - name: "Nonexistent member silently skipped, pool has only existing member"
+      ansible.builtin.assert:
+        that:
+          # Pool is generated, nonexistent member silently skipped
+          - nginx_t_pool is defined
+          - nginx_t_pool.hosts | length == 1
+          - nginx_t_pool.hosts[0].address == '10.0.0.1:8080'
+        success_msg: "PASS: nonexistent member silently skipped, pool has only existing member"
+        fail_msg: "FAIL: pool={{ nginx_t_pool | to_nice_json }}"
+
+
+- name: "POOLS | pool references only nonexistent members → upstream with empty hosts"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_pools:
+          - name: web
+            members: [ghost1, ghost2]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_pool"
+      ansible.builtin.set_fact:
+        nginx_t_pool: >-
+          {{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+             | selectattr('name', 'equalto', 'myapp_web') | first }}
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          # Pool upstream generated but hosts is empty — nginx will reject this config
+          # This is a known silent failure: no Ansible error, bad nginx config
+          - nginx_t_pool is defined
+          - nginx_t_pool.hosts | length == 0
+        success_msg: >-
+          PASS (known silent failure): pool with only nonexistent members produces
+          upstream with empty hosts — will fail nginx -t but not Ansible
+        fail_msg: "FAIL: pool={{ nginx_t_pool | to_nice_json }}"
+
+
+- name: "POOLS | member without address field is excluded from pool hosts"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+          - name: web2
+            # no address field
+        upstream_pools:
+          - name: web
+            members: [web1, web2]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_pool"
+      ansible.builtin.set_fact:
+        nginx_t_pool: >-
+          {{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+             | selectattr('name', 'equalto', 'myapp_web') | first }}
+    - name: "Member without address is excluded from pool hosts"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_pool.hosts | length == 1
+          - nginx_t_pool.hosts[0].address == '10.0.0.1:8080'
+        success_msg: "PASS: member without address is excluded from pool hosts"
+        fail_msg: "FAIL: pool hosts={{ nginx_t_pool.hosts | to_nice_json }}"
+
+
+- name: "POOLS | member without address also excluded from member upstreams"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+          - name: web2
+            # no address — not converted to upstream
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Member without address not converted to individual upstream"
+      ansible.builtin.assert:
+        that:
+          # Only web1 becomes an upstream, web2 (no address) does not
+          - _nginx_server_runtime.myapp.upstreams_registry.derived | length == 1
+          - _nginx_server_runtime.myapp.upstreams_registry.derived[0].name == 'myapp_web1'
+        success_msg: "PASS: member without address not converted to individual upstream"
+        fail_msg: >-
+          FAIL: derived upstreams={{ _nginx_server_runtime.myapp.upstreams_registry.derived
+            | map(attribute='name') | list }}
+
+
+- name: "POOLS | pool ip_hash flag preserved in derived upstream"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+        upstream_pools:
+          - name: sticky
+            members: [web1]
+            ip_hash: true
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_pool"
+      ansible.builtin.set_fact:
+        nginx_t_pool: >-
+          {{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+             | selectattr('name', 'equalto', 'myapp_sticky') | first }}
+    - name: "Pool ip_hash:true preserved in derived upstream"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_pool.ip_hash == true
+        success_msg: "PASS: pool ip_hash:true preserved in derived upstream"
+        fail_msg: "FAIL: pool={{ nginx_t_pool | to_nice_json }}"
+
+
+- name: "POOLS | member weight preserved in pool host"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+            weight: 5
+        upstream_pools:
+          - name: web
+            members: [web1]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_host"
+      ansible.builtin.set_fact:
+        nginx_t_host: >-
+          {{ (_nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_web') | first).hosts[0] }}
+    - name: "Member weight=5 preserved in pool host"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_host.weight == 5
+        success_msg: "PASS: member weight=5 preserved in pool host"
+        fail_msg: "FAIL: host={{ nginx_t_host | to_nice_json }}"
+
+
+- name: "POOLS | member-level fail_timeout used when pool has none"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+            max_fails: 3
+            fail_timeout: "20s"
+        upstream_pools:
+          - name: web
+            members: [web1]
+            # no max_fails or fail_timeout → member values used as fallback
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_host"
+      ansible.builtin.set_fact:
+        nginx_t_host: >-
+          {{ (_nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_web') | first).hosts[0] }}
+    - name: "Member max_fails/fail_timeout used when pool has none"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_host.max_fails == 3
+          - nginx_t_host.fail_timeout == '20s'
+        success_msg: "PASS: member max_fails/fail_timeout used when pool has none"
+        fail_msg: "FAIL: host={{ nginx_t_host | to_nice_json }}"
+
+
+- name: "POOLS | member backup flag preserved in pool host"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: primary
+            address: "10.0.0.1:8080"
+          - name: backup
+            address: "10.0.0.2:8080"
+            backup: true
+        upstream_pools:
+          - name: web
+            members: [primary, backup]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_hosts"
+      ansible.builtin.set_fact:
+        nginx_t_hosts: >-
+          {{ (_nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_web') | first).hosts }}
+    - name: "Member backup flag preserved in pool host"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_hosts | selectattr('address', 'equalto', '10.0.0.1:8080')
+              | map(attribute='backup') | first == false
+          - nginx_t_hosts | selectattr('address', 'equalto', '10.0.0.2:8080')
+              | map(attribute='backup') | first == true
+        success_msg: "PASS: member backup flag preserved in pool host"
+        fail_msg: "FAIL: hosts={{ nginx_t_hosts | to_nice_json }}"

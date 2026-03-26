@@ -1,0 +1,741 @@
+---
+# Tests for remaining composite directives in vhost.j2.
+# Covers: add_header (double/single/absent quotes, always flag),
+# proxy_cache_status_header (bool/string/mapping),
+# error_page (codes list, string entries),
+# ssl_files, proxy_cache_valid (string/mapping/codes list),
+# if-blocks (set, return, raw; condition filter),
+# index, try_files, auth_list, proxy_set_header.
+#
+# NOTE: locations go in nginx_server_runtime.locations (not item.locations)
+# because the template replaces item.locations with runtime.locations when defined.
+
+- name: "ADD_HEADER | default double-quoted with always flag"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          add_header:
+            - name: X-Frame-Options
+              value: SAMEORIGIN
+              always: true
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Add_header default double-quoted with always"
+      ansible.builtin.assert:
+        that:
+          - "'add_header X-Frame-Options \"SAMEORIGIN\" always;' in nginx_rendered"
+        success_msg: "PASS: add_header default double-quoted with always"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "ADD_HEADER | single-quoted variant"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          add_header:
+            - name: X-Custom
+              value: "some value"
+              quotes: single
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Add_header quotes:single → single-quoted"
+      ansible.builtin.assert:
+        that:
+          - "\"add_header X-Custom 'some value';\" in nginx_rendered"
+        success_msg: "PASS: add_header quotes:single → single-quoted"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "ADD_HEADER | absent-quotes variant (no quoting)"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          add_header:
+            - name: X-Forwarded-Proto
+              value: "$scheme"
+              quotes: absent
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Add_header quotes:absent → no wrapping quotes"
+      ansible.builtin.assert:
+        that:
+          - "'add_header X-Forwarded-Proto $scheme;' in nginx_rendered"
+        success_msg: "PASS: add_header quotes:absent → no wrapping quotes"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_CACHE_STATUS_HEADER | bool true → default variable"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_cache_status_header: true
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_cache_status_header:true → $upstream_cache_status"
+      ansible.builtin.assert:
+        that:
+          - "'add_header X-Proxy-Cache-Status $upstream_cache_status;' in nginx_rendered"
+        success_msg: "PASS: proxy_cache_status_header:true → $upstream_cache_status"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_CACHE_STATUS_HEADER | string value used literally"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_cache_status_header: "$my_cache_var"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_cache_status_header string used literally"
+      ansible.builtin.assert:
+        that:
+          - "'add_header X-Proxy-Cache-Status $my_cache_var;' in nginx_rendered"
+        success_msg: "PASS: proxy_cache_status_header string used literally"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_CACHE_STATUS_HEADER | mapping with always flag"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_cache_status_header:
+            value: "$upstream_cache_status"
+            always: true
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_cache_status_header mapping with always"
+      ansible.builtin.assert:
+        that:
+          - "'add_header X-Proxy-Cache-Status $upstream_cache_status always;' in nginx_rendered"
+        success_msg: "PASS: proxy_cache_status_header mapping with always"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "ERROR_PAGE | codes list renders all codes space-separated"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page:
+        - codes: [500, 502, 503]
+          target: "@server_error"
+        - codes: 404
+          target: "@not_found"
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Error_page codes list and scalar both rendered"
+      ansible.builtin.assert:
+        that:
+          - "'error_page 500 502 503 @server_error;' in nginx_rendered"
+          - "'error_page 404 @not_found;' in nginx_rendered"
+        success_msg: "PASS: error_page codes list and scalar both rendered"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "ERROR_PAGE | string entries passed through as-is"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page:
+        - "404 /404.html"
+        - "500 /500.html"
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "String error_page entries passed through"
+      ansible.builtin.assert:
+        that:
+          - "'error_page 404 /404.html;' in nginx_rendered"
+          - "'error_page 500 /500.html;' in nginx_rendered"
+        success_msg: "PASS: string error_page entries passed through"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "SSL_FILES | ssl_certificate and ssl_certificate_key rendered per pair"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      ssl_files:
+        - certificate: "/etc/ssl/certs/myapp.crt"
+          key: "/etc/ssl/private/myapp.key"
+        - certificate: "/etc/ssl/certs/myapp_rsa.crt"
+          key: "/etc/ssl/private/myapp_rsa.key"
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Ssl_files renders both certificate pairs"
+      ansible.builtin.assert:
+        that:
+          - "'ssl_certificate /etc/ssl/certs/myapp.crt;' in nginx_rendered"
+          - "'ssl_certificate_key /etc/ssl/private/myapp.key;' in nginx_rendered"
+          - "'ssl_certificate /etc/ssl/certs/myapp_rsa.crt;' in nginx_rendered"
+          - "'ssl_certificate_key /etc/ssl/private/myapp_rsa.key;' in nginx_rendered"
+        success_msg: "PASS: ssl_files renders both certificate pairs"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_CACHE_VALID | string entry passed through"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_cache_valid:
+            - "200 1h"
+            - "404 1m"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_cache_valid string entries passed through"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_cache_valid 200 1h;' in nginx_rendered"
+          - "'proxy_cache_valid 404 1m;' in nginx_rendered"
+        success_msg: "PASS: proxy_cache_valid string entries passed through"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_CACHE_VALID | mapping with codes list renders all codes"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_cache_valid:
+            - codes: [200, 301, 302]
+              time: "10m"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_cache_valid codes list joined by space"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_cache_valid 200 301 302 10m;' in nginx_rendered"
+        success_msg: "PASS: proxy_cache_valid codes list joined by space"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "IF | if-block with return renders condition and return"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if:
+        - condition: "$rate_limited = 1"
+          return:
+            code: 429
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "If-block with return rendered correctly"
+      ansible.builtin.assert:
+        that:
+          - "'if ($rate_limited = 1) {' in nginx_rendered"
+          - "'return 429;' in nginx_rendered"
+        success_msg: "PASS: if-block with return rendered correctly"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "IF | if-block with set directives rendered"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if:
+        - condition: "$arg_debug = 1"
+          set:
+            - name: "$debug_mode"
+              value: "1"
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "If-block set directives rendered"
+      ansible.builtin.assert:
+        that:
+          - "'if ($arg_debug = 1) {' in nginx_rendered"
+          - "'set $debug_mode 1;' in nginx_rendered"
+        success_msg: "PASS: if-block set directives rendered"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "IF | if-block with raw lines rendered"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if:
+        - condition: "$maintenance_active = 1"
+          raw: "return 503"
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "If-block raw lines rendered with semicolon appended"
+      ansible.builtin.assert:
+        that:
+          - "'if ($maintenance_active = 1) {' in nginx_rendered"
+          - "'return 503;' in nginx_rendered"
+        success_msg: "PASS: if-block raw lines rendered with semicolon appended"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "IF | if-block without condition skipped"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if:
+        - return:
+            code: 403    # no condition field → skipped
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "If-block without condition skipped"
+      ansible.builtin.assert:
+        that:
+          - "'if (' not in nginx_rendered"
+        success_msg: "PASS: if-block without condition skipped"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "INDEX | index list rendered space-separated"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          index:
+            - index.html
+            - index.htm
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Index list joined with spaces"
+      ansible.builtin.assert:
+        that:
+          - "'index index.html index.htm;' in nginx_rendered"
+        success_msg: "PASS: index list joined with spaces"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "INDEX | index scalar wrapped in list"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          index: "index.php"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Index scalar treated as single-item list"
+      ansible.builtin.assert:
+        that:
+          - "'index index.php;' in nginx_rendered"
+        success_msg: "PASS: index scalar treated as single-item list"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "TRY_FILES | try_files rendered verbatim"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          try_files: "$uri $uri/ =404"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Try_files rendered verbatim"
+      ansible.builtin.assert:
+        that:
+          - "'try_files $uri $uri/ =404;' in nginx_rendered"
+        success_msg: "PASS: try_files rendered verbatim"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "AUTH_LIST | auth_list renders include path"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/admin"
+          auth_list: "admin_users"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Auth_list renders correct include path"
+      ansible.builtin.assert:
+        that:
+          - "'include /etc/nginx/includes/auth.admin_users.include;' in nginx_rendered"
+        success_msg: "PASS: auth_list renders correct include path"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_SET_HEADER | registry headers rendered alongside proxy_pass"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_main
+            hosts:
+              - address: "10.0.0.1:8080"
+      # proxy_set_header_registry.materialized is the canonical source;
+      # the location's proxy_set_header value is overridden by the registry.
+      proxy_set_header_registry:
+        materialized:
+          - name: "Host"
+            value: "$host"
+          - name: "X-Real-IP"
+            value: "$remote_addr"
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          # proxy_pass makes block_has_content return true for the proxy block,
+          # ensuring proxy_set_header (from registry) is also rendered.
+          proxy_pass: "default"
+          proxy_set_header: true
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_set_header comes from registry, rendered alongside proxy_pass"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_set_header Host $host;' in nginx_rendered"
+          - "'proxy_set_header X-Real-IP $remote_addr;' in nginx_rendered"
+        success_msg: "PASS: proxy_set_header comes from registry, rendered alongside proxy_pass"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"

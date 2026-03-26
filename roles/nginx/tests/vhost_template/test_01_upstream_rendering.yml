@@ -1,0 +1,231 @@
+---
+# Tests for upstream block rendering in vhost.j2.
+# Covers: ip_hash, host flags (backup, weight, max_fails, fail_timeout, remark),
+# state:absent filtering, empty hosts list.
+
+- name: "UPSTREAM | basic upstream block rendered"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_web1
+            hosts:
+              - address: "10.0.0.1:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Basic upstream block rendered correctly"
+      ansible.builtin.assert:
+        that:
+          - "'upstream myapp_web1 {' in nginx_rendered"
+          - "'\tserver 10.0.0.1:8080;' in nginx_rendered"
+        success_msg: "PASS: basic upstream block rendered correctly"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "UPSTREAM | ip_hash flag rendered"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_sticky
+            ip_hash: true
+            hosts:
+              - address: "10.0.0.1:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Ip_hash rendered inside upstream block"
+      ansible.builtin.assert:
+        that:
+          - "'\tip_hash;' in nginx_rendered"
+        success_msg: "PASS: ip_hash rendered inside upstream block"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "UPSTREAM | host with backup, weight, max_fails, fail_timeout, remark"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_web
+            hosts:
+              - address: "10.0.0.1:8080"
+                backup: true
+                weight: 3
+                max_fails: 5
+                fail_timeout: "30s"
+                remark: "primary"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "All host parameters rendered in correct order"
+      ansible.builtin.assert:
+        that:
+          - "'\tserver 10.0.0.1:8080 backup weight=3 max_fails=5 fail_timeout=30s; # primary' in nginx_rendered"
+        success_msg: "PASS: all host parameters rendered in correct order"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "UPSTREAM | state:absent upstream excluded from output"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_active
+            hosts:
+              - address: "10.0.0.1:8080"
+          - name: myapp_removed
+            state: absent
+            hosts:
+              - address: "10.0.0.2:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "State:absent upstream excluded from rendered output"
+      ansible.builtin.assert:
+        that:
+          - "'upstream myapp_active {' in nginx_rendered"
+          - "'upstream myapp_removed' not in nginx_rendered"
+        success_msg: "PASS: state:absent upstream excluded from rendered output"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "UPSTREAM | host with state:absent excluded from upstream block"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_web
+            hosts:
+              - address: "10.0.0.1:8080"
+              - address: "10.0.0.2:8080"
+                state: absent
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "State:absent host excluded from upstream block"
+      ansible.builtin.assert:
+        that:
+          - "'10.0.0.1:8080' in nginx_rendered"
+          - "'10.0.0.2:8080' not in nginx_rendered"
+        success_msg: "PASS: state:absent host excluded from upstream block"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "UPSTREAM | no upstreams → no upstream section in output"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "No upstreams → upstream section absent"
+      ansible.builtin.assert:
+        that:
+          - "'### Upstreams' not in nginx_rendered"
+          - "'upstream ' not in nginx_rendered"
+        success_msg: "PASS: no upstreams → upstream section absent"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"

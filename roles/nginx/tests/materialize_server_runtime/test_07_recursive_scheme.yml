@@ -1,0 +1,223 @@
+---
+# Tests for recursive_scheme_header feature.
+# When enabled, the materializer injects:
+#   - a derived map: $http_x_forwarded_proto → $ns_request_scheme
+#   - a derived proxy_set_header: X-Forwarded-Proto → $ns_request_scheme
+
+- name: "RECURSIVE_SCHEME | disabled by default: no derived map or header"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        # recursive_scheme_header not set → defaults to false
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Recursive_scheme_header disabled → no derived map or header"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.maps_registry.derived
+              | selectattr('name', 'equalto', 'recursive_scheme') | list | length == 0
+          - _nginx_server_runtime.myapp.proxy_set_header_registry.derived
+              | selectattr('name', 'equalto', 'X-Forwarded-Proto') | list | length == 0
+        success_msg: "PASS: recursive_scheme_header disabled → no derived map or header"
+        fail_msg: >-
+          FAIL: derived maps={{ _nginx_server_runtime.myapp.maps_registry.derived
+            | map(attribute='name') | list }},
+          derived headers={{ _nginx_server_runtime.myapp.proxy_set_header_registry.derived
+            | map(attribute='name') | list }}
+
+
+- name: "RECURSIVE_SCHEME | enabled: derived map with default entries injected"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        recursive_scheme_header: true
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'recursive_scheme') | first }}
+    - name: "Recursive_scheme_header enabled → derived map with case-insensitive http/https entries"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map.source == '$http_x_forwarded_proto'
+          - nginx_t_map.target == '$myapp_request_scheme'
+          - nginx_t_map.default == '$scheme'
+          - nginx_t_map.entries | selectattr('match', 'equalto', '~*^http$')
+              | map(attribute='value') | first == 'http'
+          - nginx_t_map.entries | selectattr('match', 'equalto', '~*^http$')
+              | selectattr('raw_match', 'defined') | map(attribute='raw_match') | first
+          - nginx_t_map.entries | selectattr('match', 'equalto', '~*^https$')
+              | map(attribute='value') | first == 'https'
+          - nginx_t_map.entries | selectattr('match', 'equalto', '~*^https$')
+              | selectattr('raw_match', 'defined') | map(attribute='raw_match') | first
+        success_msg: "PASS: recursive_scheme_header enabled → derived map with case-insensitive http/https entries"
+        fail_msg: "FAIL: map={{ nginx_t_map | to_nice_json }}"
+
+
+- name: "RECURSIVE_SCHEME | object config can request case-sensitive exact matches"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        recursive_scheme_header:
+          enabled: true
+          case_sensitive: true
+          allowed_values:
+            - "http"
+            - "https"
+            - "on"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'recursive_scheme') | first }}
+    - name: "Object config supports exact allowed_values with case_sensitive=true"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'http') | map(attribute='value') | first == 'http'
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'https') | map(attribute='value') | first == 'https'
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'on') | map(attribute='value') | first == 'on'
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'http') | selectattr('raw_match', 'defined') | list | length == 0
+        success_msg: "PASS: object config supports exact allowed_values with case_sensitive=true"
+        fail_msg: "FAIL: map={{ nginx_t_map | to_nice_json }}"
+
+
+- name: "RECURSIVE_SCHEME | enabled: X-Forwarded-Proto proxy_set_header injected"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        recursive_scheme_header: true
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_header"
+      ansible.builtin.set_fact:
+        nginx_t_header: >-
+          {{ _nginx_server_runtime.myapp.proxy_set_header_registry.derived
+             | selectattr('name', 'equalto', 'X-Forwarded-Proto') | first }}
+    - name: "X-Forwarded-Proto header uses namespaced scheme variable"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_header.value == '$myapp_request_scheme'
+        success_msg: "PASS: X-Forwarded-Proto header uses namespaced scheme variable"
+        fail_msg: "FAIL: header={{ nginx_t_header | to_nice_json }}"
+
+
+- name: "RECURSIVE_SCHEME | custom source overrides default $http_x_forwarded_proto"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        recursive_scheme_header: true
+        recursive_scheme_source: "$http_x_scheme"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'recursive_scheme') | first }}
+    - name: "Custom recursive_scheme_source"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map.source == '$http_x_scheme'
+        success_msg: "PASS: custom recursive_scheme_source '$http_x_scheme' used"
+        fail_msg: "FAIL: map source={{ nginx_t_map.source }}"
+
+
+- name: "RECURSIVE_SCHEME | namespace correctly prefixes target variable"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: my-api
+        server_name: my-api.example.com
+        recursive_scheme_header: true
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime['my-api'].maps_registry.derived
+             | selectattr('name', 'equalto', 'recursive_scheme') | first }}
+        nginx_t_header: >-
+          {{ _nginx_server_runtime['my-api'].proxy_set_header_registry.derived
+             | selectattr('name', 'equalto', 'X-Forwarded-Proto') | first }}
+    - name: "Slug my-api to my_api in recursive_scheme target"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map.target == '$my_api_request_scheme'
+          - nginx_t_header.value == '$my_api_request_scheme'
+        success_msg: "PASS: 'my-api' slugs to 'my_api', target=$my_api_request_scheme"
+        fail_msg: >-
+          FAIL: target={{ nginx_t_map.target }}, header value={{ nginx_t_header.value }}
