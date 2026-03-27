@@ -96,7 +96,10 @@
         | regex_replace('_+$', '') %}
       {% set recursive_scheme_header_raw = item.recursive_scheme_header | default(false) %}
       {% set recursive_scheme_header_config = recursive_scheme_header_raw if recursive_scheme_header_raw is mapping else {} %}
-      {% set recursive_scheme_header = (recursive_scheme_header_config.enabled | default(true)) | bool if recursive_scheme_header_raw is mapping else recursive_scheme_header_raw | bool %}
+      {% set recursive_scheme_header =
+        (recursive_scheme_header_config.enabled | default(true)) | bool
+        if recursive_scheme_header_raw is mapping
+        else recursive_scheme_header_raw | bool %}
       {% set recursive_scheme_header_defaults = __nginx_server_runtime_feature_defaults.recursive_scheme_header %}
       {% set recursive_scheme_source = recursive_scheme_header_config.source
         | default(item.recursive_scheme_source | default(recursive_scheme_header_defaults.source)) %}
@@ -206,7 +209,11 @@
       {% for pool in upstream_pool_merge.items if pool.name is defined and pool.state | default('present') == 'present' %}
       {% set pool_hosts_ns = namespace(items=[]) %}
       {% for member_name in pool.members | default([]) %}
-      {% for member in upstream_member_merge.items if member.name is defined and member.name == member_name and member.address is defined and member.state | default('present') == 'present' %}
+      {% for member in upstream_member_merge.items
+        if member.name is defined
+        and member.name == member_name
+        and member.address is defined
+        and member.state | default('present') == 'present' %}
       {% set pool_host = {
         'address': member.address,
         'remark': member.remark | default(member.name),
@@ -269,7 +276,15 @@
       {% for member in upstream_member_merge.items if member.name is defined and member.name == default_target_ns.value %}
       {% set default_target_ns.value = generated_namespace ~ '_' ~ member.name %}
       {% endfor %}
-      {% for upstream in ((namespaced_input_upstreams_ns.items + derived_upstreams_ns.items)) if upstream.name is defined and (upstream.name == default_target_ns.value or (upstream.original_name is defined and upstream.original_name == default_target_ns.value)) %}
+      {% for upstream in (namespaced_input_upstreams_ns.items + derived_upstreams_ns.items)
+        if upstream.name is defined
+        and (
+          upstream.name == default_target_ns.value
+          or (
+            upstream.original_name is defined
+            and upstream.original_name == default_target_ns.value
+          )
+        ) %}
       {% set default_target_ns.value = upstream.name %}
       {% endfor %}
       {% set entries_ns = namespace(items=[]) %}
@@ -281,7 +296,15 @@
       {% for member in upstream_member_merge.items if member.name is defined and member.name == selector_target_ns.value %}
       {% set selector_target_ns.value = generated_namespace ~ '_' ~ member.name %}
       {% endfor %}
-      {% for upstream in ((namespaced_input_upstreams_ns.items + derived_upstreams_ns.items)) if upstream.name is defined and (upstream.name == selector_target_ns.value or (upstream.original_name is defined and upstream.original_name == selector_target_ns.value)) %}
+      {% for upstream in (namespaced_input_upstreams_ns.items + derived_upstreams_ns.items)
+        if upstream.name is defined
+        and (
+          upstream.name == selector_target_ns.value
+          or (
+            upstream.original_name is defined
+            and upstream.original_name == selector_target_ns.value
+          )
+        ) %}
       {% set selector_target_ns.value = upstream.name %}
       {% endfor %}
       {% set entries_ns.items = entries_ns.items + [{
