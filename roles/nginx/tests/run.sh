@@ -11,7 +11,10 @@ PATTERN="${1:-}"
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$TESTS_DIR/../../.." && pwd)"
 
-mapfile -t playbooks < <(
+playbooks=()
+while IFS= read -r playbook; do
+  playbooks+=("$playbook")
+done < <(
   find "$TESTS_DIR" -name 'test_*.yml' | sort \
     | { [ -n "$PATTERN" ] && grep "$PATTERN" || cat; }
 )
