@@ -727,15 +727,17 @@ Common top-level fields supported by the template include:
 - `auth_list`
 - `add_header`
 - `client_max_body_size`
+- `includes`
 - `set`
 - `if`
+- `fastcgi_pass`
+- `fastcgi_params`
 - `proxy_*`
 - `proxy_cache_valid`
 - `rewrite`
 - `root`
 - `alias`
 - `index`
-- `include`
 - `try_files`
 - `error_page`
 - `return`
@@ -772,6 +774,8 @@ If the companion block stops making sense without the main server, it is probabl
 The main operational risk of overusing `companion_servers` is that the rendered nginx file becomes a vhost-monolith whose filename no longer clearly explains every hostname it serves. That can make diagnostics and incident response slower, especially when operators inspect `sites-available` or `sites-enabled` and expect filename-to-hostname correspondence to stay obvious.
 
 Location items support the same general model, with the usual nginx context restrictions applied by the directive registry.
+
+Low-level nginx-native directives such as `include` and `set` remain available as first-class fields where the directive registry allows them. They should be used as controlled primitives, not as a substitute for stable higher-level sugar.
 
 `recursive_scheme_header` may be either a boolean or a structured object. When enabled, it injects a namespaced `map` from the incoming proto header to `$<ns>_request_scheme` and wires `proxy_set_header X-Forwarded-Proto` to that derived variable.
 

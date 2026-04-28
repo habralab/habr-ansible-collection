@@ -133,6 +133,7 @@ Examples include:
 
 - extra lines in server templates
 - explicit include directives
+- low-level nginx-native primitives like `includes` and `set`
 - selective raw-like fields for complex directives
 
 Do not rush to model every nginx directive as a first-class variable. A controlled escape hatch is often better than a premature and unstable schema.
@@ -272,6 +273,8 @@ When extending `servers/vhost`, prefer:
 1. add or adjust directive metadata in the directive registry
 2. place the directive into the correct logical block
 3. extend composite rendering only when a normal renderer type is insufficient
+
+Generic low-level primitives such as `includes` and `set` belong in their own directive-oriented block, not inside more semantic blocks like `routing` or `proxy`.
 
 Do not add another hardcoded template branch unless the current data model genuinely cannot express the behavior.
 

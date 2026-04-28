@@ -530,6 +530,15 @@
 {% else %}
 {% set ns.out = indent ~ '# TODO invalid composite: proxy_cache_valid\n' %}
 {% endif %}
+{%- elif member == 'fastcgi_params' -%}
+{# --- composite: fastcgi_params --------------------------------------------- #}
+{% if value is sequence and value is not string %}
+{% for entry in value if entry.key is defined and entry.value is defined %}
+{% set ns.out = ns.out ~ indent ~ 'fastcgi_param ' ~ entry.key ~ ' ' ~ entry.value ~ ';\n' %}
+{% endfor %}
+{% else %}
+{% set ns.out = indent ~ '# TODO invalid composite: fastcgi_params\n' %}
+{% endif %}
 {%- elif member == 'return' -%}
 {# --- composite: return ------------------------------------------------------ #}
 {% if value is string %}

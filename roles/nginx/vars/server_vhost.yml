@@ -87,6 +87,15 @@ __nginx_server_vhost_directive_specs:
       - "location"
     spacing: false
 
+  # fastcgi_pass address;
+  fastcgi_pass:
+    directive: "fastcgi_pass"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
   # fastcgi_split_path_info regex;
   fastcgi_split_path_info:
     directive: "fastcgi_split_path_info"
@@ -473,11 +482,12 @@ __nginx_server_vhost_block_specs:
       - client_max_body_size
       - port_in_redirect
 
-  sets:
-    title: "Sets"
-    mock_name: "sets"
+  directives:
+    title: "Directives"
+    mock_name: "directives"
     spacing: true
     members:
+      - includes
       - set
 
   conditions:
@@ -536,7 +546,6 @@ __nginx_server_vhost_block_specs:
     spacing: true
     members:
       - alias
-      - includes
       - index
       - root
       - try_files
@@ -592,7 +601,7 @@ __nginx_server_vhost_context_specs:
       - auth
       - headers
       - tuning
-      - sets
+      - directives
       - conditions
       - proxy
       - rewrites
@@ -610,7 +619,7 @@ __nginx_server_vhost_context_specs:
       - auth
       - headers
       - tuning
-      - sets
+      - directives
       - conditions
       - proxy
       - errors
