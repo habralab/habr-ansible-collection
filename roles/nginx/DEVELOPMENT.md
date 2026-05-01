@@ -221,6 +221,16 @@ New features should be designed with check mode in mind:
 - avoid pretending state changes succeeded when they cannot be simulated safely
 - keep operational behavior understandable during dry runs
 
+## Tagging Contract
+
+Tagging behavior is part of the role contract.
+
+- nginx-mutating tasks must never use `always`
+- selective nginx entrypoints such as `nginx-servers` and `nginx-cleanup` must receive enough preflight data to execute safely
+- non-nginx high-level runs such as `-t php` must not execute nginx role tasks
+
+Play-level fact gathering is outside this rule. The important boundary is that nginx role tasks themselves must not leak into unrelated high-level runs.
+
 ## Platform Assumptions
 
 The role metadata currently targets Ubuntu and requires Ansible 2.15+.

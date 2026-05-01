@@ -17,6 +17,16 @@ The selected repository affects not only package origin and update cadence, but 
 
 **Current Model Boundary:** The declarative API in this role currently targets the nginx HTTP layer. In practice this means `nginx_servers`, `nginx_auth`, `nginx_geos`, `nginx_maps`, `nginx_proxy_*`, `nginx_real_ip_*`, and server-level location preset sugars are HTTP-oriented abstractions. Stream/TCP/UDP proxying is intentionally outside the current role model and should be introduced later as a separate parallel namespace if it becomes a real requirement.
 
+## Tagging Contract
+
+This role is intended to support both full nginx runs and selective nginx-only rollouts.
+
+- High-level runs such as `-t nginx` are the primary supported operational path.
+- Selective nginx runs such as `-t nginx-servers` and `-t nginx-cleanup` are also intended to work.
+- Non-nginx high-level runs such as `-t php` must not execute nginx role tasks. Play-level fact gathering may still occur because the surrounding play is not tag-scoped.
+
+Internally, the role keeps a small preflight layer that prepares derived repository, layout, and runtime values for nginx-tagged execution paths.
+
 ## Reading Guide
 
 If you are opening this README from scratch, this is probably not a one-coffee read. A practical reading order is:
@@ -195,8 +205,6 @@ Official Nginx documentation: [HTTP Log module](https://nginx.org/en/docs/http/n
 | `nginx_working_dirs` | `[]` | Extra directories to create in addition to the layout defaults. Each item may define `path`, `owner`, `group`, `mode`, and `recurse`. |
 | `nginx_extra_groups` | `[]` | Extra UNIX groups appended to the runtime user; triggers a service restart. |
 | `nginx_cleanup_paths` | `[]` | Arbitrary paths to remove after configuration deployment. Useful for retiring legacy files. |
-| `nginx_user` | layout specific | Overrides the runtime user (`www-data` for Debian layout, `nginx` for upstream layout). |
-| `nginx_group` | layout specific | Overrides the runtime group. |
 
 #### Proxy Settings
 These variables are injected via a generic drop-in. If any of the `nginx_proxy_*` variables listed below are defined, the `proxy.conf` file is automatically generated.

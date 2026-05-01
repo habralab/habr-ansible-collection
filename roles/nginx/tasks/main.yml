@@ -3,7 +3,17 @@
   ansible.builtin.set_fact:
     _nginx_repos_merged: "{{ __nginx_repositories_defaults | combine(nginx_repositories, recursive=True) }}"
   tags:
-    - always
+    - nginx
+    - apt
+    - nginx-config
+    - nginx-includes
+    - nginx-auth
+    - nginx-servers
+    - nginx-ssl
+    - nginx-cleanup
+    - user
+    - logs
+    - logrotate
 
 - name: "Determine active repository"
   ansible.builtin.set_fact:
@@ -17,7 +27,17 @@
          | default('ubuntu', true)
       }}
   tags:
-    - always
+    - nginx
+    - apt
+    - nginx-config
+    - nginx-includes
+    - nginx-auth
+    - nginx-servers
+    - nginx-ssl
+    - nginx-cleanup
+    - user
+    - logs
+    - logrotate
 
 - name: "Set active layout and runtime user/group from dictionary"
   ansible.builtin.set_fact:
@@ -31,7 +51,17 @@
         nginx_group | default(__nginx_layouts_config[_nginx_repos_merged[_nginx_active_repo].layout].runtime_group, true)
       }}
   tags:
-    - always
+    - nginx
+    - apt
+    - nginx-config
+    - nginx-includes
+    - nginx-auth
+    - nginx-servers
+    - nginx-ssl
+    - nginx-cleanup
+    - user
+    - logs
+    - logrotate
 
 - name: "Validate input variables and repositories structure"
   ansible.builtin.assert:
@@ -635,4 +665,7 @@
   become: true
   notify: Reload nginx
   tags:
-    - always
+    - nginx
+    - nginx-config
+    - nginx-servers
+    - nginx-cleanup
