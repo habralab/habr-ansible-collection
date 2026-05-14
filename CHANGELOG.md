@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.0] - 2026-05-15
+
+### Added
+- `users`: Support removing user home directories and mail spools via `remove: true`.
+
 ## [1.7.1] - 2026-03-25
 
 ### Fixed
