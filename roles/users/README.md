@@ -7,6 +7,7 @@ Manages system and normal Linux users declaratively using a unified list.
 - Creation and removal of user accounts (`state: present|absent`).
 - Management of primary and secondary groups.
 - Configuration of user attributes (shell, UID, home directory).
+- Removal of user home directories and mail spools when `remove: true` is set.
 - Support for system users (`system: true`).
 - Password hash injection.
 
@@ -23,6 +24,7 @@ The role is driven by a single variable `users_list`, which is a list of diction
 ### Variables
 
 - `users_list`: List of users to manage (default: `[]`).
+- User entries support the documented subset of `ansible.builtin.user` arguments used by this role, including `state`, `system`, `password`, `shell`, `create_home`, `remove`, `group`, `groups`, `append`, and `uid`.
 
 ### Example
 
@@ -41,4 +43,8 @@ users_list:
 
   - name: "old_employee"
     state: absent
+
+  - name: "ubuntu"
+    state: absent
+    remove: true
 ```
