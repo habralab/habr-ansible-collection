@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.0] - 2026-05-20
+
+### Added
+- Production-ready role: `dell_openmanage`:
+  - Configure Dell OpenManage community APT repositories for Dell iSM.
+  - Select the repository by PowerEdge generation and Ubuntu release.
+  - Install `dcism` and manage `dcismeng.service`.
+  - Document the supported release matrix against Dell repository availability data.
+
 ## [1.8.0] - 2026-05-15
 
 ### Added
