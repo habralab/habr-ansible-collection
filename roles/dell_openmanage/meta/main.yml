@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: "dell_openmanage"
+  author: "Habr Team <servers@habr.team>"
+  description: "Configure Dell OpenManage iSM APT repository and packages"
+  company: "Habr"
+  issue_tracker_url: "https://github.com/habralab/habr-ansible-collection/issues"
+  license: "MIT"
+  min_ansible_version: "2.15"
+  platforms:
+    - name: "Ubuntu"
+      versions:
+        - "focal"
+        - "jammy"
+        - "noble"
+dependencies: []

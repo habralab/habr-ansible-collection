@@ -32,6 +32,7 @@ Detailed documentation for each role is available in its respective `roles/<name
 Some roles may also include a role-local `DEVELOPMENT.md` with internal design notes and contributor guidance for that specific role.
 
 - `apt_repo`: Helper role to manage APT repositories (supports legacy lists and deb822 sources).
+- `dell_openmanage`: Configures Dell OpenManage iSM APT repository and installs Dell iSM packages.
 - `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `locale`: Declarative management of generated system locales and default `LANG`.

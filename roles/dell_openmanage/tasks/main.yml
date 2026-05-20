@@ -1,0 +1,95 @@
+---
+- name: "Validate Dell OpenManage role support"
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - dell_openmanage_var_generation in dell_openmanage_ism_repository_matrix
+      - dell_openmanage_var_release in dell_openmanage_var_ism_repositories
+    msg: >-
+      Dell OpenManage iSM repository is not configured for generation
+      {{ dell_openmanage_var_generation }} on Ubuntu {{ dell_openmanage_var_release }}.
+      Supported generations: {{ dell_openmanage_ism_repository_matrix.keys() | list | join(', ') }}.
+      {{
+        'Supported releases for this generation: ' ~
+        (dell_openmanage_var_ism_repositories.keys() | list | join(', '))
+        if dell_openmanage_var_ism_repositories | length > 0
+        else 'Add this generation to dell_openmanage_ism_repository_matrix before assigning the role.'
+      }}
+      Current host is {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_release'] }}.
+  when: dell_openmanage_manage_ism | bool
+  tags:
+    - dell
+    - openmanage
+    - ism
+    - apt
+
+- name: "Configure Dell iSM APT repository"
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - dell
+        - openmanage
+        - ism
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ dell_openmanage_ism_repository_name }}"
+      url: "{{ dell_openmanage_var_ism_repository.url }}"
+      suite: "{{ dell_openmanage_var_ism_repository.suite }}"
+      components:
+        - main
+      key_url: "{{ dell_openmanage_repository_key_url }}"
+      keyring: "{{ dell_openmanage_repository_keyring }}"
+      state: "{{ dell_openmanage_repository_state }}"
+  when: dell_openmanage_manage_ism | bool
+  tags:
+    - dell
+    - openmanage
+    - ism
+    - apt
+
+- name: "Force handler execution to update APT cache immediately"
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - dell
+    - openmanage
+    - ism
+    - apt
+
+- name: "Install Dell iSM packages"
+  ansible.builtin.apt:
+    name: "{{ dell_openmanage_var_ism_packages | unique | list }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  when:
+    - dell_openmanage_repository_state == 'present'
+    - dell_openmanage_manage_ism | bool
+    - dell_openmanage_install_packages | bool
+    - dell_openmanage_var_ism_packages | length > 0
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - dell
+    - openmanage
+    - ism
+    - apt
+
+- name: "Manage Dell iSM service"
+  ansible.builtin.systemd_service:
+    name: "{{ dell_openmanage_ism_service_name }}"
+    state: "{{ dell_openmanage_ism_service_state }}"
+    enabled: "{{ dell_openmanage_ism_service_enabled }}"
+  when:
+    - dell_openmanage_repository_state == 'present'
+    - dell_openmanage_manage_ism | bool
+    - dell_openmanage_manage_ism_service | bool
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - dell
+    - openmanage
+    - ism
+    - service

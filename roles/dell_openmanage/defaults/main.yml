@@ -1,0 +1,68 @@
+---
+dell_openmanage_repository_state: present
+
+dell_openmanage_repository_key_url: "https://linux.dell.com/repo/pgp_pubkeys/0x1285491434D8786F.asc"
+dell_openmanage_repository_keyring: "/usr/share/keyrings/dell_openmanage.gpg"
+
+dell_openmanage_manage_ism: true
+dell_openmanage_install_packages: true
+dell_openmanage_manage_ism_service: true
+
+dell_openmanage_generation: "17"
+
+dell_openmanage_ism_repository_name: "dell_openmanage_ism"
+dell_openmanage_ism_service_name: "dcismeng.service"
+dell_openmanage_ism_service_state: "started"
+dell_openmanage_ism_service_enabled: true
+dell_openmanage_ism_repository_matrix:
+  "14":
+    focal:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/4300/focal"
+      suite: "focal"
+      packages:
+        - dcism
+    jammy:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/5300/jammy"
+      suite: "jammy"
+      packages:
+        - dcism
+    noble:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/5400/noble"
+      suite: "noble"
+      packages:
+        - dcism
+  "15":
+    focal:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/4300/focal"
+      suite: "focal"
+      packages:
+        - dcism
+    jammy:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/5300/jammy"
+      suite: "jammy"
+      packages:
+        - dcism
+    noble:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/6100/noble"
+      suite: "noble"
+      packages:
+        - dcism
+  "16":
+    jammy:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/5300/jammy"
+      suite: "jammy"
+      packages:
+        - dcism
+    noble:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/6100/noble"
+      suite: "noble"
+      packages:
+        - dcism
+  "17":
+    noble:
+      url: "http://linux.dell.com/repo/community/openmanage/iSM/6100/noble"
+      suite: "noble"
+      packages:
+        - dcism
+
+dell_openmanage_ism_packages_extra: []

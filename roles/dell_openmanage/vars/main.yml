@@ -1,0 +1,11 @@
+---
+dell_openmanage_var_release: "{{ ansible_facts['distribution_release'] | lower }}"
+dell_openmanage_var_generation: "{{ dell_openmanage_generation | string }}"
+dell_openmanage_var_ism_repositories: "{{ dell_openmanage_ism_repository_matrix[dell_openmanage_var_generation] | default({}) }}"
+dell_openmanage_var_ism_repository: "{{ dell_openmanage_var_ism_repositories[dell_openmanage_var_release] | default({}) }}"
+dell_openmanage_var_ism_packages: >-
+  {{
+    (
+      dell_openmanage_var_ism_repository.packages | default([])
+    ) + dell_openmanage_ism_packages_extra
+  }}
