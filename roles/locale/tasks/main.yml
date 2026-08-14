@@ -65,7 +65,10 @@
   tags:
     - locale
 
-- name: Set default LANG in /etc/default/locale
+# Preserve the existing mode of the distribution-owned file. On newer Ubuntu
+# releases /etc/default/locale is a symlink and an explicit mode creates a
+# misleading check-mode diff against the link's synthetic 0777 permissions.
+- name: Set default LANG in /etc/default/locale  # noqa risky-file-permissions
   ansible.builtin.lineinfile:
     path: "/etc/default/locale"
     regexp: "^LANG="
@@ -73,7 +76,6 @@
     create: true
     owner: root
     group: root
-    mode: "0644"
   when: locale_default | length > 0
   become: true
   tags:
