@@ -1,5 +1,6 @@
 ---
 profile: production
-skip_list: []
+skip_list:
+  - no-tabs
 warn_list:
   - experimental
