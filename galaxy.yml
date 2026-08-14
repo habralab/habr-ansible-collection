@@ -18,6 +18,9 @@ tags:
 license:
   - MIT
 
+dependencies:
+  ansible.posix: ">=2.2.2,<3.0.0"
+
 repository: https://github.com/habralab/habr-ansible-collection
 issues: https://github.com/habralab/habr-ansible-collection/issues
 

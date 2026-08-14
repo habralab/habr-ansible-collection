@@ -1,101 +1,107 @@
-# Role: SSH Authorized Keys Development Notes
+# SSH authorized keys role design
 
-This document captures the intended design direction for a future `ssh_authorized_keys` role. It is intentionally limited to role goals, boundaries, and data model shape. It is not yet a public contract.
+This document describes the internal policy-composition model and invariants.
+The public variables and usage examples are documented in `README.md`.
 
-## Purpose
+## Processing pipeline
 
-The role should provide a reusable, data-driven mechanism for managing SSH access through `authorized_keys`.
+The role separates reusable identities, inventory policy and host mutation:
 
-Target use cases:
+```text
+key catalog + key groups
+            |
+user baseline + one effective inventory overlay
+            |
+            v
+      effective contract
+            |
+      group expansion
+            |
+            v
+  add_keys / remove_keys per user
+            |
+            v
+ ansible.posix.authorized_key
+```
 
-- direct role usage in playbooks
-- reuse as a low-level primitive via `include_role`
-- materializing access policy for shared Unix accounts such as `root`, `web`, or `deploy`
+Key identifiers keep inventory policy independent from literal public-key
+payloads. Key groups provide reusable policy sets such as operators or revoked
+keys without duplicating catalog entries.
 
-## Scope
+## Contract boundary
 
-The role should manage:
+There are two intended entry points:
 
-- SSH public keys for Unix accounts
-- grant, update, and revoke lifecycle
-- one or more managed principals
+1. Policy mode builds the effective contract from
+   `ssh_authorized_keys_users_base` and
+   `ssh_authorized_keys_users_overlay`.
+2. Direct mode receives an already assembled
+   `ssh_authorized_keys_contract`.
 
-The role should not manage:
+These are alternative ownership models, not three inventory precedence layers.
+A consumer should not define a direct contract together with a non-empty base
+or overlay.
 
-- SSH daemon configuration
-- SSH client configuration
-- host keys
-- user creation
-- sudo policy
+The executor ultimately requires only per-user `add_keys` and `remove_keys`
+lists containing catalog identifiers. Group references are expanded before
+host mutation.
 
-## Design Principles
+## Inventory precedence
 
-- keep the role environment-agnostic
-- keep access policy in inventory data, not in role files
-- support both standalone and helper-style usage
-- prefer explicit, iterable object models over ad hoc variables
+The baseline and overlay names deliberately differ. This lets a common value
+from `group_vars/all.yml` survive when a more specific group supplies an
+overlay, without relying on Ansible's global `hash_behaviour=merge` setting.
 
-## Conceptual Model
+Ansible resolves each variable before role execution. If both a parent group
+and a child group define `ssh_authorized_keys_users_overlay`, the child's value
+replaces the parent's value according to normal inventory precedence. The role
+never sees both values and therefore cannot merge them.
 
-### Subject
+Consequences:
 
-A subject is an identity that owns one or more SSH public keys.
+- use one effective overlay per host;
+- make a higher-precedence overlay self-contained;
+- repeat inherited policy in a child overlay when it must remain effective;
+- do not interpret `append_rp` as cross-group inventory merging.
 
-Examples:
+Within the role, `append_rp` recursively combines the already resolved base and
+overlay. List items supplied by the overlay are appended, while duplicate
+items from the lower-precedence list are removed in favor of the overlay's
+occurrence.
 
-- a person
-- a CI actor
-- an automation account
+If a future consumer needs more than a baseline and one effective overlay, add
+an explicit ordered list of policy fragments to the public model. Do not make
+the role depend on implicit group load order or global hash merging.
 
-### Principal
+## Validation invariants
 
-A principal is a Unix account whose `authorized_keys` file is managed.
+Before key-management tasks begin:
 
-Examples:
+- all top-level containers must be mappings;
+- direct contract and base/overlay policy modes must not be mixed;
+- catalog entries must be non-empty literal public-key strings;
+- key groups must contain only known catalog identifiers;
+- every target Unix user must already exist;
+- user contracts must contain only the four documented fields;
+- user contract fields must be lists;
+- every referenced key group must exist;
+- every resolved key identifier must exist in the catalog;
+- the same key identifier must not be present in both add and remove sets for
+  one user.
 
-- `root`
-- `web`
-- `deploy`
+New contract fields or composition layers must preserve validation before
+mutation and must define deterministic merge behavior.
 
-### Binding
+## Mutation model
 
-A binding assigns one or more subjects to one principal.
+The role manages only explicitly referenced catalog keys. It intentionally
+leaves `exclusive` disabled so that adopting the role does not remove keys
+owned by another system or keys not yet represented in the catalog.
 
-## Candidate Public Data Shapes
+Users are expected to be provisioned before this role. Directory creation and
+ownership management are delegated to `ansible.posix.authorized_key` and are
+controlled by `ssh_authorized_keys_manage_dir`.
 
-Recommended model:
-
-- `ssh_authorized_keys_subjects`
-- `ssh_authorized_keys_bindings`
-
-Optional simplified model:
-
-- `ssh_authorized_keys_items`
-
-The recommended direction is to treat SSH access as subject-to-principal binding rather than raw per-user key lists.
-
-## Lifecycle Semantics
-
-The role is expected to support:
-
-- grant keys derived from declared subjects or direct items
-- revoke keys that are explicitly absent or no longer bound
-- additive mode for partially managed principals
-- authoritative mode for fully managed principals
-
-## Usage Modes
-
-### Standalone Role
-
-Inventory may define subjects and bindings directly, then apply the role in a play.
-
-### Helper Role
-
-Another role may compute subjects or bindings and call this role via `include_role`.
-
-## Open Questions
-
-- whether direct item mode should exist long-term or only during early adoption
-- how authoritative mode should behave for mixed-ownership `authorized_keys`
-- whether per-principal path overrides are worth supporting
-- whether comments and metadata should be treated as part of managed identity
+The catalog stores literal public keys. Supporting remote URLs or controller
+file paths would introduce a different trust and transport model and should be
+designed explicitly rather than added as an incidental input form.

@@ -1,2 +1,255 @@
 ---
-[]
+- name: Validate authorized keys input containers
+  ansible.builtin.assert:
+    that:
+      - ssh_authorized_keys_catalog is mapping
+      - ssh_authorized_keys_groups is mapping
+      - ssh_authorized_keys_contract is mapping
+      - ssh_authorized_keys_users_base is mapping
+      - ssh_authorized_keys_users_overlay is mapping
+      - ssh_authorized_keys_manage_dir is boolean
+    fail_msg: Authorized keys inputs have invalid container or option types.
+
+- name: Validate authorized keys input mode
+  ansible.builtin.assert:
+    that:
+      - >-
+        ssh_authorized_keys_contract | length == 0
+        or (
+          ssh_authorized_keys_users_base | length == 0
+          and ssh_authorized_keys_users_overlay | length == 0
+        )
+    fail_msg: >-
+      Use either ssh_authorized_keys_contract or the base/overlay policy
+      variables. Direct and policy modes cannot be mixed.
+
+- name: Validate authorized key catalog entries
+  ansible.builtin.assert:
+    that:
+      - item.key is string
+      - item.key | length > 0
+      - item.value is string
+      - item.value | length > 0
+      - not (item.value is match('^(https?://|file:)'))
+    quiet: true
+    fail_msg: >-
+      Authorized key catalog entry {{ item.key }} must contain a literal public
+      key. URL and file sources are not supported.
+  loop: "{{ ssh_authorized_keys_catalog | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Validate authorized key groups
+  ansible.builtin.assert:
+    that:
+      - item.key is string
+      - item.key | length > 0
+      - item.value is sequence
+      - item.value is not string
+      - item.value | select('string') | list | length == item.value | length
+      - >-
+        item.value
+        | difference(ssh_authorized_keys_catalog.keys() | list)
+        | length == 0
+    quiet: true
+    fail_msg: >-
+      Authorized key group {{ item.key }} must be a list containing only known
+      catalog key ids.
+  loop: "{{ ssh_authorized_keys_groups | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Build effective authorized keys contract
+  ansible.builtin.set_fact:
+    _ssh_authorized_keys_contract: >-
+      {{
+        ssh_authorized_keys_contract
+        if ssh_authorized_keys_contract | length > 0
+        else ssh_authorized_keys_users_base
+          | combine(
+              ssh_authorized_keys_users_overlay,
+              recursive=true,
+              list_merge='append_rp'
+            )
+      }}
+
+- name: Validate authorized key user contract containers
+  ansible.builtin.assert:
+    that:
+      - item.key is string
+      - item.key | length > 0
+      - item.value is mapping
+    quiet: true
+    fail_msg: >-
+      Authorized key contract for {{ item.key }} must be a mapping.
+  loop: "{{ _ssh_authorized_keys_contract | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Validate authorized key user contract fields
+  ansible.builtin.assert:
+    that:
+      - >-
+        item.value.keys()
+        | difference(authorized_key_contract_fields)
+        | length == 0
+      - (item.value.add_keys | default([])) is sequence
+      - (item.value.add_keys | default([])) is not string
+      - (item.value.remove_keys | default([])) is sequence
+      - (item.value.remove_keys | default([])) is not string
+      - (item.value.add_groups | default([])) is sequence
+      - (item.value.add_groups | default([])) is not string
+      - (item.value.remove_groups | default([])) is sequence
+      - (item.value.remove_groups | default([])) is not string
+    quiet: true
+    fail_msg: >-
+      Authorized key contract for {{ item.key }} contains unknown fields or
+      does not use lists for key and group references.
+  vars:
+    authorized_key_contract_fields:
+      - add_keys
+      - remove_keys
+      - add_groups
+      - remove_groups
+  loop: "{{ _ssh_authorized_keys_contract | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Read the Unix user database
+  ansible.builtin.getent:
+    database: passwd
+  when: _ssh_authorized_keys_contract | length > 0
+
+- name: Validate authorized key target users
+  ansible.builtin.assert:
+    that:
+      - >-
+        _ssh_authorized_keys_contract.keys()
+        | difference(ansible_facts.getent_passwd.keys() | list)
+        | length == 0
+    quiet: true
+    fail_msg: >-
+      Authorized key contracts reference users that do not exist:
+      {{
+        _ssh_authorized_keys_contract.keys()
+        | difference(ansible_facts.getent_passwd.keys() | list)
+        | join(', ')
+      }}.
+  when: _ssh_authorized_keys_contract | length > 0
+
+- name: Validate authorized key group references
+  ansible.builtin.assert:
+    that:
+      - >-
+        referenced_groups
+        | difference(ssh_authorized_keys_groups.keys() | list)
+        | length == 0
+    quiet: true
+    fail_msg: >-
+      Unknown authorized key groups for {{ item.key }}:
+      {{
+        referenced_groups
+        | difference(ssh_authorized_keys_groups.keys() | list)
+        | join(', ')
+      }}
+  vars:
+    referenced_groups: >-
+      {{
+        (item.value.add_groups | default([]))
+        + (item.value.remove_groups | default([]))
+      }}
+  loop: "{{ _ssh_authorized_keys_contract | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Resolve authorized key groups into key ids
+  ansible.builtin.set_fact:
+    _ssh_authorized_keys_contract: >-
+      {{
+        _ssh_authorized_keys_contract
+        | combine(
+            {
+              item.key: {
+                'add_keys': (
+                  (item.value.add_keys | default([]))
+                  + (
+                    item.value.add_groups | default([])
+                    | map('extract', ssh_authorized_keys_groups)
+                    | list
+                    | flatten
+                  )
+                ) | unique,
+                'remove_keys': (
+                  (item.value.remove_keys | default([]))
+                  + (
+                    item.value.remove_groups | default([])
+                    | map('extract', ssh_authorized_keys_groups)
+                    | list
+                    | flatten
+                  )
+                ) | unique
+              }
+            },
+            recursive=true
+          )
+      }}
+  loop: "{{ _ssh_authorized_keys_contract | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Validate resolved authorized key contracts
+  ansible.builtin.assert:
+    that:
+      - >-
+        referenced_key_ids
+        | difference(ssh_authorized_keys_catalog.keys() | list)
+        | length == 0
+      - add_key_ids | intersect(remove_key_ids) | length == 0
+    quiet: true
+    fail_msg: >-
+      Invalid authorized key contract for {{ item.key }}.
+      Unknown key ids:
+      {{
+        referenced_key_ids
+        | difference(ssh_authorized_keys_catalog.keys() | list)
+        | join(', ')
+      }}.
+      Present in both add_keys and remove_keys:
+      {{ add_key_ids | intersect(remove_key_ids) | join(', ') }}.
+  vars:
+    add_key_ids: "{{ item.value.add_keys | default([]) }}"
+    remove_key_ids: "{{ item.value.remove_keys | default([]) }}"
+    referenced_key_ids: "{{ add_key_ids + remove_key_ids }}"
+  loop: "{{ _ssh_authorized_keys_contract | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Add authorized keys by contract
+  ansible.posix.authorized_key:
+    user: "{{ item.0.key }}"
+    key: "{{ ssh_authorized_keys_catalog[item.1] }}"
+    state: present
+    manage_dir: "{{ ssh_authorized_keys_manage_dir }}"
+  loop: >-
+    {{
+      _ssh_authorized_keys_contract
+      | dict2items
+      | subelements('value.add_keys', {'skip_missing': true})
+    }}
+  loop_control:
+    label: "{{ item.0.key }} add {{ item.1 }}"
+
+- name: Remove authorized keys by contract
+  ansible.posix.authorized_key:
+    user: "{{ item.0.key }}"
+    key: "{{ ssh_authorized_keys_catalog[item.1] }}"
+    state: absent
+    manage_dir: "{{ ssh_authorized_keys_manage_dir }}"
+  loop: >-
+    {{
+      _ssh_authorized_keys_contract
+      | dict2items
+      | subelements('value.remove_keys', {'skip_missing': true})
+    }}
+  loop_control:
+    label: "{{ item.0.key }} remove {{ item.1 }}"

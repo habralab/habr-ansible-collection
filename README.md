@@ -39,7 +39,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
 - `packages`: Declarative management of APT packages and .deb URLs.
-- `ssh_authorized_keys`: Declarative SSH access management through `authorized_keys`.
+- `ssh_authorized_keys`: Manages SSH public keys through catalogs, groups and per-user contracts.
 - `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
 - `systemd_unit`: Declarative lifecycle management for one system or user unit.
 - `systemd_units`: Iterates over declarative system and user unit lifecycles.

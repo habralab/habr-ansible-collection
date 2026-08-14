@@ -1,4 +1,7 @@
 ---
-ssh_authorized_keys_subjects: {}
-ssh_authorized_keys_bindings: []
-ssh_authorized_keys_items: []
+ssh_authorized_keys_catalog: {}
+ssh_authorized_keys_groups: {}
+ssh_authorized_keys_contract: {}
+ssh_authorized_keys_users_base: {}
+ssh_authorized_keys_users_overlay: {}
+ssh_authorized_keys_manage_dir: true
