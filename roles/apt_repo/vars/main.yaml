@@ -3,10 +3,12 @@ apt_repo_var_suite: "{{ apt_repo_config.suite | default(apt_repo_suite) }}"
 apt_repo_var_components: "{{ apt_repo_config.components | default(apt_repo_components) }}"
 apt_repo_var_is_flat: "{{ apt_repo_var_suite.endswith('/') }}"
 apt_repo_var_keyring: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
+apt_repo_var_key_url: "{{ apt_repo_config.key_url | default(apt_repo_key_url) }}"
+apt_repo_var_key_ids: "{{ apt_repo_config.key_ids | default(apt_repo_key_ids) }}"
 apt_repo_var_key_active: >-
   {{
-    (apt_repo_config.key_url | default(apt_repo_key_url) | length > 0) or
-    (apt_repo_config.key_ids | default(apt_repo_key_ids) | length > 0)
+    (apt_repo_var_key_url | length > 0) or
+    (apt_repo_var_key_ids | length > 0)
   }}
 
 apt_repo_var_arch_str: "arch={{ apt_repo_config.arch | default(apt_repo_arch) }}"

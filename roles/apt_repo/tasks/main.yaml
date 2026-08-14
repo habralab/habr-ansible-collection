@@ -13,48 +13,18 @@
     state: directory
     mode: '0755'
 
-- name: "Import GPG keys from direct URL | {{ apt_repo_config.name }}"
-  ansible.builtin.apt_key:
-    url: "{{ apt_repo_config.key_url | default(apt_repo_key_url) }}"
-    keyring: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
-    state: present
-  when:
-    - (apt_repo_config.state | default(apt_repo_state)) == 'present'
-    - (apt_repo_config.key_url | default(apt_repo_key_url)) | length > 0
-  notify: Update apt cache
+- name: "Validate signing key source for deb822 | {{ apt_repo_config.name }}"
+  ansible.builtin.assert:
+    that:
+      - apt_repo_var_key_ids | length == 0 or apt_repo_var_key_url | length > 0
+    msg: >-
+      Deb822 repositories require a direct key_url. key_ids/keyserver imports
+      are supported only by the legacy .list path on Ubuntu older than 22.04.
+  when: ansible_facts['distribution_version'] is version('22.04', '>=')
 
-- name: "Import GPG keys from keyserver | {{ apt_repo_config.name }}"
-  ansible.builtin.apt_key:
-    id: "{{ key_item }}"
-    keyserver: "{{ apt_repo_config.key_server | default(apt_repo_key_server) }}"
-    keyring: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
-    state: present
-  loop: "{{ [apt_repo_config.key_ids | default(apt_repo_key_ids)] | flatten }}"
-  loop_control:
-    loop_var: key_item
-  when:
-    - (apt_repo_config.state | default(apt_repo_state)) == 'present'
-    - (apt_repo_config.key_ids | default(apt_repo_key_ids)) | length > 0
-    - (apt_repo_config.key_url | default(apt_repo_key_url)) | length == 0
-  notify: Update apt cache
-
-- name: "Configure repository (Legacy .list format) | {{ apt_repo_config.name }}"
-  ansible.builtin.apt_repository:
-    repo: "{{ apt_repo_var_repo_parts | select | join(' ') }}"
-    state: "{{ apt_repo_config.state | default(apt_repo_state) }}"
-    filename: "{{ apt_repo_config.name }}"
-  vars:
-    apt_repo_var_repo_parts:
-      - "{{ type_item }}"
-      - "{{ '[' ~ apt_repo_var_opts ~ ']' if apt_repo_var_opts | length > 0 else '' }}"
-      - "{{ apt_repo_config.url }}"
-      - "{{ apt_repo_var_suite }}"
-      - "{{ apt_repo_var_comps_str }}"
-  loop: "{{ apt_repo_config.types | default(apt_repo_types) }}"
-  loop_control:
-    loop_var: type_item
+- name: "Configure legacy APT repository | {{ apt_repo_config.name }}"
+  ansible.builtin.include_tasks: legacy.yml
   when: ansible_facts['distribution_version'] is version('22.04', '<')
-  notify: Update apt cache
 
 - name: "Configure repository (Modern deb822 format) | {{ apt_repo_config.name }}"
   ansible.builtin.deb822_repository:
@@ -70,7 +40,7 @@
     architectures: "{{ apt_repo_config.arch | default(apt_repo_arch) }}"
     signed_by: >-
       {{
-        apt_repo_var_keyring if apt_repo_var_key_active | bool
+        apt_repo_var_key_url if apt_repo_var_key_url | length > 0
         else omit
       }}
     state: "{{ apt_repo_config.state | default(apt_repo_state) }}"
@@ -78,7 +48,6 @@
   notify: Update apt cache
   tags:
     - skip_ansible_lint
-
 - name: "Remove repository files if state is absent | {{ apt_repo_config.name }}"
   ansible.builtin.file:
     path: "/etc/apt/sources.list.d/{{ apt_repo_config.name }}{{ item }}"
@@ -86,12 +55,5 @@
   loop:
     - ".list"
     - ".sources"
-  when: (apt_repo_config.state | default(apt_repo_state)) == 'absent'
-  notify: Update apt cache
-
-- name: "Remove keyring file if repository is absent | {{ apt_repo_config.name }}"
-  ansible.builtin.file:
-    path: "{{ apt_repo_config.keyring | default(apt_repo_keyring) }}"
-    state: absent
   when: (apt_repo_config.state | default(apt_repo_state)) == 'absent'
   notify: Update apt cache
