@@ -1,16 +1,24 @@
 ---
 galaxy_info:
-  role_name: "nvm"
+  role_name: "nodejs"
   author: "Habr Team <servers@habr.team>, Vadim Rybalko <vadim@habr.team>"
-  description: "NodeJS Version Manager from git"
+  description: "Declarative Node.js runtime provisioning"
   company: "Habr"
   issue_tracker_url: "https://github.com/habralab/habr-ansible-collection/issues"
   license: "MIT"
-  min_ansible_version: "2.15"
+  min_ansible_version: "2.16"
+
   platforms:
     - name: "Ubuntu"
       versions:
         - "focal"
         - "jammy"
         - "noble"
+
+  galaxy_tags:
+    - "nodejs"
+    - "node"
+    - "npm"
+    - "nvm"
+
 dependencies: []

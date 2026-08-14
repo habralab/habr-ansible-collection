@@ -1,4 +1,0 @@
----
-nvm_version: "v0.40.4"
-nvm_profile: ".bashrc"
-nvm_repo: "https://github.com/nvm-sh/nvm.git"

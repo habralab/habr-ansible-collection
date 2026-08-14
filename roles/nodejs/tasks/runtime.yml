@@ -1,0 +1,23 @@
+---
+- name: Initialize normalized Node.js runtime
+  ansible.builtin.set_fact:
+    _nodejs_runtime: "{{ current_nodejs_runtime }}"
+    _nodejs_runtime_provider_result: {}
+    nodejs_runtime_result: {}
+
+- name: Materialize NVM-backed Node.js runtime
+  ansible.builtin.include_tasks:
+    file: provider_nvm.yml
+
+- name: Resolve normalized runtime result
+  ansible.builtin.include_tasks:
+    file: resolve_runtime.yml
+  when: _nodejs_runtime_provider_result | length > 0
+
+- name: Install runtime-bound npm packages
+  ansible.builtin.include_tasks:
+    file: npm_packages.yml
+  when:
+    - nodejs_runtime_result | length > 0
+    - _nodejs_runtime.npm_packages is defined
+    - _nodejs_runtime.npm_packages | length > 0

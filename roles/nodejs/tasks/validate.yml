@@ -1,0 +1,44 @@
+---
+- name: Validate common Node.js runtime fields
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_runtime is mapping
+      - current_nodejs_runtime | length > 0
+      - current_nodejs_runtime.name is string
+      - current_nodejs_runtime.name | length > 0
+      - current_nodejs_runtime.provider is string
+      - current_nodejs_runtime.provider == 'nvm'
+      - current_nodejs_runtime.scope is string
+      - current_nodejs_runtime.scope == 'user'
+      - current_nodejs_runtime.state is string
+      - current_nodejs_runtime.state == 'present'
+    fail_msg: >-
+      Each item in 'nodejs_runtimes' must be a non-empty dictionary with
+      supported 'name', 'provider', 'scope', and 'state' fields.
+    quiet: true
+
+- name: Validate provider-specific Node.js runtime rules
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_runtime.user is defined
+      - current_nodejs_runtime.user is string
+      - current_nodejs_runtime.user | length > 0
+      - current_nodejs_runtime.version is defined
+      - current_nodejs_runtime.version is string
+      - current_nodejs_runtime.version | length > 0
+      - >-
+        current_nodejs_runtime.nvm_version is not defined
+        or (
+          current_nodejs_runtime.nvm_version is string
+          and current_nodejs_runtime.nvm_version | length > 0
+        )
+      - >-
+        current_nodejs_runtime.profile is not defined
+        or (
+          current_nodejs_runtime.profile is string
+          and current_nodejs_runtime.profile | length > 0
+        )
+    fail_msg: >-
+      provider=nvm requires scope=user and non-empty string values for user and
+      version. Optional nvm_version and profile values must be strings.
+    quiet: true

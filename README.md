@@ -3,29 +3,73 @@
 This repository contains the **Habr Ansible Collection**, providing reusable roles,
 plugins, and modules for managing Linux hosts and infrastructure services.
 
-## Structure
-
-- `roles/` — production-ready Ansible roles
-- `plugins/` — custom plugins (modules, filters, lookups)
-- `docs/` — internal documentation and guidelines
-
 ## Requirements
 
-- ansible-core >= 2.15
+- ansible-core >= 2.16.0
 
-## Usage
+## Installation
 
-Install the collection from git:
+Install the collection via `requirements.yml`:
+
+```yaml
+collections:
+  - name: habr.linuxhost
+    source: git+https://github.com/habralab/habr-ansible-collection.git
+    type: git
+    version: main
+```
+
+Or directly from CLI:
 
 ```bash
 ansible-galaxy collection install git+https://github.com/habralab/habr-ansible-collection.git
 ```
 
-Then reference roles using FQCN:
+## Available Roles
+
+Detailed documentation for each role is available in its respective `roles/<name>/README.md`.
+
+Some roles may also include a role-local `DEVELOPMENT.md` with internal design notes and contributor guidance for that specific role.
+
+- `apt_repo`: Helper role to manage APT repositories (supports legacy lists and deb822 sources).
+- `dell_openmanage`: Configures Dell OpenManage iSM APT repository and installs Dell iSM packages.
+- `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
+- `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
+- `locale`: Declarative management of generated system locales and default `LANG`.
+- `logind`: Manages `systemd-logind` configuration and user lingering.
+- `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
+- `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
+- `packages`: Declarative management of APT packages and .deb URLs.
+- `timezone`: Declarative management of the system timezone.
+- `users`: Declarative management of Linux users (UIDs, shells, groups).
+
+## Usage Example
+
+Reference roles using FQCN:
 
 ```yaml
-roles:
-  - habr.linuxhost.garagehq
+- name: Setup Web Server
+  hosts: web_servers
+  roles:
+    - name: habr.linuxhost.users
+      vars:
+        users_list: [{ name: "web", groups: ["www-data"] }]
+    - name: habr.linuxhost.nodejs
+      vars:
+        nodejs_runtimes:
+          - name: "web-main"
+            provider: "nvm"
+            scope: "user"
+            user: "web"
+            version: "22"
+            state: "present"
 ```
 
-This collection is maintained by the Habr infrastructure team.
+## Principles
+
+- **Idempotency**: Roles are designed to be safe to run repeatedly.
+- **Explicit Scope**: Each role should define clear operational boundaries and documented non-goals.
+- **Pragmatic Modeling**: Simple use cases should stay simple, but more complex infrastructure roles may use richer internal models when this reduces drift and improves operability.
+- **Transparency**: Public role contracts belong in role `README.md`; implementation-specific design rules may live in role-local `DEVELOPMENT.md`.
+
+This collection is maintained by **Habr infrastructure team**. For development guidelines, see [CONTRIBUTING.md](./CONTRIBUTING.md).
