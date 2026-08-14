@@ -1,0 +1,54 @@
+---
+- name: Ensure Redis include directory exists
+  ansible.builtin.file:
+    path: "{{ redis_server_config_dir }}"
+    state: directory
+    owner: root
+    group: redis
+    mode: "0750"
+
+- name: Deploy Redis stock configuration wrapper
+  ansible.builtin.template:
+    src: redis-ansible.conf.j2
+    dest: "{{ redis_server_wrapper_config }}"
+    owner: root
+    group: redis
+    mode: "0640"
+  notify:
+    - Validate Redis server configuration
+    - Restart Redis server
+
+- name: Deploy Redis Ansible configuration fragment
+  ansible.builtin.template:
+    src: 90-ansible.conf.j2
+    dest: "{{ redis_server_config_file }}"
+    owner: root
+    group: redis
+    mode: "0640"
+  no_log: "{{ redis_server_config_no_log }}"
+  notify:
+    - Validate Redis server configuration
+    - Restart Redis server
+
+- name: Ensure Redis systemd drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ redis_server_systemd_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point packaged Redis service at the wrapper
+  ansible.builtin.template:
+    src: redis-server.service.conf.j2
+    dest: "{{ redis_server_systemd_dropin_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd for Redis
+    - Validate Redis server configuration
+    - Restart Redis server
+
+- name: Apply Redis configuration handlers
+  ansible.builtin.meta: flush_handlers

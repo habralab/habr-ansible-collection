@@ -1,0 +1,10 @@
+---
+redis_supported_repositories:
+  - ubuntu
+  - ppa_redislabs
+  - unmanaged
+
+redis_redislabs_supported_releases:
+  - focal
+  - jammy
+  - noble
