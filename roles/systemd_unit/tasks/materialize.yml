@@ -1,0 +1,217 @@
+---
+- name: Lookup passwd entry for target user
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ systemd_unit_config.user }}"
+    fail_key: false
+  register: systemd_unit_target_user_getent
+  when: systemd_unit_config.scope == 'user'
+
+- name: Validate existence of target user for user-scoped unit
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_target_user_getent.ansible_facts.getent_passwd is defined
+      - systemd_unit_target_user_getent.ansible_facts.getent_passwd.get(systemd_unit_config.user) is not none
+    fail_msg: "Target user '{{ systemd_unit_config.user }}' does not exist for scope=user."
+    quiet: true
+  when: systemd_unit_config.scope == 'user'
+
+- name: Normalize user-scoped unit facts
+  ansible.builtin.set_fact:
+    _systemd_unit_target_user_fact: "{{ systemd_unit_target_user_getent.ansible_facts.getent_passwd[systemd_unit_config.user] }}"
+  when: systemd_unit_config.scope == 'user'
+
+- name: Initialize normalized systemd unit runtime
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime:
+      name: "{{ systemd_unit_config.name }}"
+      scope: "{{ systemd_unit_config.scope }}"
+      state: "{{ systemd_unit_config.state }}"
+      enabled: "{{ systemd_unit_config.enabled if systemd_unit_config.enabled is defined else omit }}"
+      masked: "{{ systemd_unit_config.masked if systemd_unit_config.masked is defined else omit }}"
+      service_state: "{{ systemd_unit_config.service_state | default('') }}"
+      force: "{{ systemd_unit_config.force | default(false) }}"
+      no_block: "{{ systemd_unit_config.no_block | default(false) }}"
+      manage_linger: "{{ systemd_unit_config.manage_linger | default(systemd_unit_manage_linger) }}"
+      reload_on_change: "{{ systemd_unit_config.reload_on_change | default(false) }}"
+      restart_on_change: "{{ systemd_unit_config.restart_on_change | default(false) }}"
+      lifecycle_requested: >-
+        {{
+          systemd_unit_config.enabled is defined
+          or systemd_unit_config.masked is defined
+          or systemd_unit_config.service_state is defined
+          or systemd_unit_config.reload_on_change | default(false) | bool
+          or systemd_unit_config.restart_on_change | default(false) | bool
+        }}
+      file:
+        path: >-
+          {{
+            '/etc/systemd/system/' ~ systemd_unit_config.name
+            if systemd_unit_config.scope == 'system'
+            else _systemd_unit_target_user_fact[4] ~ '/.config/systemd/user/' ~ systemd_unit_config.name
+          }}
+        dir: >-
+          {{
+            '/etc/systemd/system'
+            if systemd_unit_config.scope == 'system'
+            else _systemd_unit_target_user_fact[4] ~ '/.config/systemd/user'
+          }}
+        owner: "{{ 'root' if systemd_unit_config.scope == 'system' else systemd_unit_config.user }}"
+        group: "{{ 'root' if systemd_unit_config.scope == 'system' else _systemd_unit_target_user_fact[2] }}"
+        mode: "{{ systemd_unit_config.mode | default('0644') }}"
+      user_context: >-
+        {{
+          {
+            'name': systemd_unit_config.user,
+            'uid': _systemd_unit_target_user_fact[1],
+            'gid': _systemd_unit_target_user_fact[2],
+            'home': _systemd_unit_target_user_fact[4],
+            'shell': _systemd_unit_target_user_fact[5],
+            'runtime_dir': '/run/user/' ~ _systemd_unit_target_user_fact[1]
+          }
+          if systemd_unit_config.scope == 'user'
+          else {}
+        }}
+      source_mode: >-
+        {{
+          'model'
+          if systemd_unit_config.state == 'present' and systemd_unit_config.source.model is defined
+          else 'content'
+          if systemd_unit_config.state == 'present' and systemd_unit_config.source.content is defined
+          else 'template'
+          if systemd_unit_config.state == 'present' and systemd_unit_config.source.template is defined
+          else 'src'
+          if systemd_unit_config.state == 'present' and systemd_unit_config.source.src is defined
+          else 'none'
+        }}
+      sections: []
+      rendered_content: ""
+
+- name: Normalize model-backed unit sections
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime: >-
+      {{
+        _systemd_unit_runtime | combine(
+          {
+            'sections': (
+              _systemd_unit_model_sections_json | from_json
+            )
+          },
+          recursive=True
+        )
+      }}
+  vars:
+    _systemd_unit_model_sections_json: |
+      {%- set ns = namespace(sections=[]) -%}
+      {%- for section_name in __systemd_unit_section_order -%}
+      {%- set section = systemd_unit_config.source.model[section_name] | default(None) -%}
+      {%- if section is not none -%}
+      {%- set directive_ns = namespace(items=[]) -%}
+      {%- for directive_name in __systemd_unit_section_directive_specs[section_name].keys() -%}
+      {%- if section[directive_name] is defined -%}
+      {%- set spec = __systemd_unit_section_directive_specs[section_name][directive_name] -%}
+      {%- set directive = {
+            'key': directive_name,
+            'render_type': spec.render_type,
+            'value_type': spec.value_type
+          } -%}
+      {%- if spec.value_type == 'string' -%}
+      {%- set directive = directive | combine({'value': section[directive_name]}) -%}
+      {%- else -%}
+      {%- set directive = directive | combine({'values': section[directive_name]}) -%}
+      {%- endif -%}
+      {%- set directive_ns.items = directive_ns.items + [directive] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- set ns.sections = ns.sections + [{'name': section_name, 'directives': directive_ns.items}] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ ns.sections | to_json }}
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.model is defined
+
+- name: Normalize inline content-backed candidate unit content
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime: >-
+      {{
+        _systemd_unit_runtime | combine(
+          {
+            'rendered_content': systemd_unit_config.source.content
+          },
+          recursive=True
+        )
+      }}
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.content is defined
+
+- name: Render model-backed candidate unit content
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime: >-
+      {{
+        _systemd_unit_runtime | combine(
+          {
+            'rendered_content': lookup('template', 'unit.j2')
+          },
+          recursive=True
+        )
+      }}
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.model is defined
+
+- name: Ensure lingering for target user when requested by systemd_unit
+  ansible.builtin.include_role:
+    name: habr.linuxhost.systemd_logind
+    apply:
+      tags:
+        - systemd
+        - systemd-unit
+        - systemd_logind
+  vars:
+    systemd_logind_linger_users:
+      - name: "{{ _systemd_unit_runtime.user_context.name }}"
+        state: present
+  when:
+    - systemd_unit_config.scope == 'user'
+    - systemd_unit_config.state == 'present'
+    - _systemd_unit_runtime.manage_linger | bool
+    - _systemd_unit_runtime.lifecycle_requested | bool
+  tags:
+    - systemd
+    - systemd-unit
+    - systemd_logind
+
+- name: Check user runtime directory availability
+  ansible.builtin.stat:
+    path: "{{ _systemd_unit_runtime.user_context.runtime_dir }}"
+  register: systemd_unit_runtime_dir_stat
+  when:
+    - systemd_unit_config.scope == 'user'
+    - systemd_unit_config.state == 'present'
+    - _systemd_unit_runtime.lifecycle_requested | bool
+
+- name: Validate user runtime directory availability
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_runtime_dir_stat.stat.exists
+      - systemd_unit_runtime_dir_stat.stat.isdir
+    fail_msg: >-
+      {{
+        "User runtime directory '"
+        ~ _systemd_unit_runtime.user_context.runtime_dir
+        ~ "' is unavailable."
+        ~ (
+          " Dry-run cannot activate lingering. Re-run without check mode or prepare lingering first."
+          if _systemd_unit_runtime.manage_linger | bool and ansible_check_mode
+          else " Lingering was requested through systemd_unit, but the user manager context is still unavailable."
+          if _systemd_unit_runtime.manage_linger | bool
+          else " Ensure the target user has an active user manager context, typically by enabling lingering before managing user-scoped unit lifecycle."
+        )
+      }}
+    quiet: true
+  when:
+    - systemd_unit_config.scope == 'user'
+    - systemd_unit_config.state == 'present'
+    - _systemd_unit_runtime.lifecycle_requested | bool

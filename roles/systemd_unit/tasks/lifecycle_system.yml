@@ -1,0 +1,10 @@
+---
+- name: Converge system-scoped systemd lifecycle
+  ansible.builtin.systemd_service:
+    name: "{{ _systemd_unit_runtime.name }}"
+    enabled: "{{ _systemd_unit_runtime.enabled if _systemd_unit_runtime.enabled is defined else omit }}"
+    masked: "{{ _systemd_unit_runtime.masked if _systemd_unit_runtime.masked is defined else omit }}"
+    state: "{{ _systemd_unit_runtime.effective_service_state if _systemd_unit_runtime.effective_service_state | length > 0 else omit }}"
+    force: "{{ _systemd_unit_runtime.force }}"
+    no_block: "{{ _systemd_unit_runtime.no_block }}"
+  become: true

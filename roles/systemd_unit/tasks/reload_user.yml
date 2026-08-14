@@ -1,0 +1,9 @@
+---
+- name: Reload systemd user manager
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "{{ _systemd_unit_runtime.user_context.runtime_dir }}"
+  become: true
+  become_user: "{{ _systemd_unit_runtime.user_context.name }}"

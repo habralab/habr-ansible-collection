@@ -1,0 +1,127 @@
+---
+- name: Ensure unit directory exists for one declarative systemd unit
+  ansible.builtin.file:
+    path: "{{ _systemd_unit_runtime.file.dir }}"
+    state: directory
+    owner: "{{ _systemd_unit_runtime.file.owner }}"
+    group: "{{ _systemd_unit_runtime.file.group }}"
+    mode: "0755"
+  become: "{{ _systemd_unit_runtime.scope == 'system' }}"
+  become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
+
+- name: Materialize unit from rendered content
+  ansible.builtin.copy:
+    content: "{{ _systemd_unit_runtime.rendered_content }}"
+    dest: "{{ _systemd_unit_runtime.file.path }}"
+    owner: "{{ _systemd_unit_runtime.file.owner }}"
+    group: "{{ _systemd_unit_runtime.file.group }}"
+    mode: "{{ _systemd_unit_runtime.file.mode }}"
+  register: systemd_unit_file_content_result
+  become: "{{ _systemd_unit_runtime.scope == 'system' }}"
+  become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
+  when: _systemd_unit_runtime.source_mode in ['model', 'content']
+
+- name: Materialize unit from controller template
+  ansible.builtin.template:
+    src: "{{ systemd_unit_config.source.template }}"
+    dest: "{{ _systemd_unit_runtime.file.path }}"
+    owner: "{{ _systemd_unit_runtime.file.owner }}"
+    group: "{{ _systemd_unit_runtime.file.group }}"
+    mode: "{{ _systemd_unit_runtime.file.mode }}"
+  register: systemd_unit_file_template_result
+  become: "{{ _systemd_unit_runtime.scope == 'system' }}"
+  become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
+  when: _systemd_unit_runtime.source_mode == 'template'
+
+- name: Materialize unit from controller file
+  ansible.builtin.copy:
+    src: "{{ systemd_unit_config.source.src }}"
+    dest: "{{ _systemd_unit_runtime.file.path }}"
+    owner: "{{ _systemd_unit_runtime.file.owner }}"
+    group: "{{ _systemd_unit_runtime.file.group }}"
+    mode: "{{ _systemd_unit_runtime.file.mode }}"
+  register: systemd_unit_file_src_result
+  become: "{{ _systemd_unit_runtime.scope == 'system' }}"
+  become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
+  when: _systemd_unit_runtime.source_mode == 'src'
+
+- name: Consolidate unit materialization change state
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime: >-
+      {{
+        _systemd_unit_runtime | combine(
+          {
+            'file_changed': (
+              (systemd_unit_file_content_result.changed | default(false))
+              or (systemd_unit_file_template_result.changed | default(false))
+              or (systemd_unit_file_src_result.changed | default(false))
+            )
+          },
+          recursive=True
+        )
+      }}
+
+- name: Resolve effective lifecycle after unit materialization
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime: >-
+      {{
+        _systemd_unit_runtime | combine(
+          {
+            'effective_service_state': (
+              'restarted'
+              if _systemd_unit_runtime.file_changed and _systemd_unit_runtime.restart_on_change
+              else 'reloaded'
+              if _systemd_unit_runtime.file_changed and _systemd_unit_runtime.reload_on_change
+              else _systemd_unit_runtime.service_state
+            )
+          },
+          recursive=True
+        )
+      }}
+
+- name: Reload system manager after unit file changes
+  ansible.builtin.include_tasks:
+    file: reload_system.yml
+  when:
+    - _systemd_unit_runtime.scope == 'system'
+    - _systemd_unit_runtime.file_changed | default(false)
+
+- name: Reload user manager after unit file changes
+  ansible.builtin.include_tasks:
+    file: reload_user.yml
+  when:
+    - _systemd_unit_runtime.scope == 'user'
+    - _systemd_unit_runtime.file_changed | default(false)
+
+- name: Skip lifecycle transitions in check mode for newly materialized units
+  ansible.builtin.debug:
+    msg: >-
+      Unit file for '{{ _systemd_unit_runtime.name }}' would change in check mode.
+      Lifecycle transitions are skipped because the manager cannot load a file
+      that was not actually written during dry-run.
+  when:
+    - ansible_check_mode
+    - _systemd_unit_runtime.file_changed | default(false)
+    - _systemd_unit_runtime.enabled is defined
+      or _systemd_unit_runtime.masked is defined
+      or _systemd_unit_runtime.effective_service_state | length > 0
+
+- name: Apply lifecycle for system-scoped unit
+  ansible.builtin.include_tasks:
+    file: lifecycle_system.yml
+  when:
+    - _systemd_unit_runtime.scope == 'system'
+    - not (ansible_check_mode and (_systemd_unit_runtime.file_changed | default(false)))
+    - _systemd_unit_runtime.enabled is defined
+      or _systemd_unit_runtime.masked is defined
+      or _systemd_unit_runtime.effective_service_state | length > 0
+
+- name: Apply lifecycle for user-scoped unit
+  ansible.builtin.include_tasks:
+    file: lifecycle_user.yml
+  when:
+    - _systemd_unit_runtime.scope == 'user'
+    - not (ansible_check_mode and (_systemd_unit_runtime.file_changed | default(false)))
+    - _systemd_unit_runtime.enabled is defined
+      or _systemd_unit_runtime.masked is defined
+      or _systemd_unit_runtime.effective_service_state | length > 0
