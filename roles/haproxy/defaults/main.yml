@@ -12,9 +12,7 @@ haproxy_repo_config:
   name: "vbernat-haproxy"
   url: "http://ppa.launchpad.net/vbernat/haproxy-{{ haproxy_version }}/ubuntu"
   components: ["main"]
-  key_server: "keyserver.ubuntu.com"
-  key_ids:
-    - "0x3D653970FBAB0A890E4E4E9A0F14D8B0CF4EFE96"
+  key_url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x3D653970FBAB0A890E4E4E9A0F14D8B0CF4EFE96"
 
 haproxy_packages:
   - "haproxy"
@@ -27,6 +25,7 @@ haproxy_manage_confd: true
 
 haproxy_global_ssl_ca_base: "/etc/ssl/certs"
 haproxy_global_ssl_crt_base: "/etc/ssl/private"
+haproxy_global_tune_bufsize: ""
 
 haproxy_global_ssl_ciphers:
   - "ECDHE-ECDSA-AES128-GCM-SHA256"
