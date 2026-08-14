@@ -5,6 +5,7 @@ netfilter_persistent_available_releases:
  - "focal"
  - "jammy"
  - "noble"
+ - "resolute"
 
 netfilter_iptables_persistent_available_releases:
  - "xenial"
@@ -12,8 +13,10 @@ netfilter_iptables_persistent_available_releases:
  - "focal"
  - "jammy"
  - "noble"
+ - "resolute"
 
 netfilter_ipset_persistent_available_releases:
  - "focal"
  - "jammy"
  - "noble"
+ - "resolute"

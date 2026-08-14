@@ -6,7 +6,7 @@ galaxy_info:
   company: "Habr"
   issue_tracker_url: "https://github.com/habralab/habr-ansible-collection/issues"
   license: "MIT"
-  min_ansible_version: "2.15"
+  min_ansible_version: "2.18"
   platforms:
     - name: "Ubuntu"
       versions:
@@ -15,4 +15,5 @@ galaxy_info:
         - "focal"
         - "jammy"
         - "noble"
+        - "resolute"
 dependencies: []
