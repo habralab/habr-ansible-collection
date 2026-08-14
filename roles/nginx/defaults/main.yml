@@ -1,0 +1,26 @@
+---
+nginx_repo_manage: true
+
+nginx_packages: []
+nginx_remove_packages: []
+
+nginx_repositories: {}
+
+nginx_mime_types: {}
+
+nginx_ssl_dhparam_size: 2048
+
+nginx_working_dirs: []
+nginx_extra_groups: []
+nginx_cleanup_paths: []
+nginx_http_includes: []
+nginx_only_servers: []
+nginx_proxy_cache_root: "/var/cache/nginx"
+nginx_server_location_presets: {}
+nginx_server_location_preset_defaults: {}
+nginx_server_maintenance: {}
+
+nginx_auth: []
+nginx_auth_passwd_list: []
+nginx_geos: []
+nginx_maps: []

@@ -1,0 +1,172 @@
+---
+# Tests for server namespace (slug) generation.
+# The namespace is derived from identity fields and used as a prefix for all
+# generated nginx variable names (upstreams, maps, geos).
+# Priority order: cache_namespace > name > server_name > filename.
+
+- name: "NAMESPACE | plain name passes through unchanged"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Plain name"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp is defined
+          - _nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_web1') | list | length == 1
+        success_msg: "PASS: plain name 'myapp' used as namespace prefix"
+        fail_msg: >-
+          FAIL: upstreams={{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+            | map(attribute='name') | list }}
+
+
+- name: "NAMESPACE | dashes in name replaced with underscores"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: my-app
+        server_name: my-app.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Dashes in"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime['my-app'] is defined
+          - _nginx_server_runtime['my-app'].upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'my_app_web1') | list | length == 1
+        success_msg: "PASS: dashes in 'my-app' slug to 'my_app', upstream prefixed"
+        fail_msg: >-
+          FAIL: upstreams={{ _nginx_server_runtime['my-app'].upstreams_registry.materialized
+            | map(attribute='name') | list }}
+
+
+- name: "NAMESPACE | domain name: dots become underscores, result is valid slug"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: "my-app.staging"
+        server_name: my-app.staging.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Slug my-app.staging to my_app_staging"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime['my-app.staging'] is defined
+          - _nginx_server_runtime['my-app.staging'].upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'my_app_staging_web1') | list | length == 1
+        success_msg: "PASS: 'my-app.staging' slugs to 'my_app_staging'"
+        fail_msg: >-
+          FAIL: upstreams={{ _nginx_server_runtime['my-app.staging'].upstreams_registry.materialized
+            | map(attribute='name') | list }}
+
+
+- name: "NAMESPACE | cache_namespace takes priority over name"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        cache_namespace: custom_ns
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Cache_namespace"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp is defined
+          - _nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'custom_ns_web1') | list | length == 1
+          - _nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_web1') | list | length == 0
+        success_msg: "PASS: cache_namespace 'custom_ns' used as prefix, not 'myapp'"
+        fail_msg: >-
+          FAIL: upstreams={{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+            | map(attribute='name') | list }}
+
+
+- name: "NAMESPACE | server_name used when name absent"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - server_name: api.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Server_name"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime['api.example.com'] is defined
+          - _nginx_server_runtime['api.example.com'].upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'api_example_com_web1') | list | length == 1
+        success_msg: "PASS: server_name 'api.example.com' slugs to 'api_example_com'"
+        fail_msg: >-
+          FAIL: runtime keys={{ _nginx_server_runtime.keys() | list }},
+          upstreams={{ (_nginx_server_runtime.values() | first).upstreams_registry.materialized
+            | map(attribute='name') | list }}

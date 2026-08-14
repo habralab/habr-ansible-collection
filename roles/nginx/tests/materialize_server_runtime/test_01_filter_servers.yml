@@ -1,0 +1,214 @@
+---
+# Tests for nginx_only_servers filtering logic.
+# Covers: empty filter, exact match, glob, dot escaping, comma-string, list input.
+
+- name: "FILTER | empty pattern selects all servers"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+      - name: static
+        server_name: static.example.com
+      - name: admin
+        server_name: admin.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Empty filter keeps all 3 servers"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 3
+          - _nginx_server_runtime | length == 3
+        success_msg: "PASS: empty filter keeps all 3 servers"
+        fail_msg: >-
+          FAIL: expected 3 servers, selected={{ _nginx_selected_servers | length }},
+          runtime={{ _nginx_server_runtime | length }}
+
+
+- name: "FILTER | exact name match"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: ["api"]
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+      - name: static
+        server_name: static.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Exact name match selects exactly one server"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 1
+          - _nginx_selected_servers[0].name == 'api'
+        success_msg: "PASS: exact name match selects exactly one server"
+        fail_msg: "FAIL: selected={{ _nginx_selected_servers | map(attribute='name') | list }}"
+
+
+- name: "FILTER | glob pattern matches by prefix"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: ["api*"]
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+      - name: api-v2
+        server_name: api-v2.example.com
+      - name: static
+        server_name: static.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Glob"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 2
+          - _nginx_selected_servers | selectattr('name', 'equalto', 'api') | list | length == 1
+          - _nginx_selected_servers | selectattr('name', 'equalto', 'api-v2') | list | length == 1
+        success_msg: "PASS: glob 'api*' matches 'api' and 'api-v2'"
+        fail_msg: "FAIL: selected={{ _nginx_selected_servers | map(attribute='name') | list }}"
+
+
+- name: "FILTER | dot in pattern is literal, not regex wildcard"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    # Pattern "my.app" must NOT match "myXapp" — dot must be escaped to \.
+    nginx_only_servers: ["my.app"]
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: my.app
+        server_name: my.app.example.com
+      - name: myXapp
+        server_name: myXapp.example.com
+      - name: my_app
+        server_name: my_app.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Dot in pattern matches literally, not as regex wildcard"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 1
+          - _nginx_selected_servers[0].name == 'my.app'
+        success_msg: "PASS: dot in pattern matches literally, not as regex wildcard"
+        fail_msg: "FAIL: selected={{ _nginx_selected_servers | map(attribute='name') | list }}"
+
+
+- name: "FILTER | comma-separated string splits into multiple patterns"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: "api, static"
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+      - name: static
+        server_name: static.example.com
+      - name: admin
+        server_name: admin.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Comma-string"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 2
+          - _nginx_selected_servers | selectattr('name', 'equalto', 'api') | list | length == 1
+          - _nginx_selected_servers | selectattr('name', 'equalto', 'static') | list | length == 1
+        success_msg: "PASS: comma-string 'api, static' selects both servers"
+        fail_msg: "FAIL: selected={{ _nginx_selected_servers | map(attribute='name') | list }}"
+
+
+- name: "FILTER | pattern matched against server_name identity"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: ["api.example.com"]
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - server_name: api.example.com
+      - server_name: static.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Pattern matches server_name identity field"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 1
+          - _nginx_selected_servers[0].server_name == 'api.example.com'
+        success_msg: "PASS: pattern matches server_name identity field"
+        fail_msg: "FAIL: selected={{ _nginx_selected_servers }}"
+
+
+- name: "FILTER | no match yields empty runtime"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: ["nonexistent"]
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Unmatched pattern yields empty selection and runtime"
+      ansible.builtin.assert:
+        that:
+          - _nginx_selected_servers | length == 0
+          - _nginx_server_runtime | length == 0
+        success_msg: "PASS: unmatched pattern yields empty selection and runtime"
+        fail_msg: "FAIL: selected={{ _nginx_selected_servers }}"

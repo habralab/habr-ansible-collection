@@ -1,0 +1,48 @@
+---
+__nginx_server_runtime_identity_fields:
+  - "cache_namespace"
+  - "name"
+  - "server_name"
+  - "filename"
+
+__nginx_server_runtime_registry_specs:
+  base:
+    upstream_members:
+      input_field: "upstream_members"
+      derived_field: "_nginx_derived_upstream_members"
+      key_field: "name"
+      runtime_key: "upstream_members_registry"
+    upstream_pools:
+      input_field: "upstream_pools"
+      derived_field: "_nginx_derived_upstream_pools"
+      key_field: "name"
+      runtime_key: "upstream_pools_registry"
+    upstream_selection:
+      input_field: "upstream_selection"
+      derived_field: "_nginx_derived_upstream_selection"
+      key_field: "name"
+      runtime_key: "upstream_selection_registry"
+  final:
+    geos:
+      key_field: "target"
+      runtime_key: "geos_registry"
+    maps:
+      key_field: "target"
+      runtime_key: "maps_registry"
+    upstreams:
+      key_field: "name"
+      runtime_key: "upstreams_registry"
+    proxy_set_header:
+      key_field: "name"
+      runtime_key: "proxy_set_header_registry"
+
+__nginx_server_runtime_feature_defaults:
+  recursive_scheme_header:
+    source: "$http_x_forwarded_proto"
+    target_suffix: "request_scheme"
+    default: "$scheme"
+    allowed_values:
+      - "http"
+      - "https"
+    case_sensitive: false
+    proxy_set_header_name: "X-Forwarded-Proto"

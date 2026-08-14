@@ -1,0 +1,636 @@
+---
+# Declarative directive registry for servers/vhost.
+# Rules:
+# - keep directive keys sorted alphabetically
+# - each entry describes nginx directive name, renderer, supported contexts
+# - optional `default` is part of the data-model, not template hardcode
+# - optional `spacing: true|false` belongs here, not in the template
+# - `spacing: true` means "this item wants air around itself"; between siblings the template inserts one blank line when either adjacent item requests spacing
+__nginx_server_vhost_directive_specs:
+  # alias path;
+  alias:
+    directive: "alias"
+    renderer: "scalar"
+    contexts:
+      - "location"
+    spacing: false
+
+  # allow address | CIDR | unix: | all;
+  allow:
+    directive: "allow"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # client_body_timeout time;
+  client_body_timeout:
+    directive: "client_body_timeout"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # client_max_body_size size;
+  client_max_body_size:
+    directive: "client_max_body_size"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # deny address | CIDR | unix: | all;
+  deny:
+    directive: "deny"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # empty_gif;
+  empty_gif:
+    directive: "empty_gif"
+    renderer: "bare"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # expires [modified] time | epoch | max | off;
+  expires:
+    directive: "expires"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # fastcgi_index name;
+  fastcgi_index:
+    directive: "fastcgi_index"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # fastcgi_keep_conn on | off;
+  fastcgi_keep_conn:
+    directive: "fastcgi_keep_conn"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # fastcgi_pass address;
+  fastcgi_pass:
+    directive: "fastcgi_pass"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # fastcgi_split_path_info regex;
+  fastcgi_split_path_info:
+    directive: "fastcgi_split_path_info"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # http2 on | off;
+  http2:
+    directive: "http2"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+    spacing: false
+
+  # include file | mask;
+  includes:
+    directive: "include"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # lingering_timeout time;
+  lingering_timeout:
+    directive: "lingering_timeout"
+    renderer: "scalar"
+    contexts:
+      - "location"
+    spacing: false
+
+  # listen address[:port] [params];
+  listen:
+    directive: "listen"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+    default:
+      - "80"
+      - "[::]:80"
+    spacing: false
+
+  # log_not_found on | off;
+  log_not_found:
+    directive: "log_not_found"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # port_in_redirect on | off;
+  port_in_redirect:
+    directive: "port_in_redirect"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+    spacing: false
+
+  # proxy_buffer_size size;
+  proxy_buffer_size:
+    directive: "proxy_buffer_size"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_buffering on | off;
+  proxy_buffering:
+    directive: "proxy_buffering"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: true
+
+  # proxy_buffers number size;
+  proxy_buffers:
+    directive: "proxy_buffers"
+    renderer: "proxy_buffers"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache zone | off;
+  proxy_cache:
+    directive: "proxy_cache"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: true
+
+  # proxy_cache_background_update on | off;
+  proxy_cache_background_update:
+    directive: "proxy_cache_background_update"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_key string;
+  proxy_cache_key:
+    directive: "proxy_cache_key"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_bypass string ...;
+  proxy_cache_bypass:
+    directive: "proxy_cache_bypass"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_min_uses number;
+  proxy_cache_min_uses:
+    directive: "proxy_cache_min_uses"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_cache_use_stale error timeout ...;
+  proxy_cache_use_stale:
+    directive: "proxy_cache_use_stale"
+    renderer: "join_space"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_no_cache string ...;
+  proxy_no_cache:
+    directive: "proxy_no_cache"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_connect_timeout time;
+  proxy_connect_timeout:
+    directive: "proxy_connect_timeout"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_hide_header field;
+  proxy_hide_header:
+    directive: "proxy_hide_header"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+      - "location"
+    spacing: true
+
+  # proxy_http_version 1.0 | 1.1;
+  proxy_http_version:
+    directive: "proxy_http_version"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_ignore_headers field ...;
+  proxy_ignore_headers:
+    directive: "proxy_ignore_headers"
+    renderer: "join_space"
+    contexts:
+      - "server"
+      - "location"
+    spacing: true
+
+  # proxy_pass_header field;
+  proxy_pass_header:
+    directive: "proxy_pass_header"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+      - "location"
+    spacing: true
+
+  # proxy_intercept_errors on | off;
+  proxy_intercept_errors:
+    directive: "proxy_intercept_errors"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_max_temp_file_size size;
+  proxy_max_temp_file_size:
+    directive: "proxy_max_temp_file_size"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_next_upstream error timeout ...;
+  proxy_next_upstream:
+    directive: "proxy_next_upstream"
+    renderer: "join_space"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_read_timeout time;
+  proxy_read_timeout:
+    directive: "proxy_read_timeout"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_send_timeout time;
+  proxy_send_timeout:
+    directive: "proxy_send_timeout"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # proxy_request_buffering on | off;
+  proxy_request_buffering:
+    directive: "proxy_request_buffering"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # rewrite_log on | off;
+  rewrite_log:
+    directive: "rewrite_log"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+    spacing: false
+
+  # recursive_error_pages on | off;
+  recursive_error_pages:
+    directive: "recursive_error_pages"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # satisfy all | any;
+  satisfy:
+    directive: "satisfy"
+    renderer: "scalar"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
+  # send_timeout time;
+  send_timeout:
+    directive: "send_timeout"
+    renderer: "scalar"
+    contexts:
+      - "location"
+    spacing: false
+
+  # server_name name ...;
+  server_name:
+    directive: "server_name"
+    renderer: "join_space"
+    contexts:
+      - "server"
+    default: "_"
+    spacing: false
+
+  # server_tokens on | off;
+  server_tokens:
+    directive: "server_tokens"
+    renderer: "bool_on_off"
+    contexts:
+      - "server"
+    spacing: false
+
+  # set $variable value;
+  set:
+    directive: "set"
+    renderer: "name_value_list"
+    contexts:
+      - "server"
+      - "location"
+      - "if"
+    spacing: false
+
+# Declarative block registry for servers/vhost.
+# Rules:
+# - block keys describe human-oriented directive groups, not nginx syntax nodes
+# - members may reference directives or composite fields
+# - title controls rendered section title; empty title means unnamed block
+# - keep block keys sorted by chosen render order only, not alphabetically
+# - `spacing: true|false` belongs here, not in the template
+# - block spacing is the fallback for members/directives that do not define their own spacing
+__nginx_server_vhost_block_specs:
+  listen:
+    title: ""
+    mock_name: "listen"
+    spacing: false
+    members:
+      - listen
+      - http2
+
+  identity:
+    title: "Server"
+    mock_name: "server"
+    spacing: true
+    members:
+      - server_name
+      - server_tokens
+
+  logs:
+    title: "Logs"
+    mock_name: "logs"
+    spacing: true
+    members:
+      - access_log
+      - error_log
+      - log_not_found
+      - rewrite_log
+
+  ssl:
+    title: "SSL"
+    mock_name: "ssl"
+    spacing: true
+    members:
+      - ssl_files
+      - ssl_certificate
+      - ssl_certificate_key
+      - ssl_provisioning
+
+  auth:
+    title: "Auth"
+    mock_name: "auth"
+    spacing: true
+    members:
+      - allow
+      - auth_basic
+      - auth_list
+      - deny
+      - satisfy
+
+  headers:
+    title: "Add Headers"
+    mock_name: "headers"
+    spacing: true
+    members:
+      - add_header
+      - expires
+      - proxy_cache_status_header
+
+  tuning:
+    title: "Tuning"
+    mock_name: "tuning"
+    spacing: true
+    members:
+      - client_body_timeout
+      - client_max_body_size
+      - port_in_redirect
+
+  directives:
+    title: "Directives"
+    mock_name: "directives"
+    spacing: true
+    members:
+      - includes
+      - set
+
+  conditions:
+    title: "Conditions"
+    mock_name: "conditions"
+    spacing: true
+    members:
+      - if
+
+  proxy:
+    title: "Proxy"
+    mock_name: "proxy"
+    spacing: true
+    members:
+      - proxy_http_version
+      - proxy_next_upstream
+      - proxy_connect_timeout
+      - proxy_read_timeout
+      - proxy_send_timeout
+      - proxy_buffering
+      - proxy_request_buffering
+      - proxy_buffer_size
+      - proxy_buffers
+      - proxy_max_temp_file_size
+      - proxy_cache
+      - proxy_cache_bypass
+      - proxy_cache_key
+      - proxy_cache_min_uses
+      - proxy_cache_background_update
+      - proxy_no_cache
+      - proxy_cache_use_stale
+      - proxy_cache_valid
+      - proxy_pass_header
+      - proxy_hide_header
+      - proxy_ignore_headers
+      - proxy_intercept_errors
+      - proxy_set_header
+      - proxy_pass
+      - fastcgi_pass
+      - fastcgi_keep_conn
+      - fastcgi_index
+      - fastcgi_split_path_info
+      - fastcgi_params
+      - empty_gif
+
+  rewrites:
+    title: "Rewrites"
+    mock_name: "rewrites"
+    spacing: true
+    members:
+      - rewrite
+
+  routing:
+    title: "Routing"
+    mock_name: "routing"
+    spacing: true
+    members:
+      - alias
+      - index
+      - root
+      - try_files
+
+  errors:
+    title: "Errors"
+    mock_name: "errors"
+    spacing: true
+    members:
+      - error_page
+      - recursive_error_pages
+
+  return:
+    title: ""
+    mock_name: "return"
+    spacing: true
+    members:
+      - return
+
+  locations:
+    title: "Locations"
+    mock_name: "locations"
+    spacing: true
+    members:
+      - locations
+
+  extra:
+    title: ""
+    mock_name: "extra"
+    spacing: true
+    members:
+      - extra
+
+# Declarative context registry for servers/vhost.
+# Rules:
+# - context keys are render contexts, not data objects
+# - `block_order` is authoritative
+# - context-level indentation lives here; spacing belongs to blocks/directives
+# - keep context keys stable; extend by adding new contexts, not ad-hoc ifs in tpl
+__nginx_server_vhost_context_specs:
+  upstream:
+    indent: ""
+    show_block_titles: false
+
+  server:
+    indent: "\t"
+    show_block_titles: true
+    block_order:
+      - listen
+      - identity
+      - logs
+      - ssl
+      - auth
+      - headers
+      - tuning
+      - directives
+      - conditions
+      - proxy
+      - rewrites
+      - routing
+      - errors
+      - return
+      - locations
+      - extra
+
+  location:
+    indent: "\t\t"
+    show_block_titles: false
+    block_order:
+      - logs
+      - auth
+      - headers
+      - tuning
+      - directives
+      - conditions
+      - proxy
+      - errors
+      - rewrites
+      - routing
+      - return
+      - extra
+
+__nginx_server_vhost_mode:
+  render_directives: true
+  debug:
+    render_blocks: false
+    render_members: false
+    block_prefix: "debug block: "

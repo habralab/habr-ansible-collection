@@ -1,0 +1,13 @@
+---
+# Reusable ip_set definitions for maintenance trigger tests.
+# Load via vars_files in plays that test ip_sets triggers.
+
+nginx_ip_sets:
+  office_ips:
+    - net: "10.0.1.0/24"
+    - net: "10.0.2.5/32"
+  cdn_ips:
+    - "192.168.100.0/24"
+    - "192.168.101.0/24"
+  single_ip:
+    - net: "203.0.113.42/32"

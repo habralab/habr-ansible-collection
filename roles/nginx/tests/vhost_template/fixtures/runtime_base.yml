@@ -1,0 +1,15 @@
+---
+# Minimal nginx_server_runtime skeleton for vhost template tests.
+# Load via vars_files, then override specific registries per test.
+nginx_server_runtime:
+  geos_registry:
+    materialized: []
+  maps_registry:
+    materialized: []
+  upstreams_registry:
+    materialized: []
+  proxy_set_header_registry:
+    materialized: []
+  if: []
+  error_page: []
+  locations: []

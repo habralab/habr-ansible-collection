@@ -1,0 +1,18 @@
+##
+# {{ item.value['description'] | default(item.key | title ~ ' Settings') }}
+##
+
+{% set _active_vars = q('varnames', item.value.triggers | join('|')) %}
+{% for _directive in item.value['keys'] %}
+{% set _var = 'nginx_' ~ _directive %}
+{% if _var in _active_vars %}
+{% set _val = lookup('vars', _var) %}
+{% if _val is boolean %}
+{{ _directive }} {{ _val | ternary('on', 'off') }};
+{% elif _val is sequence and _val is not string %}
+{{ _directive }} {{ _val | join(' ') }};
+{% else %}
+{{ _directive }} {{ _val }};
+{% endif %}
+{% endif %}
+{% endfor %}

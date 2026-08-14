@@ -1,0 +1,199 @@
+user {{ _nginx_runtime_user }};
+worker_processes {{ nginx_worker_processes | default('auto') }};
+{% if nginx_worker_rlimit_nofile is defined %}
+worker_rlimit_nofile {{ nginx_worker_rlimit_nofile | int }};
+{% endif %}
+pid {{ nginx_pid_file | default('/run/nginx.pid') }};
+error_log {{ nginx_error_log | default('/var/log/nginx/error.log') }};
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+{% if nginx_use is defined %}
+	use {{ nginx_use }};
+{% endif %}
+	worker_connections {{ nginx_worker_connections | default(768) | int }};
+{% if nginx_multi_accept is defined %}
+	multi_accept {{ nginx_multi_accept | bool | ternary('on', 'off') }};
+{% else %}
+	# multi_accept on;
+{% endif %}
+}
+
+http {
+
+	##
+	# Basic Settings
+	##
+
+	sendfile {{ nginx_sendfile | default(true) | bool | ternary('on', 'off') }};
+	tcp_nopush {{ nginx_tcp_nopush | default(true) | bool | ternary('on', 'off') }};
+{% if nginx_tcp_nodelay is defined %}
+	tcp_nodelay {{ nginx_tcp_nodelay | bool | ternary('on', 'off') }};
+{% endif %}
+	types_hash_max_size {{ nginx_types_hash_max_size | default(2048) }};
+{% if nginx_server_tokens is defined %}
+	server_tokens {{ nginx_server_tokens | bool | ternary('on', 'off') }};
+{% else %}
+	# server_tokens off;
+{% endif %}
+
+{% if nginx_map_hash_max_size is defined %}
+	map_hash_max_size {{ nginx_map_hash_max_size }};
+{% endif %}
+{% if nginx_map_hash_bucket_size is defined %}
+	map_hash_bucket_size {{ nginx_map_hash_bucket_size }};
+{% endif %}
+{% if nginx_variables_hash_max_size is defined %}
+	variables_hash_max_size {{ nginx_variables_hash_max_size }};
+{% endif %}
+{% if nginx_variables_hash_bucket_size is defined %}
+	variables_hash_bucket_size {{ nginx_variables_hash_bucket_size }};
+{% endif %}
+{% if nginx_server_names_hash_max_size is defined %}
+	server_names_hash_max_size {{ nginx_server_names_hash_max_size }};
+{% endif %}
+{% if nginx_server_names_hash_bucket_size is defined %}
+	server_names_hash_bucket_size {{ nginx_server_names_hash_bucket_size }};
+{% else %}
+	# server_names_hash_bucket_size 64;
+{% endif %}
+{% if nginx_server_name_in_redirect is defined %}
+	server_name_in_redirect {{ nginx_server_name_in_redirect | bool | ternary('on', 'off') }};
+{% else %}
+	# server_name_in_redirect off;
+{% endif %}
+{% if nginx_client_max_body_size is defined %}
+	client_max_body_size {{ nginx_client_max_body_size }};
+{% endif %}
+{% if nginx_client_body_buffer_size is defined %}
+	client_body_buffer_size {{ nginx_client_body_buffer_size }};
+{% endif %}
+
+	include /etc/nginx/mime.types;
+	default_type {{ nginx_default_type | default('application/octet-stream') }};
+{% if nginx_keepalive_timeout is defined %}
+	keepalive_timeout {{ nginx_keepalive_timeout | default(65) | int }};
+{% endif %}
+
+	##
+	# SSL Settings
+	##
+
+{% if nginx_ssl_protocols is defined %}
+	ssl_protocols {{ nginx_ssl_protocols | join(' ') if nginx_ssl_protocols is sequence and nginx_ssl_protocols is not string else nginx_ssl_protocols }};
+{% else %}
+	ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
+{% endif %}
+{% if nginx_ssl_prefer_server_ciphers is defined %}
+	ssl_prefer_server_ciphers {{ nginx_ssl_prefer_server_ciphers | bool | ternary('on', 'off') }};
+{% else %}
+	ssl_prefer_server_ciphers on;
+{% endif %}
+{% if nginx_ssl_ciphers is defined %}
+	ssl_ciphers {{ nginx_ssl_ciphers | join(':') if nginx_ssl_ciphers is sequence and nginx_ssl_ciphers is not string else nginx_ssl_ciphers }};
+{% endif %}
+{% if nginx_ssl_session_cache is defined %}
+	ssl_session_cache {{ nginx_ssl_session_cache }};
+{% endif %}
+{% if nginx_ssl_dhparam_file is defined %}
+	ssl_dhparam {{ nginx_ssl_dhparam_file }};
+{% endif %}
+
+	##
+	# Logging Settings
+	##
+
+{% if nginx_log_format is defined %}
+{% for log in nginx_log_format %}
+{% set _decl = "log_format " ~ log.name ~ ((" escape=" ~ log.escape) if log.escape is defined else "") %}
+{% set _align_spaces = _decl | length + 1 %}
+{% for string in log.string %}
+{% if loop.first %}
+	{{ _decl }} '{{ string }}'{% if loop.length == 1 %};{% endif %}{{ '' }}
+{% else %}
+	{{ ' ' * _align_spaces }}'{{ string }}'{% if loop.last %};{% endif %}{{ '' }}
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+{% endif %}
+	access_log {{ nginx_access_log | default('/var/log/nginx/access.log') }};
+
+	##
+	# Gzip Settings
+	##
+
+{% if nginx_gzip is defined %}
+	gzip {{ nginx_gzip | bool | ternary('on', 'off') }};
+{% else %}
+	gzip on;
+{% endif %}
+
+{% if nginx_gzip_vary is defined %}
+	gzip_vary {{ nginx_gzip_vary | bool | ternary('on', 'off') }};
+{% else %}
+	# gzip_vary on;
+{% endif %}
+{% if nginx_gzip_proxied is defined %}
+	gzip_proxied {{ nginx_gzip_proxied }};
+{% else %}
+	# gzip_proxied any;
+{% endif %}
+{% if nginx_gzip_comp_level is defined %}
+	gzip_comp_level {{ nginx_gzip_comp_level | int }};
+{% else %}
+	# gzip_comp_level 6;
+{% endif %}
+{% if nginx_gzip_buffers is defined %}
+	gzip_buffers {{ nginx_gzip_buffers }};
+{% else %}
+	# gzip_buffers 16 8k;
+{% endif %}
+{% if nginx_gzip_http_version is defined %}
+	gzip_http_version {{ nginx_gzip_http_version }};
+{% else %}
+	# gzip_http_version 1.1;
+{% endif %}
+{% if nginx_gzip_types is defined %}
+	gzip_types {{ nginx_gzip_types | join(' ') if nginx_gzip_types is sequence and nginx_gzip_types is not string else nginx_gzip_types }};
+{% else %}
+	# gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+{% endif %}
+{% if nginx_gzip_disable is defined %}
+	gzip_disable {{ nginx_gzip_disable | join(' ') if nginx_gzip_disable is sequence and nginx_gzip_disable is not string else nginx_gzip_disable }};
+{% endif %}
+{% if nginx_gzip_min_length is defined %}
+	gzip_min_length {{ nginx_gzip_min_length }};
+{% endif %}
+
+	##
+	# Virtual Host Configs
+	##
+
+{% set _all_http_includes = (__nginx_layouts_config[_nginx_active_layout].http_includes | default([])) + (nginx_http_includes | default([])) %}
+{% for inc in _all_http_includes | unique %}
+	include {{ inc }};
+{% endfor %}
+}
+
+
+#mail {
+#	# See sample authentication script at:
+#	# http://wiki.nginx.org/ImapAuthenticateWithApachePhpScript
+#
+#	# auth_http localhost/auth.php;
+#	# pop3_capabilities "TOP" "USER";
+#	# imap_capabilities "IMAP4rev1" "UIDPLUS";
+#
+#	server {
+#		listen     localhost:110;
+#		protocol   pop3;
+#		proxy      on;
+#	}
+#
+#	server {
+#		listen     localhost:143;
+#		protocol   imap;
+#		proxy      on;
+#	}
+#}

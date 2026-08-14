@@ -1,0 +1,246 @@
+---
+# Tests for upstream_selection → derived maps logic.
+# Selections generate nginx map blocks that route traffic to different upstreams
+# based on a source variable (cookie, header expression, etc.).
+
+- name: "SELECTION | cookie source generates map from $cookie_name"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_selection:
+          - name: backend_override
+            source:
+              cookie: backend
+            default_target: ""
+            selectors: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_sel_map"
+      ansible.builtin.set_fact:
+        nginx_t_sel_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'backend_override') | first }}
+    - name: "Cookie source"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_sel_map.source == '$cookie_backend'
+          - nginx_t_sel_map.target == '$myapp_upstream_selection_backend_override'
+        success_msg: "PASS: cookie source 'backend' maps from '$cookie_backend'"
+        fail_msg: "FAIL: map={{ nginx_t_sel_map | to_nice_json }}"
+
+
+- name: "SELECTION | source.name is alias for source.cookie"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_selection:
+          - name: route
+            source:
+              name: routing_cookie
+            default_target: ""
+            selectors: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_sel_map"
+      ansible.builtin.set_fact:
+        nginx_t_sel_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'route') | first }}
+    - name: "Source.name"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_sel_map.source == '$cookie_routing_cookie'
+        success_msg: "PASS: source.name 'routing_cookie' treated as cookie"
+        fail_msg: "FAIL: map source={{ nginx_t_sel_map.source }}"
+
+
+- name: "SELECTION | expression source used verbatim"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_selection:
+          - name: by_header
+            source:
+              expression: "$http_x_target_backend"
+            default_target: ""
+            selectors: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_sel_map"
+      ansible.builtin.set_fact:
+        nginx_t_sel_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'by_header') | first }}
+    - name: "Expression source used verbatim as map source"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_sel_map.source == '$http_x_target_backend'
+        success_msg: "PASS: expression source used verbatim as map source"
+        fail_msg: "FAIL: map source={{ nginx_t_sel_map.source }}"
+
+
+- name: "SELECTION | default_target pool name resolved to namespaced upstream"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+          - name: web2
+            address: "10.0.0.2:8080"
+        upstream_pools:
+          - name: web
+            members: [web1, web2]
+        upstream_selection:
+          - name: route
+            source:
+              cookie: backend
+            default_target: web
+            selectors: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_sel_map"
+      ansible.builtin.set_fact:
+        nginx_t_sel_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'route') | first }}
+    - name: "Default_target"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_sel_map.default == 'myapp_web'
+        success_msg: "PASS: default_target 'web' resolved to namespaced 'myapp_web'"
+        fail_msg: "FAIL: map default={{ nginx_t_sel_map.default }}"
+
+
+- name: "SELECTION | selector targets resolved to namespaced upstream names"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: canary
+            address: "10.0.0.10:8080"
+          - name: stable
+            address: "10.0.0.1:8080"
+        upstream_selection:
+          - name: route
+            source:
+              cookie: backend
+            default_target: stable
+            selectors:
+              - value: "canary"
+                target: canary
+              - value: "stable"
+                target: stable
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_sel_map"
+      ansible.builtin.set_fact:
+        nginx_t_sel_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'route') | first }}
+    - name: "Selectors target"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_sel_map.default == 'myapp_stable'
+          - nginx_t_sel_map.entries | selectattr('match', 'equalto', 'canary')
+              | map(attribute='value') | first == 'myapp_canary'
+          - nginx_t_sel_map.entries | selectattr('match', 'equalto', 'stable')
+              | map(attribute='value') | first == 'myapp_stable'
+        success_msg: "PASS: selectors target 'canary'/'stable' resolved to namespaced upstreams"
+        fail_msg: "FAIL: map={{ nginx_t_sel_map | to_nice_json }}"
+
+
+- name: "SELECTION | absent selection excluded from derived maps"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_selection:
+          - name: route
+            state: absent
+            source:
+              cookie: backend
+            default_target: ""
+            selectors: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Absent selection not present in derived maps"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.maps_registry.derived
+              | selectattr('name', 'equalto', 'route') | list | length == 0
+        success_msg: "PASS: absent selection not present in derived maps"
+        fail_msg: >-
+          FAIL: derived maps={{ _nginx_server_runtime.myapp.maps_registry.derived
+            | map(attribute='name') | list }}
