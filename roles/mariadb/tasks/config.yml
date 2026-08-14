@@ -1,0 +1,86 @@
+---
+- name: Select MariaDB configuration validator
+  ansible.builtin.set_fact:
+    _mariadb_config_validator: >-
+      {{
+        '/usr/sbin/mariadbd'
+        if mariadb_modern_server_binary.stat.exists
+        else '/usr/sbin/mysqld'
+      }}
+
+- name: Inspect installed MariaDB version
+  ansible.builtin.command:
+    argv:
+      - "{{ _mariadb_config_validator }}"
+      - --version
+  register: mariadb_installed_version
+  changed_when: false
+  check_mode: false
+
+- name: Parse installed MariaDB version
+  ansible.builtin.set_fact:
+    _mariadb_installed_version: >-
+      {{
+        mariadb_installed_version.stdout
+        | regex_search('(?<=Ver )[0-9]+\.[0-9]+(?:\.[0-9]+)?')
+      }}
+
+- name: Validate MariaDB configuration compatibility
+  ansible.builtin.assert:
+    that:
+      - _mariadb_installed_version | length > 0
+      - _mariadb_installed_version is version('10.3', '>=')
+    fail_msg: >-
+      Unable to select a supported configuration epoch from:
+      {{ mariadb_installed_version.stdout }}
+
+- name: Load MariaDB configuration epoch
+  ansible.builtin.include_vars:
+    file: >-
+      {{
+        'config_10_6.yml'
+        if _mariadb_installed_version is version('10.6', '>=')
+        else 'config_10_3.yml'
+      }}
+
+- name: Build effective MariaDB configuration
+  ansible.builtin.set_fact:
+    _mariadb_config_effective: >-
+      {{
+        _mariadb_config_common
+        | combine(_mariadb_config_epoch, recursive=true)
+        | combine(mariadb_config, recursive=true)
+      }}
+
+- name: Validate MariaDB configuration sections
+  ansible.builtin.assert:
+    that:
+      - item.key is string
+      - item.key | length > 0
+      - item.value is mapping
+    fail_msg: >-
+      mariadb_config must map non-empty option-group names to mappings of
+      MariaDB directives.
+  loop: "{{ _mariadb_config_effective | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Install managed MariaDB configuration
+  ansible.builtin.template:
+    src: 90-ansible.cnf.j2
+    dest: "{{ _mariadb_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: >-
+      {{ _mariadb_config_validator }}
+      --defaults-file=%s --verbose --help
+  notify: Restart MariaDB
+  when: mariadb_config_manage | bool
+
+- name: Remove unused managed MariaDB configuration
+  ansible.builtin.file:
+    path: "{{ _mariadb_config_file }}"
+    state: absent
+  notify: Restart MariaDB
+  when: not mariadb_config_manage | bool

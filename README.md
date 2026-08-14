@@ -36,6 +36,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `locale`: Declarative management of generated system locales and default `LANG`.
+- `mariadb`: Installs and configures MariaDB Community Server from its upstream repository.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nginx`: Installs and configures Nginx using a layout-driven approach (Debian/Upstream).
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.

@@ -1,0 +1,20 @@
+# Managed by Ansible. Local changes will be overwritten.
+{% for section, options in _mariadb_config_effective.items() %}
+[{{ section }}]
+{% for option, value in options.items() %}
+{% if value is not sameas false %}
+{% if value is sequence and value is not string %}
+{% for repeated_value in value %}
+{{ option }}{% if repeated_value is not none %} = {{ repeated_value }}{% endif %}{{ '\n' -}}
+{% endfor %}
+{% elif value is none %}
+{{ option }}
+{% elif value is sameas true %}
+{{ option }} = ON
+{% else %}
+{{ option }} = {{ value }}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+{% endfor %}

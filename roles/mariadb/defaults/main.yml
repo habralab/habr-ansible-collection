@@ -1,0 +1,29 @@
+---
+mariadb_version: "12.rolling"
+
+mariadb_repository_name: mariadb
+mariadb_repository_url: >-
+  https://dlm.mariadb.com/repo/mariadb-server/{{ mariadb_version }}/repo/ubuntu
+mariadb_repository_suite: "{{ ansible_facts['distribution_release'] }}"
+mariadb_repository_components:
+  - main
+mariadb_repository_arch: >-
+  {{
+    {
+      'x86_64': 'amd64',
+      'aarch64': 'arm64'
+    }.get(ansible_facts['architecture'], ansible_facts['architecture'])
+  }}
+mariadb_repository_key_url: >-
+  https://supplychain.mariadb.com/mariadb-keyring-2019.gpg
+mariadb_repository_keyring: /etc/apt/keyrings/mariadb-keyring.gpg
+
+mariadb_packages:
+  - mariadb-server
+  - mariadb-client
+mariadb_service_name: mariadb
+mariadb_service_enabled: true
+mariadb_service_state: started
+
+mariadb_config_manage: true
+mariadb_config: {}

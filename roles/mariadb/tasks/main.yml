@@ -1,0 +1,127 @@
+---
+- name: Configure MariaDB APT repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - mariadb
+        - mariadb_repository
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ mariadb_repository_name }}"
+      url: "{{ mariadb_repository_url }}"
+      suite: "{{ mariadb_repository_suite }}"
+      components: "{{ mariadb_repository_components }}"
+      arch: "{{ mariadb_repository_arch }}"
+      key_url: "{{ mariadb_repository_key_url }}"
+      keyring: "{{ mariadb_repository_keyring }}"
+      state: present
+  tags:
+    - mariadb
+    - mariadb_repository
+    - apt
+
+- name: Apply MariaDB repository cache update
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - mariadb
+    - mariadb_repository
+    - apt
+
+- name: Inspect MariaDB package candidate
+  ansible.builtin.command:
+    argv:
+      - apt-cache
+      - policy
+      - mariadb-server
+  environment:
+    LC_ALL: C
+  register: mariadb_package_policy
+  changed_when: false
+  check_mode: false
+  tags:
+    - mariadb
+    - mariadb_packages
+    - apt
+
+- name: Validate MariaDB package candidate
+  ansible.builtin.assert:
+    that:
+      - >-
+        mariadb_package_policy.stdout is search(
+          'Candidate:\\s+[^\\s]*' ~
+          (mariadb_version | regex_replace('\\.rolling$', '') | regex_escape) ~
+          '\\.'
+        )
+      - mariadb_repository_url in mariadb_package_policy.stdout
+    fail_msg: >-
+      The mariadb-server APT candidate does not match the requested
+      {{ mariadb_version }} channel or series, or APT policy does not contain
+      the configured {{ mariadb_repository_url }} repository:
+      {{ mariadb_package_policy.stdout }}
+  tags:
+    - mariadb
+    - mariadb_packages
+    - apt
+
+- name: Install MariaDB packages
+  ansible.builtin.apt:
+    name: "{{ mariadb_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags:
+    - mariadb
+    - mariadb_packages
+    - apt
+
+- name: Ensure MariaDB service state
+  ansible.builtin.service:
+    name: "{{ mariadb_service_name }}"
+    enabled: "{{ mariadb_service_enabled }}"
+    state: "{{ mariadb_service_state }}"
+  # The unit does not exist yet when package installation is only predicted.
+  when: not ansible_check_mode
+  tags:
+    - mariadb
+    - mariadb_packages
+
+- name: Validate MariaDB configuration container
+  ansible.builtin.assert:
+    that:
+      - mariadb_config is mapping
+    fail_msg: mariadb_config must be a mapping of option-group names.
+  tags:
+    - mariadb
+    - mariadb_config
+
+- name: Inspect modern MariaDB server binary
+  ansible.builtin.stat:
+    path: /usr/sbin/mariadbd
+  register: mariadb_modern_server_binary
+  tags:
+    - mariadb
+    - mariadb_config
+
+- name: Inspect legacy MariaDB server binary
+  ansible.builtin.stat:
+    path: /usr/sbin/mysqld
+  register: mariadb_legacy_server_binary
+  tags:
+    - mariadb
+    - mariadb_config
+
+- name: Manage versioned MariaDB configuration
+  ansible.builtin.include_tasks:
+    file: config.yml
+    apply:
+      tags:
+        - mariadb
+        - mariadb_config
+  when: >-
+    mariadb_modern_server_binary.stat.exists
+    or mariadb_legacy_server_binary.stat.exists
+  tags:
+    - mariadb
+    - mariadb_config
