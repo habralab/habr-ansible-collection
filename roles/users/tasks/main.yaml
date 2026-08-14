@@ -6,6 +6,7 @@
     system: "{{ item.system | default(false) }}"
     password: "{{ item.password | default(omit) }}"
     shell: "{{ item.shell | default(omit) }}"
+    home: "{{ item.home | default(omit) }}"
     create_home: "{{ item.create_home | default(omit) }}"
     remove: "{{ item.remove | default(omit) }}"
     group: "{{ item.group | default(omit) }}"
