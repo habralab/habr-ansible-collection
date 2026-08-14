@@ -1,0 +1,51 @@
+---
+redis_repository: ubuntu
+redis_repository_manage: true
+
+redis_redislabs_repository_name: redislabs-redis
+redis_redislabs_repository_url: https://ppa.launchpadcontent.net/redislabs/redis/ubuntu
+redis_redislabs_repository_key_url: >-
+  https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x60A0586666DE0BA4B481628ACC59E6B43FA6E3CA
+
+redis_server_packages:
+  - redis-server
+redis_server_enabled: true
+redis_server_package_state: present
+redis_server_service_name: redis-server
+redis_server_service_enabled: true
+redis_server_service_state: started
+
+redis_server_stock_config: /etc/redis/redis.conf
+redis_server_config_dir: /etc/redis/redis.conf.d
+redis_server_config_file: /etc/redis/redis.conf.d/90-ansible.conf
+redis_server_wrapper_config: /etc/redis/redis-ansible.conf
+redis_server_systemd_dropin_dir: /etc/systemd/system/redis-server.service.d
+redis_server_systemd_dropin_file: >-
+  /etc/systemd/system/redis-server.service.d/90-ansible.conf
+
+redis_server_config_manage: true
+redis_server_config_no_log: true
+redis_server_config: {}
+
+redis_sysctl: {}
+
+redis_sentinel_enabled: false
+redis_sentinel_packages:
+  - redis-sentinel
+redis_sentinel_package_state: present
+redis_sentinel_service_name: redis-sentinel
+redis_sentinel_service_enabled: true
+redis_sentinel_service_state: started
+
+redis_sentinel_config_file: /etc/redis/sentinel-ansible.conf
+redis_sentinel_systemd_dropin_dir: /etc/systemd/system/redis-sentinel.service.d
+redis_sentinel_systemd_dropin_file: >-
+  /etc/systemd/system/redis-sentinel.service.d/90-ansible.conf
+
+redis_sentinel_bind: 127.0.0.1 -::1
+redis_sentinel_port: 26379
+redis_sentinel_protected_mode: true
+redis_sentinel_requirepass: ""
+redis_sentinel_monitors: []
+redis_sentinel_no_log: true
+redis_sentinel_reseed: false

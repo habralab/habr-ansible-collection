@@ -1,0 +1,41 @@
+---
+- name: "Verify Nginx config"
+  ansible.builtin.command: "{{ __nginx_layouts_config[_nginx_active_layout].bin_path }} -t"
+  changed_when: false
+  become: true
+  listen:
+    - "Reload nginx"
+    - "Restart nginx"
+
+- name: "Reload Nginx service"
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+    enabled: true
+  become: true
+  listen: "Reload nginx"
+  ignore_errors: true
+  register: _nginx_reload_result
+
+- name: "Fallback to Restart Nginx if Reload failed"
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: true
+  become: true
+  listen: "Reload nginx"
+  when: _nginx_reload_result.failed | default(false)
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: "Restart Nginx service"
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: true
+  become: true
+  listen: "Restart nginx"
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true

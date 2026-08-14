@@ -1,0 +1,343 @@
+---
+# Tests for proxy_pass resolution in vhost.j2.
+# The resolve_runtime_upstream_name macro has three lookup paths:
+#   1. exact_match: upstream.name == value
+#   2. original_match: upstream.original_name == value
+#   3. namespaced_match: upstream.name == namespace + '_' + value
+#   4. fallback: namespace + '_' + value (no match found)
+#
+# render_proxy_pass_target supports:
+#   string 'default' → scheme://namespace_main (or upstream_default_target)
+#   string (other)   → literal
+#   {default: true}  → same as 'default'
+#   {upstream: name} → resolved upstream name
+#   {pool: name}     → same as upstream
+#   {member: name}   → same as upstream
+#   {map: name}      → resolved map target
+#   {target: url}    → literal target with scheme
+#
+# NOTE: locations go in nginx_server_runtime.locations (not item.locations)
+# because the template replaces item.locations with runtime.locations when defined.
+#
+# NOTE: upstream_default_scheme and upstream_default_target must be set on item
+# because the template's '| default(none) | default(fallback)' chain does not
+# substitute None (only Undefined), so server-level defaults must be explicit.
+
+- name: "PROXY_PASS | string 'default' resolves to namespace_main"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_main
+            hosts:
+              - address: "10.0.0.1:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass: "default"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass http://myapp_main;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass 'default' → http://myapp_main"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | mapping default:true resolves same as string 'default'"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_main
+            hosts:
+              - address: "10.0.0.1:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            default: true
+            scheme: https
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass {default:true, scheme:https} → https://myapp_main"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass https://myapp_main;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass {default:true, scheme:https} → https://myapp_main"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | upstream name resolved via namespaced_match"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_web
+            hosts:
+              - address: "10.0.0.1:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            upstream: web
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass {upstream: web} resolved via namespaced_match to myapp_web"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass http://myapp_web;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass {upstream: web} resolved via namespaced_match to myapp_web"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | upstream name resolved via original_name match"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry:
+        materialized:
+          - name: myapp_backend
+            original_name: backend
+            hosts:
+              - address: "10.0.0.1:8080"
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            upstream: backend
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass {upstream: backend} resolved via original_name to myapp_backend"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass http://myapp_backend;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass {upstream: backend} resolved via original_name to myapp_backend"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | map target resolved by map name"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry:
+        materialized:
+          - name: route
+            source: "$cookie_backend"
+            target: "$myapp_upstream_selection_route"
+            default: "myapp_web"
+            entries: []
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            map: route
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass {map: route} resolved to map target variable"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass http://$myapp_upstream_selection_route;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass {map: route} resolved to map target variable"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | map target resolved by $-prefixed variable (passthrough)"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            map: "$myapp_upstream_selection_route"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass {map: $var} passed through verbatim"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass http://$myapp_upstream_selection_route;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass {map: $var} passed through verbatim"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | literal target with scheme"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            scheme: https
+            target: "backend.internal:8443"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Proxy_pass {scheme:https, target:...} rendered literally"
+      ansible.builtin.assert:
+        that:
+          - "'proxy_pass https://backend.internal:8443;' in nginx_rendered"
+        success_msg: "PASS: proxy_pass {scheme:https, target:...} rendered literally"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "PROXY_PASS | unresolvable target → TODO comment in output"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+      upstream_default_scheme: http
+      upstream_default_target: main
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          proxy_pass:
+            map: ""    # empty map name, no $ prefix, no match → empty target
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Unresolvable proxy_pass target produces TODO comment"
+      ansible.builtin.assert:
+        that:
+          - "'# TODO invalid composite: proxy_pass' in nginx_rendered"
+        success_msg: "PASS: unresolvable proxy_pass target produces TODO comment"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"

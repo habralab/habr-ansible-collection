@@ -1,0 +1,287 @@
+---
+# Tests for location preset logic.
+#
+# Preset activation rules:
+#   preset_explicit_config = preset exists in nginx_server_location_preset_defaults
+#                            OR in item.location_presets
+#   preset_enabled = effective_config.enabled | default(preset_explicit_config)
+#
+# So: defining a preset in nginx_server_location_presets alone does NOT enable it.
+# It must appear in defaults OR in per-server location_presets.
+
+- name: "PRESETS | preset defined globally but not in defaults or server → not applied"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      health:
+        name: "/health"
+        return:
+          code: 200
+    nginx_server_location_preset_defaults: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        # no location_presets key → preset_explicit_config=False → not enabled
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Preset only in nginx_server_location_presets → not applied"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.locations
+              | selectattr('name', 'equalto', '/health') | list | length == 0
+        success_msg: "PASS: preset only in nginx_server_location_presets → not applied"
+        fail_msg: "FAIL: locations={{ _nginx_server_runtime.myapp.locations | map(attribute='name') | list }}"
+
+
+- name: "PRESETS | preset in nginx_server_location_preset_defaults → auto-enabled"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      health:
+        name: "/health"
+        return:
+          code: 200
+    nginx_server_location_preset_defaults:
+      health: {}    # presence alone makes preset_explicit_config=True → enabled
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Preset in nginx_server_location_preset_defaults → auto-enabled"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.locations
+              | selectattr('name', 'equalto', '/health') | list | length == 1
+        success_msg: "PASS: preset in nginx_server_location_preset_defaults → auto-enabled"
+        fail_msg: "FAIL: locations={{ _nginx_server_runtime.myapp.locations | map(attribute='name') | list }}"
+
+
+- name: "PRESETS | preset in server location_presets → enabled for that server"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      health:
+        name: "/health"
+        return:
+          code: 200
+    nginx_server_location_preset_defaults: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        location_presets:
+          health: {}    # presence makes preset_explicit_config=True → enabled
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Preset in server location_presets → enabled for that server"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.locations
+              | selectattr('name', 'equalto', '/health') | list | length == 1
+        success_msg: "PASS: preset in server location_presets → enabled for that server"
+        fail_msg: "FAIL: locations={{ _nginx_server_runtime.myapp.locations | map(attribute='name') | list }}"
+
+
+- name: "PRESETS | explicit enabled:false in preset_defaults disables preset"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      health:
+        name: "/health"
+        return:
+          code: 200
+    nginx_server_location_preset_defaults:
+      health:
+        enabled: false
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Enabled:false in preset_defaults disables the preset"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.locations
+              | selectattr('name', 'equalto', '/health') | list | length == 0
+        success_msg: "PASS: enabled:false in preset_defaults disables the preset"
+        fail_msg: "FAIL: locations={{ _nginx_server_runtime.myapp.locations | map(attribute='name') | list }}"
+
+
+- name: "PRESETS | server location_presets enabled:true overrides disabled global default"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      health:
+        name: "/health"
+        return:
+          code: 200
+    nginx_server_location_preset_defaults:
+      health:
+        enabled: false
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        location_presets:
+          health:
+            enabled: true    # server overrides global disabled
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Server enabled:true overrides global enabled:false"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.locations
+              | selectattr('name', 'equalto', '/health') | list | length == 1
+        success_msg: "PASS: server enabled:true overrides global enabled:false"
+        fail_msg: "FAIL: locations={{ _nginx_server_runtime.myapp.locations | map(attribute='name') | list }}"
+
+
+- name: "PRESETS | server location_presets merges into preset location definition"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      health:
+        location:
+          name: "/health"
+          return:
+            code: 200
+    nginx_server_location_preset_defaults: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        location_presets:
+          health:
+            location:
+              return:
+                code: 204    # override return code via combine
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_loc"
+      ansible.builtin.set_fact:
+        nginx_t_loc: >-
+          {{ _nginx_server_runtime.myapp.locations
+             | selectattr('name', 'equalto', '/health') | first }}
+    - name: "Server location_presets.location merges into preset definition"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_loc is defined
+          - nginx_t_loc.return.code == 204
+        success_msg: "PASS: server location_presets.location merges into preset definition"
+        fail_msg: "FAIL: location={{ nginx_t_loc | to_nice_json }}"
+
+
+- name: "PRESETS | preset without .location wrapper uses definition directly as location"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    # Flat definition (no .location wrapper) — whole dict is the location
+    nginx_server_location_presets:
+      robots:
+        name: "/robots.txt"
+        return:
+          code: 200
+          body: "User-agent: *\nDisallow:"
+    nginx_server_location_preset_defaults:
+      robots: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_loc"
+      ansible.builtin.set_fact:
+        nginx_t_loc: >-
+          {{ _nginx_server_runtime.myapp.locations
+             | selectattr('name', 'equalto', '/robots.txt') | first }}
+    - name: "Flat preset definition (no .location wrapper) used as location directly"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_loc is defined
+          - nginx_t_loc.return.code == 200
+        success_msg: "PASS: flat preset definition (no .location wrapper) used as location directly"
+        fail_msg: "FAIL: location={{ nginx_t_loc | to_nice_json }}"
+
+
+- name: "PRESETS | preset without name in location definition is silently skipped"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_maintenance: {}
+    nginx_server_location_presets:
+      broken:
+        return:
+          code: 200
+          # no 'name' field → preset_materialized_location.name is not defined → skipped
+    nginx_server_location_preset_defaults:
+      broken: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Preset without location name is silently skipped"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.locations | length == 0
+        success_msg: "PASS: preset without location name is silently skipped"
+        fail_msg: "FAIL: locations={{ _nginx_server_runtime.myapp.locations }}"

@@ -1,0 +1,5 @@
+# Ansible managed: keep the package configuration as the versioned baseline.
+include {{ redis_server_stock_config }}
+
+# Role-owned overrides are deliberately processed last.
+include {{ redis_server_config_dir }}/*.conf

@@ -1,0 +1,157 @@
+
+user  {{ _nginx_runtime_user }};
+worker_processes  {{ nginx_worker_processes | default('auto') }};
+{% if nginx_worker_rlimit_nofile is defined %}
+worker_rlimit_nofile {{ nginx_worker_rlimit_nofile | int }};
+{% endif %}
+
+error_log  {{ nginx_error_log | default('/var/log/nginx/error.log') }} notice;
+pid        {{ nginx_pid_file | default('/run/nginx.pid') }};
+
+
+events {
+{% if nginx_use is defined %}
+    use {{ nginx_use }};
+{% endif %}
+    worker_connections  {{ nginx_worker_connections | default(1024) | int }};
+{% if nginx_multi_accept is defined %}
+    multi_accept {{ nginx_multi_accept | bool | ternary('on', 'off') }};
+{% endif %}
+}
+
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  {{ nginx_default_type | default('application/octet-stream') }};
+
+{% set _custom_log_names = nginx_log_format | default([]) | map(attribute='name') | list %}
+{% if nginx_log_format is defined %}
+{% for log in nginx_log_format %}
+{% set _decl = "log_format " ~ log.name ~ ((" escape=" ~ log.escape) if log.escape is defined else "") %}
+{% set _indent = _decl | length + 1 %}
+{% for string in log.string %}
+{% if loop.first %}
+    {{ _decl }} '{{ string }}'{% if loop.length == 1 %};{% endif %}{{ '' }}
+{% else %}
+    {{ ' ' * _indent }}'{{ string }}'{% if loop.last %};{% endif %}{{ '' }}
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+{% endif %}
+{% if 'main' not in _custom_log_names %}
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+{% endif %}
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        {{ nginx_sendfile | default(true) | bool | ternary('on', 'off') }};
+{% if nginx_tcp_nopush is defined %}
+    tcp_nopush      {{ nginx_tcp_nopush | bool | ternary('on', 'off') }};
+{% else %}
+    #tcp_nopush     on;
+{% endif %}
+{% if nginx_tcp_nodelay is defined %}
+    tcp_nodelay {{ nginx_tcp_nodelay | bool | ternary('on', 'off') }};
+{% endif %}
+
+    keepalive_timeout  {{ nginx_keepalive_timeout | default(65) | int }};
+{% if nginx_server_tokens is defined %}
+    server_tokens {{ nginx_server_tokens | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_server_name_in_redirect is defined %}
+    server_name_in_redirect {{ nginx_server_name_in_redirect | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_server_names_hash_max_size is defined %}
+    server_names_hash_max_size {{ nginx_server_names_hash_max_size }};
+{% endif %}
+{% if nginx_server_names_hash_bucket_size is defined %}
+    server_names_hash_bucket_size {{ nginx_server_names_hash_bucket_size }};
+{% endif %}
+{% if nginx_types_hash_max_size is defined %}
+    types_hash_max_size {{ nginx_types_hash_max_size }};
+{% endif %}
+{% if nginx_types_hash_bucket_size is defined %}
+    types_hash_bucket_size {{ nginx_types_hash_bucket_size }};
+{% endif %}
+{% if nginx_map_hash_max_size is defined %}
+    map_hash_max_size {{ nginx_map_hash_max_size }};
+{% endif %}
+{% if nginx_map_hash_bucket_size is defined %}
+    map_hash_bucket_size {{ nginx_map_hash_bucket_size }};
+{% endif %}
+{% if nginx_variables_hash_max_size is defined %}
+    variables_hash_max_size {{ nginx_variables_hash_max_size }};
+{% endif %}
+{% if nginx_variables_hash_bucket_size is defined %}
+    variables_hash_bucket_size {{ nginx_variables_hash_bucket_size }};
+{% endif %}
+{% if nginx_client_max_body_size is defined %}
+    client_max_body_size {{ nginx_client_max_body_size }};
+{% endif %}
+{% if nginx_client_body_buffer_size is defined %}
+    client_body_buffer_size {{ nginx_client_body_buffer_size }};
+{% endif %}
+
+{% set _ssl_triggers = [
+    'nginx_ssl_protocols',
+    'nginx_ssl_prefer_server_ciphers',
+    'nginx_ssl_ciphers',
+    'nginx_ssl_session_cache',
+    'nginx_ssl_dhparam_file'
+] %}
+{% if _ssl_triggers | intersect(q('varnames', '.*')) %}
+{% if nginx_ssl_protocols is defined %}
+    ssl_protocols {{ nginx_ssl_protocols | join(' ') if nginx_ssl_protocols is sequence and nginx_ssl_protocols is not string else nginx_ssl_protocols }};
+{% endif %}
+{% if nginx_ssl_prefer_server_ciphers is defined %}
+    ssl_prefer_server_ciphers {{ nginx_ssl_prefer_server_ciphers | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_ssl_ciphers is defined %}
+    ssl_ciphers {{ nginx_ssl_ciphers | join(':') if nginx_ssl_ciphers is sequence and nginx_ssl_ciphers is not string else nginx_ssl_ciphers }};
+{% endif %}
+{% if nginx_ssl_session_cache is defined %}
+    ssl_session_cache {{ nginx_ssl_session_cache }};
+{% endif %}
+{% if nginx_ssl_dhparam_file is defined %}
+    ssl_dhparam {{ nginx_ssl_dhparam_file }};
+{% endif %}
+
+{% endif %}
+{% if nginx_gzip is defined %}
+    gzip {{ nginx_gzip | bool | ternary('on', 'off') }};
+{% else %}
+    #gzip  on;
+{% endif %}
+{% if nginx_gzip_vary is defined %}
+    gzip_vary {{ nginx_gzip_vary | bool | ternary('on', 'off') }};
+{% endif %}
+{% if nginx_gzip_proxied is defined %}
+    gzip_proxied {{ nginx_gzip_proxied }};
+{% endif %}
+{% if nginx_gzip_comp_level is defined %}
+    gzip_comp_level {{ nginx_gzip_comp_level | int }};
+{% endif %}
+{% if nginx_gzip_buffers is defined %}
+    gzip_buffers {{ nginx_gzip_buffers }};
+{% endif %}
+{% if nginx_gzip_http_version is defined %}
+    gzip_http_version {{ nginx_gzip_http_version }};
+{% endif %}
+{% if nginx_gzip_types is defined %}
+    gzip_types {{ nginx_gzip_types | join(' ') if nginx_gzip_types is sequence and nginx_gzip_types is not string else nginx_gzip_types}};
+{% endif %}
+{% if nginx_gzip_disable is defined %}
+    gzip_disable {{ nginx_gzip_disable | join(' ') if nginx_gzip_disable is sequence and nginx_gzip_disable is not string else nginx_gzip_disable }};
+{% endif %}
+{% if nginx_gzip_min_length is defined %}
+    gzip_min_length {{ nginx_gzip_min_length }};
+{% endif %}
+
+{% set _all_http_includes = (__nginx_layouts_config[_nginx_active_layout].http_includes | default([])) + (nginx_http_includes | default([])) %}
+{% for inc in _all_http_includes | unique %}
+    include {{ inc }};
+{% endfor %}
+}

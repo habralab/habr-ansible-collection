@@ -1,0 +1,46 @@
+---
+- name: "Validate model section shape: {{ _systemd_unit_section_name }}"
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source.model[_systemd_unit_section_name] is mapping
+      - systemd_unit_config.source.model[_systemd_unit_section_name] | length > 0
+      - >-
+        systemd_unit_config.source.model[_systemd_unit_section_name].keys()
+        | difference(__systemd_unit_section_directive_specs[_systemd_unit_section_name].keys())
+        | length == 0
+    fail_msg: >-
+      source.model.{{ _systemd_unit_section_name }} must be a non-empty mapping
+      containing only supported directives.
+    quiet: true
+
+- name: "Validate model directive values: {{ _systemd_unit_section_name }}"
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          _systemd_unit_directive.value.value_type == 'string'
+          and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is string
+        )
+        or (
+          _systemd_unit_directive.value.value_type == 'list'
+          and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is sequence
+          and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is not string
+          and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key]
+              | select('string') | list | length
+            == systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] | length
+        )
+    fail_msg: >-
+      source.model.{{ _systemd_unit_section_name }}.{{ _systemd_unit_directive.key }}
+      has an invalid value type.
+    quiet: true
+  loop: >-
+    {{
+      __systemd_unit_section_directive_specs[_systemd_unit_section_name]
+      | dict2items
+    }}
+  loop_control:
+    loop_var: _systemd_unit_directive
+    label: "{{ _systemd_unit_directive.key }}"
+  when: >-
+    systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key]
+    is defined

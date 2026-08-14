@@ -36,10 +36,18 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `locale`: Declarative management of generated system locales and default `LANG`.
-- `logind`: Manages `systemd-logind` configuration and user lingering.
+- `mariadb`: Installs and configures MariaDB Community Server from its upstream repository.
+- `mariadb_assets`: Manages MariaDB databases and application accounts.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
-- `nvm`: Multi-user Node Version Manager (NVM) installation from git.
+- `nginx`: Installs and configures Nginx using a layout-driven approach (Debian/Upstream).
+- `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
 - `packages`: Declarative management of APT packages and .deb URLs.
+- `php`: Installs and configures parallel PHP CLI and FPM versions.
+- `redis`: Installs Redis Server and optional Sentinel without replacing package defaults.
+- `ssh_authorized_keys`: Manages SSH public keys through catalogs, groups and per-user contracts.
+- `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
+- `systemd_unit`: Declarative lifecycle management for one system or user unit.
+- `systemd_units`: Iterates over declarative system and user unit lifecycles.
 - `timezone`: Declarative management of the system timezone.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
 
@@ -54,9 +62,15 @@ Reference roles using FQCN:
     - name: habr.linuxhost.users
       vars:
         users_list: [{ name: "web", groups: ["www-data"] }]
-    - name: habr.linuxhost.nvm
+    - name: habr.linuxhost.nodejs
       vars:
-        nvm_users: [{ name: "web" }]
+        nodejs_runtimes:
+          - name: "web-main"
+            provider: "nvm"
+            scope: "user"
+            user: "web"
+            version: "22"
+            state: "present"
 ```
 
 ## Principles

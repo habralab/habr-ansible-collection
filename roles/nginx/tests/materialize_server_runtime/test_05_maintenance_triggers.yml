@@ -1,0 +1,426 @@
+---
+# Tests for maintenance trigger compilation.
+# Triggers become derived geos/maps that feed into a maintenance_active map.
+# The maintenance_active map drives an `if` block returning 503.
+
+- name: "MAINTENANCE | ip_sets trigger produces derived geo block"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+    - "fixtures/ip_sets_catalog.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+          triggers:
+            - type: ip_sets
+              name: office_bypass
+              ip_sets: [office_ips]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: >-
+          {{ _nginx_server_runtime.myapp.geos_registry.derived
+             | selectattr('name', 'equalto', 'office_bypass') | first }}
+    - name: "Ip_sets trigger"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo is defined
+          - nginx_t_geo.target == '$myapp_maintenance_bypass_office_bypass'
+          - nginx_t_geo.default == '0'
+          - nginx_t_geo.entries | selectattr('match', 'equalto', '10.0.1.0/24')
+              | map(attribute='value') | first == '1'
+          - nginx_t_geo.entries | selectattr('match', 'equalto', '10.0.2.5/32')
+              | map(attribute='value') | first == '1'
+        success_msg: "PASS: ip_sets trigger 'office_bypass' compiled to geo block with correct entries"
+        fail_msg: "FAIL: geo={{ nginx_t_geo | to_nice_json }}"
+
+
+- name: "MAINTENANCE | ip_sets entries as plain strings (not dicts)"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+    - "fixtures/ip_sets_catalog.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+          triggers:
+            - type: ip_sets
+              name: cdn_bypass
+              ip_sets: [cdn_ips]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: >-
+          {{ _nginx_server_runtime.myapp.geos_registry.derived
+             | selectattr('name', 'equalto', 'cdn_bypass') | first }}
+    - name: "Plain-string ip_set entries compiled correctly"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo.entries | length == 2
+          - nginx_t_geo.entries | selectattr('match', 'equalto', '192.168.100.0/24') | list | length == 1
+          - nginx_t_geo.entries | selectattr('match', 'equalto', '192.168.101.0/24') | list | length == 1
+        success_msg: "PASS: plain-string ip_set entries compiled correctly"
+        fail_msg: "FAIL: geo entries={{ nginx_t_geo.entries | to_nice_json }}"
+
+
+- name: "MAINTENANCE | cookie trigger produces derived map block"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+          triggers:
+            - type: cookie
+              name: cookie_bypass
+              cookie:
+                name: maintenance_bypass
+                allow_values: ["1", "true"]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'cookie_bypass') | first }}
+    - name: "Cookie trigger compiled to map from"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map.source == '$cookie_maintenance_bypass'
+          - nginx_t_map.target == '$myapp_maintenance_bypass_cookie_bypass'
+          - nginx_t_map.default == '0'
+          - nginx_t_map.entries | selectattr('match', 'equalto', '1')
+              | map(attribute='value') | first == '1'
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'true')
+              | map(attribute='value') | first == '1'
+        success_msg: "PASS: cookie trigger compiled to map from '$cookie_maintenance_bypass'"
+        fail_msg: "FAIL: map={{ nginx_t_map | to_nice_json }}"
+
+
+- name: "MAINTENANCE | map trigger produces derived map from existing variable"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+          triggers:
+            - type: map
+              name: jwt_bypass
+              variable: "$jwt_claim_role"
+              allow_values: ["admin", "dev"]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'jwt_bypass') | first }}
+    - name: "Map trigger from"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map.source == '$jwt_claim_role'
+          - nginx_t_map.target == '$myapp_maintenance_bypass_jwt_bypass'
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'admin')
+              | map(attribute='value') | first == '1'
+          - nginx_t_map.entries | selectattr('match', 'equalto', 'dev')
+              | map(attribute='value') | first == '1'
+        success_msg: "PASS: map trigger from '$jwt_claim_role' compiled correctly"
+        fail_msg: "FAIL: map={{ nginx_t_map | to_nice_json }}"
+
+
+- name: "MAINTENANCE | enabled:true sets maintenance_switch default to '1'"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: true
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_switch"
+      ansible.builtin.set_fact:
+        nginx_t_switch: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'maintenance_switch') | first }}
+    - name: "Enabled:true → maintenance_switch default="
+      ansible.builtin.assert:
+        that:
+          - nginx_t_switch.default == '1'
+          - nginx_t_switch.source == '$request_method'
+        success_msg: "PASS: enabled:true → maintenance_switch default='1'"
+        fail_msg: "FAIL: switch={{ nginx_t_switch | to_nice_json }}"
+
+
+- name: "MAINTENANCE | enabled:false sets maintenance_switch default to '0'"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_switch"
+      ansible.builtin.set_fact:
+        nginx_t_switch: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'maintenance_switch') | first }}
+    - name: "Enabled:false → maintenance_switch default="
+      ansible.builtin.assert:
+        that:
+          - nginx_t_switch.default == '0'
+        success_msg: "PASS: enabled:false → maintenance_switch default='0'"
+        fail_msg: "FAIL: switch={{ nginx_t_switch | to_nice_json }}"
+
+
+- name: "MAINTENANCE | no triggers: maintenance_active maps directly from switch"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_active"
+      ansible.builtin.set_fact:
+        nginx_t_active: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'maintenance_active') | first }}
+    - name: "No triggers → maintenance_active maps directly from switch"
+      ansible.builtin.assert:
+        that:
+          # No bypass var: source is the switch directly, only 1→1 entry
+          - nginx_t_active.source == '$myapp_maintenance_switch'
+          - nginx_t_active.entries | length == 1
+          - nginx_t_active.entries[0].match == '1'
+          - nginx_t_active.entries[0].value == '1'
+        success_msg: "PASS: no triggers → maintenance_active maps directly from switch"
+        fail_msg: "FAIL: active={{ nginx_t_active | to_nice_json }}"
+
+
+- name: "MAINTENANCE | two triggers: bypass combined with 1:0/0:1/1:1→1 map"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+    - "fixtures/ip_sets_catalog.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+          triggers:
+            - type: ip_sets
+              name: office_bypass
+              ip_sets: [office_ips]
+            - type: cookie
+              name: cookie_bypass
+              cookie:
+                name: maintenance_bypass
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_combined"
+      ansible.builtin.set_fact:
+        nginx_t_combined: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'maintenance_bypass_combined_1') | first }}
+        nginx_t_active: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'maintenance_active') | first }}
+    - name: "Two triggers produce combined bypass map and correct active logic"
+      ansible.builtin.assert:
+        that:
+          # Combined map OR-logic: either bypass is active
+          - nginx_t_combined is defined
+          - nginx_t_active.source == '"$myapp_maintenance_switch:$myapp_maintenance_bypass_combined_1"'
+          - nginx_t_combined.entries | selectattr('match', 'equalto', '1:0')
+              | map(attribute='value') | first == '1'
+          - nginx_t_combined.entries | selectattr('match', 'equalto', '0:1')
+              | map(attribute='value') | first == '1'
+          - nginx_t_combined.entries | selectattr('match', 'equalto', '1:1')
+              | map(attribute='value') | first == '1'
+          # Active: switch=1 AND bypass=0 → active; switch=1 AND bypass=1 → not active
+          - nginx_t_active.entries | selectattr('match', 'equalto', '1:0')
+              | map(attribute='value') | first == '1'
+          - nginx_t_active.entries | selectattr('match', 'equalto', '1:1')
+              | map(attribute='value') | first == '0'
+        success_msg: "PASS: two triggers produce combined bypass map and correct active logic"
+        fail_msg: >-
+          FAIL: combined={{ nginx_t_combined | to_nice_json }},
+          active={{ nginx_t_active | to_nice_json }}
+
+
+- name: "MAINTENANCE | three triggers: final active source uses last combined bypass map"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+    - "fixtures/ip_sets_catalog.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+          triggers:
+            - type: ip_sets
+              name: office_bypass
+              ip_sets: [office_ips]
+            - type: cookie
+              name: cookie_bypass
+              cookie:
+                name: maintenance_bypass
+            - type: map
+              name: jwt_bypass
+              variable: "$jwt_role"
+              allow_values: ["admin"]
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_derived_maps"
+      ansible.builtin.set_fact:
+        nginx_t_derived_maps: "{{ _nginx_server_runtime.myapp.maps_registry.derived }}"
+        nginx_t_active: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'maintenance_active') | first }}
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          # Both combination maps are generated and final active uses the last one.
+          - nginx_t_derived_maps | selectattr('name', 'equalto', 'maintenance_bypass_combined_1') | list | length == 1
+          - nginx_t_derived_maps | selectattr('name', 'equalto', 'maintenance_bypass_combined_2') | list | length == 1
+          - nginx_t_active.source == '"$myapp_maintenance_switch:$myapp_maintenance_bypass_combined_2"'
+        success_msg: >-
+          PASS: 3 triggers generate chained combined maps and
+          maintenance_active uses the final combined bypass variable
+        fail_msg: >-
+          FAIL: derived map names={{ nginx_t_derived_maps | map(attribute='name') | list }},
+          active source={{ nginx_t_active.source }}
+
+
+- name: "MAINTENANCE | 503 if-block and error_page injected"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Maintenance block injects 503 if, error_page, and @maintenance location"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp['if'] | length == 1
+          - _nginx_server_runtime.myapp['if'][0].condition is search('maintenance_active')
+          - _nginx_server_runtime.myapp['if'][0].return.code == 503
+          - _nginx_server_runtime.myapp.error_page | selectattr('target', 'equalto', '@maintenance')
+              | list | length == 1
+          - _nginx_server_runtime.myapp.locations | selectattr('name', 'equalto', '@maintenance')
+              | list | length == 1
+        success_msg: "PASS: maintenance block injects 503 if, error_page, and @maintenance location"
+        fail_msg: >-
+          FAIL: if={{ _nginx_server_runtime.myapp['if'] }},
+          error_page={{ _nginx_server_runtime.myapp.error_page }},
+          locations={{ _nginx_server_runtime.myapp.locations | map(attribute='name') | list }}

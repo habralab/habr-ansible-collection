@@ -1,0 +1,101 @@
+---
+- name: Resolve requested runtime version for NVM-backed runtime
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_runtime_provider_result.nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm version {{ _nodejs_runtime_provider_result.version_requested | quote }}
+  args:
+    executable: "/bin/bash"
+  become: true
+  become_user: "{{ _nodejs_runtime_provider_result.user }}"
+  register: _nodejs_runtime_resolved_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Resolve explicit Node.js binary path for NVM-backed runtime
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_runtime_provider_result.nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm which {{ _nodejs_runtime_provider_result.version_requested | quote }}
+  args:
+    executable: "/bin/bash"
+  become: true
+  become_user: "{{ _nodejs_runtime_provider_result.user }}"
+  register: _nodejs_runtime_node_bin_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Validate resolved NVM-backed Node.js runtime
+  ansible.builtin.assert:
+    that:
+      - (_nodejs_runtime_resolved_version_query.stdout | trim) not in ['', 'N/A']
+      - _nodejs_runtime_node_bin_query.stdout | trim | length > 0
+    fail_msg: >-
+      Failed to resolve Node.js runtime '{{ _nodejs_runtime_provider_result.name }}'
+      after NVM provisioning.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Normalize runtime result for NVM-backed runtime
+  ansible.builtin.set_fact:
+    nodejs_runtime_result:
+      name: "{{ _nodejs_runtime_provider_result.name }}"
+      provider: "{{ _nodejs_runtime_provider_result.provider }}"
+      scope: "{{ _nodejs_runtime_provider_result.scope }}"
+      state: "{{ _nodejs_runtime_provider_result.state }}"
+      user: "{{ _nodejs_runtime_provider_result.user }}"
+      version_requested: "{{ _nodejs_runtime_provider_result.version_requested }}"
+      version_resolved: "{{ _nodejs_runtime_resolved_version_query.stdout | default('') | trim }}"
+      nvm_dir: "{{ _nodejs_runtime_provider_result.nvm_dir }}"
+      profile_path: "{{ _nodejs_runtime_provider_result.profile_path }}"
+      node_bin: "{{ _nodejs_runtime_node_bin }}"
+      bin_dir: "{{ _nodejs_runtime_bin_dir }}"
+      npm_bin: "{{ _nodejs_runtime_npm_bin }}"
+      npx_bin: "{{ _nodejs_runtime_npx_bin }}"
+      exec_path: >-
+        {{
+          (
+            [_nodejs_runtime_bin_dir, _nodejs_runtime_base_path]
+            | reject('equalto', '')
+            | join(':')
+          )
+        }}
+  vars:
+    _nodejs_runtime_node_bin: "{{ _nodejs_runtime_node_bin_query.stdout | default('') | trim }}"
+    _nodejs_runtime_bin_dir: >-
+      {{
+        (_nodejs_runtime_node_bin | dirname)
+        if _nodejs_runtime_node_bin | length > 0
+        else ''
+      }}
+    _nodejs_runtime_npm_bin: >-
+      {{
+        _nodejs_runtime_bin_dir ~ '/npm'
+        if _nodejs_runtime_bin_dir | length > 0
+        else ''
+      }}
+    _nodejs_runtime_npx_bin: >-
+      {{
+        _nodejs_runtime_bin_dir ~ '/npx'
+        if _nodejs_runtime_bin_dir | length > 0
+        else ''
+      }}
+    _nodejs_runtime_base_path: >-
+      {{
+        ansible_facts.get('env', {}).get(
+          'PATH',
+          '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+        )
+      }}
+
+- name: Accumulate normalized runtime results
+  ansible.builtin.set_fact:
+    nodejs_runtime_results: >-
+      {{
+        (nodejs_runtime_results | default({}))
+        | combine({ nodejs_runtime_result.name: nodejs_runtime_result })
+      }}

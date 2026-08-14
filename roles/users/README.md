@@ -24,7 +24,7 @@ The role is driven by a single variable `users_list`, which is a list of diction
 ### Variables
 
 - `users_list`: List of users to manage (default: `[]`).
-- User entries support the documented subset of `ansible.builtin.user` arguments used by this role, including `state`, `system`, `password`, `shell`, `create_home`, `remove`, `group`, `groups`, `append`, and `uid`.
+- User entries support the documented subset of `ansible.builtin.user` arguments used by this role, including `state`, `system`, `password`, `shell`, `home`, `create_home`, `remove`, `group`, `groups`, `append`, and `uid`.
 
 ### Example
 

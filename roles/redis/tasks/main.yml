@@ -1,0 +1,156 @@
+---
+- name: Validate Redis role configuration
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_major_version'] | int >= 20
+      - redis_repository in redis_supported_repositories
+      - redis_server_packages is sequence
+      - redis_server_packages is not string
+      - redis_server_config is mapping
+      - redis_sysctl is mapping
+      - redis_sentinel_monitors is sequence
+      - redis_sentinel_monitors is not string
+      - redis_server_enabled | bool or redis_sentinel_enabled | bool
+    fail_msg: >-
+      redis requires Ubuntu Focal or newer, a supported repository source,
+      a package list, and a mapping in redis_server_config.
+  tags:
+    - redis
+
+- name: Validate Redis Labs PPA support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution_release'] in redis_redislabs_supported_releases
+    fail_msg: >-
+      ppa_redislabs currently publishes packages only for Ubuntu Focal, Jammy,
+      and Noble. Select ubuntu or unmanaged for this release.
+  when: redis_repository == 'ppa_redislabs'
+  tags:
+    - redis
+    - redis_repository
+
+- name: Configure Redis Labs PPA
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - redis
+        - redis_repository
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ redis_redislabs_repository_name }}"
+      url: "{{ redis_redislabs_repository_url }}"
+      suite: "{{ ansible_facts['distribution_release'] }}"
+      components:
+        - main
+      key_url: "{{ redis_redislabs_repository_key_url }}"
+      state: present
+  when:
+    - redis_repository == 'ppa_redislabs'
+    - redis_repository_manage | bool
+  tags:
+    - redis
+    - redis_repository
+    - apt
+
+- name: Apply Redis repository cache update
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - redis
+    - redis_repository
+    - apt
+
+- name: Install Redis server packages
+  ansible.builtin.apt:
+    name: "{{ redis_server_packages }}"
+    state: "{{ redis_server_package_state }}"
+    update_cache: true
+    cache_valid_time: 3600
+  when: redis_server_enabled | bool
+  tags:
+    - redis
+    - redis_packages
+    - apt
+
+- name: Configure Redis kernel parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: true
+  loop: "{{ redis_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: redis_server_enabled | bool
+  tags:
+    - redis
+    - redis_config
+
+- name: Inspect Redis server binary
+  ansible.builtin.stat:
+    path: /usr/bin/redis-server
+  register: redis_server_binary
+  tags:
+    - redis
+    - redis_config
+
+- name: Manage Redis server configuration
+  ansible.builtin.include_tasks:
+    file: server_config.yml
+    apply:
+      tags:
+        - redis
+        - redis_config
+  when:
+    - redis_server_enabled | bool
+    - redis_server_config_manage | bool
+    - redis_server_binary.stat.exists
+  tags:
+    - redis
+    - redis_config
+
+- name: Ensure Redis server service state
+  ansible.builtin.service:
+    name: "{{ redis_server_service_name }}"
+    enabled: "{{ redis_server_service_enabled }}"
+    state: "{{ redis_server_service_state }}"
+  when:
+    - redis_server_enabled | bool
+    - not ansible_check_mode
+  tags:
+    - redis
+    - redis_packages
+
+- name: Verify Redis authenticated health
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/redis-cli
+      - -h
+      - "127.0.0.1"
+      - ping
+  environment:
+    REDISCLI_AUTH: "{{ redis_server_config['requirepass'] }}"
+  changed_when: false
+  no_log: "{{ redis_server_config_no_log }}"
+  when:
+    - redis_server_enabled | bool
+    - not ansible_check_mode
+    - "'requirepass' in redis_server_config"
+  tags:
+    - redis
+    - redis_config
+
+- name: Manage Redis Sentinel
+  ansible.builtin.include_tasks:
+    file: sentinel.yml
+    apply:
+      tags:
+        - redis
+        - redis_sentinel
+  when: redis_sentinel_enabled | bool
+  tags:
+    - redis
+    - redis_sentinel

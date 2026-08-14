@@ -1,0 +1,284 @@
+---
+# Tests for deduplication logic in base and final registries.
+#
+# Merge pattern for final registries (geos, maps, upstreams, proxy_set_header):
+#   (input + derived) | reverse → last occurrence (= derived) wins
+#   → DERIVED shadows INPUT with the same key
+#
+# Merge pattern for locations and error_page:
+#   (derived + explicit) | reverse → last occurrence (= explicit) wins
+#   → EXPLICIT (user) shadows DERIVED with the same name/key
+#
+# Merge pattern for base registries (members, pools, selection):
+#   (input + _nginx_derived_*) | reverse → _nginx_derived_* wins
+
+- name: "DEDUP | upstreams: derived shadows input with same name"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        # Explicit input upstream — same name will be generated from the member below
+        upstreams:
+          - name: myapp_web1
+            hosts:
+              - address: "10.0.0.99:8080"
+                remark: "explicit input"
+        # Member generates derived upstream myapp_web1 as well
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+            remark: "derived from member"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_upstream"
+      ansible.builtin.set_fact:
+        nginx_t_upstream: >-
+          {{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+             | selectattr('name', 'equalto', 'myapp_web1') | first }}
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_web1') | list | length == 1
+          # DERIVED wins: address from member, not from explicit input upstream
+          - nginx_t_upstream.hosts[0].address == '10.0.0.1:8080'
+          - nginx_t_upstream.hosts[0].remark == 'derived from member'
+        success_msg: >-
+          PASS: derived upstream 'myapp_web1' (from member) shadows explicit input
+          upstream with same name — (input+derived)|reverse → derived wins
+        fail_msg: "FAIL: upstream={{ nginx_t_upstream | to_nice_json }}"
+
+
+- name: "DEDUP | maps: derived shadows input with same target"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        # Explicit input map → same target as derived selection map below
+        maps:
+          - name: custom_route
+            source: "$http_x_custom"
+            target: "$myapp_upstream_selection_route"
+            default: "explicit_default"
+            entries: []
+        # Selection generates a derived map with target $myapp_upstream_selection_route
+        upstream_selection:
+          - name: route
+            source:
+              cookie: backend
+            default_target: ""
+            selectors: []
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_maps"
+      ansible.builtin.set_fact:
+        nginx_t_maps: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.materialized
+             | selectattr('target', 'equalto', '$myapp_upstream_selection_route') | list }}
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_maps | length == 1
+          # DERIVED wins: source is from selection (cookie-based), not from explicit map
+          - nginx_t_maps[0].source == '$cookie_backend'
+          - nginx_t_maps[0].default != 'explicit_default'
+        success_msg: >-
+          PASS: derived map (from upstream_selection) shadows explicit input map
+          with same target — (input+derived)|reverse → derived wins
+        fail_msg: "FAIL: maps for this target={{ nginx_t_maps | to_nice_json }}"
+
+
+- name: "DEDUP | explicit location shadows derived location with same name"
+  # locations use (derived + explicit) | reverse → EXPLICIT wins
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+        # Override the auto-generated @maintenance location with a custom one
+        locations:
+          - name: "@maintenance"
+            return:
+              code: 200
+              body: "Custom maintenance page"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_loc"
+      ansible.builtin.set_fact:
+        nginx_t_loc: >-
+          {{ _nginx_server_runtime.myapp.locations
+             | selectattr('name', 'equalto', '@maintenance') | list }}
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_loc | length == 1
+          # EXPLICIT wins: user's return block present, not derived rewrite block
+          - nginx_t_loc[0].return is defined
+          - nginx_t_loc[0].return.code == 200
+          - nginx_t_loc[0].rewrite is not defined
+        success_msg: >-
+          PASS: explicit '@maintenance' location shadows derived maintenance location —
+          (derived+explicit)|reverse → explicit wins
+        fail_msg: "FAIL: locations={{ nginx_t_loc | to_nice_json }}"
+
+
+- name: "DEDUP | explicit error_page shadows derived error_page with same key"
+  # error_page uses (derived + explicit) | reverse → EXPLICIT wins
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+        # Explicit 503 error_page — same target as derived maintenance one
+        error_page:
+          - codes: 503
+            target: "@maintenance"
+            response_code: 200
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_503"
+      ansible.builtin.set_fact:
+        nginx_t_503: >-
+          {{ _nginx_server_runtime.myapp.error_page
+             | selectattr('target', 'equalto', '@maintenance') | list }}
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_503 | length == 1
+          # EXPLICIT wins: has response_code=200, derived one does not
+          - nginx_t_503[0].response_code is defined
+          - nginx_t_503[0].response_code == 200
+        success_msg: >-
+          PASS: explicit error_page 503→@maintenance shadows derived one —
+          (derived+explicit)|reverse → explicit wins
+        fail_msg: "FAIL: error_page entries for @maintenance={{ nginx_t_503 | to_nice_json }}"
+
+
+- name: "DEDUP | _nginx_derived_upstream_members shadows upstream_members with same name"
+  # base registries use (input + _nginx_derived_*) | reverse → derived wins
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+        # _nginx_derived_* is an internal injection field used by the role itself
+        _nginx_derived_upstream_members:
+          - name: web1
+            address: "10.0.99.99:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_members"
+      ansible.builtin.set_fact:
+        nginx_t_members: "{{ _nginx_server_runtime.myapp.upstream_members_registry.materialized }}"
+    - name: "Assert result"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_members | length == 1
+          # _nginx_derived_* wins: address from derived injection
+          - nginx_t_members[0].address == '10.0.99.99:8080'
+        success_msg: >-
+          PASS: _nginx_derived_upstream_members shadows upstream_members for
+          same name — (input+derived)|reverse → derived wins
+        fail_msg: "FAIL: members={{ nginx_t_members | to_nice_json }}"
+
+
+- name: "DEDUP | within input list, last occurrence with same key wins"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        upstreams:
+          - name: myapp_backend
+            hosts:
+              - address: "10.0.0.1:8080"
+                remark: "first"
+          - name: myapp_backend
+            hosts:
+              - address: "10.0.0.2:8080"
+                remark: "second (last)"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_upstream"
+      ansible.builtin.set_fact:
+        nginx_t_upstream: >-
+          {{ _nginx_server_runtime.myapp.upstreams_registry.materialized
+             | selectattr('name', 'equalto', 'myapp_backend') | first }}
+    - name: "Within input list, last occurrence of same key wins"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'myapp_backend') | list | length == 1
+          # Last entry with same name wins (reversed iteration, first processed = last in list)
+          - nginx_t_upstream.hosts[0].remark == 'second (last)'
+        success_msg: "PASS: within input list, last occurrence of same key wins"
+        fail_msg: "FAIL: upstream={{ nginx_t_upstream | to_nice_json }}"

@@ -1,0 +1,26 @@
+---
+- name: Reload systemd for Redis
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Validate Redis server configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/redis-server
+      - "{{ redis_server_wrapper_config }}"
+      - --test-memory
+      - "2"
+  changed_when: false
+  no_log: "{{ redis_server_config_no_log }}"
+
+- name: Restart Redis server
+  ansible.builtin.service:
+    name: "{{ redis_server_service_name }}"
+    state: restarted
+    enabled: "{{ redis_server_service_enabled }}"
+
+- name: Restart Redis Sentinel
+  ansible.builtin.service:
+    name: "{{ redis_sentinel_service_name }}"
+    state: restarted
+    enabled: "{{ redis_sentinel_service_enabled }}"

@@ -1,0 +1,245 @@
+---
+# Tests for error_page and if-block handling.
+# Covers: code vs codes (singular/plural/list), string format,
+# dedup key construction, and if-block concatenation.
+
+- name: "ERROR_PAGE | singular code: int normalized to list for dedup key"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        error_page:
+          - code: 404
+            target: "@not_found"
+          - codes: 404
+            target: "@not_found"    # same key → dedup
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_pages"
+      ansible.builtin.set_fact:
+        nginx_t_pages: >-
+          {{ _nginx_server_runtime.myapp.error_page
+             | selectattr('target', 'equalto', '@not_found') | list }}
+    - name: "Code:404 and codes:404 produce same dedup key → deduplicated"
+      ansible.builtin.assert:
+        that:
+          # Both code:404 and codes:404 produce the same dedup key → one survives
+          - nginx_t_pages | length == 1
+        success_msg: "PASS: code:404 and codes:404 produce same dedup key → deduplicated"
+        fail_msg: "FAIL: error_page entries={{ nginx_t_pages | to_nice_json }}"
+
+
+- name: "ERROR_PAGE | codes as list: all codes joined in dedup key"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        error_page:
+          - codes: [500, 502, 503]
+            target: "@server_error"
+          - codes: [500]
+            target: "@server_error"    # different key (codes list differs) → both survive
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_pages"
+      ansible.builtin.set_fact:
+        nginx_t_pages: >-
+          {{ _nginx_server_runtime.myapp.error_page
+             | selectattr('target', 'equalto', '@server_error') | list }}
+    - name: "[500,502,503] and [500] are different dedup keys → both survive"
+      ansible.builtin.assert:
+        that:
+          # Different codes lists → different dedup keys → both present
+          - nginx_t_pages | length == 2
+        success_msg: "PASS: [500,502,503] and [500] are different dedup keys → both survive"
+        fail_msg: "FAIL: error_pages for @server_error={{ nginx_t_pages | to_nice_json }}"
+
+
+- name: "ERROR_PAGE | string format: included as-is with string as dedup key"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        error_page:
+          - "404 /404.html"
+          - "404 /404.html"    # duplicate string → one survives
+          - "500 /500.html"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "String error_pages deduplicated by string value, both formats kept"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.error_page | length == 2
+          - _nginx_server_runtime.myapp.error_page | select('equalto', '404 /404.html') | list | length == 1
+          - _nginx_server_runtime.myapp.error_page | select('equalto', '500 /500.html') | list | length == 1
+        success_msg: "PASS: string error_pages deduplicated by string value, both formats kept"
+        fail_msg: "FAIL: error_page={{ _nginx_server_runtime.myapp.error_page | to_nice_json }}"
+
+
+- name: "ERROR_PAGE | mapping without target or codes: silently skipped"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        error_page:
+          - codes: 404    # missing target → page_key = '' → skipped
+          - target: "@err"    # missing codes/code → page_key = '' → skipped
+          - code: 500
+            target: "@server_error"    # valid → included
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Malformed error_page mappings silently skipped"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.error_page | length == 1
+          - (_nginx_server_runtime.myapp.error_page[0]).target == '@server_error'
+        success_msg: "PASS: malformed error_page mappings silently skipped"
+        fail_msg: "FAIL: error_page={{ _nginx_server_runtime.myapp.error_page | to_nice_json }}"
+
+
+- name: "IF | explicit if-blocks from server appended after derived"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        if:
+          - condition: "$rate_limited = 1"
+            return:
+              code: 429
+          - condition: "$blocked_ua = 1"
+            return:
+              code: 403
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Explicit if-blocks included in order"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp['if'] | length == 2
+          - _nginx_server_runtime.myapp['if'][0].return.code == 429
+          - _nginx_server_runtime.myapp['if'][1].return.code == 403
+        success_msg: "PASS: explicit if-blocks included in order"
+        fail_msg: "FAIL: if={{ _nginx_server_runtime.myapp['if'] | to_nice_json }}"
+
+
+- name: "IF | derived (maintenance) if-block comes before explicit"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        maintenance:
+          enabled: false
+        if:
+          - condition: "$rate_limited = 1"
+            return:
+              code: 429
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Derived maintenance if-block precedes explicit if-blocks"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp['if'] | length == 2
+          # maintenance if-block comes first (derived prepended)
+          - _nginx_server_runtime.myapp['if'][0].condition is search('maintenance_active')
+          - _nginx_server_runtime.myapp['if'][1].return.code == 429
+        success_msg: "PASS: derived maintenance if-block precedes explicit if-blocks"
+        fail_msg: "FAIL: if={{ _nginx_server_runtime.myapp['if'] | to_nice_json }}"
+
+
+- name: "IF | duplicate explicit if-blocks are NOT deduplicated"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        if:
+          - condition: "$bad = 1"
+            return:
+              code: 403
+          - condition: "$bad = 1"
+            return:
+              code: 403
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Duplicate if-blocks not deduplicated (pure concatenation)"
+      ansible.builtin.assert:
+        that:
+          # if uses simple concatenation, no dedup → both survive
+          - _nginx_server_runtime.myapp['if'] | length == 2
+        success_msg: "PASS: duplicate if-blocks not deduplicated (pure concatenation)"
+        fail_msg: "FAIL: if={{ _nginx_server_runtime.myapp['if'] | to_nice_json }}"

@@ -1,0 +1,3 @@
+[Service]
+ExecStart=
+ExecStart=/usr/bin/redis-sentinel {{ redis_sentinel_config_file }} --supervised systemd --daemonize no

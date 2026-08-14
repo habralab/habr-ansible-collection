@@ -1,0 +1,5 @@
+---
+nodejs_runtimes: []
+nodejs_nvm_version: "v0.40.4"
+nodejs_nvm_profile: ".bashrc"
+nodejs_nvm_repo: "https://github.com/nvm-sh/nvm.git"

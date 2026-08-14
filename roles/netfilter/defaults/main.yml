@@ -1,6 +1,7 @@
 ---
 netfilter_use_ipset: false
 netfilter_use_iptables: false
+netfilter_replace_ufw: false
 
 netfilter_ipsets: []
 netfilter_ipset_hashsize: 131072

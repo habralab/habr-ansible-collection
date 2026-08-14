@@ -1,0 +1,11 @@
+---
+php_repository: ubuntu
+php_repository_manage: true
+
+php_ondrej_repository_name: ondrej-php
+php_ondrej_repository_url: https://ppa.launchpadcontent.net/ondrej/php/ubuntu
+php_ondrej_repository_key_url: >-
+  https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
+
+php_versions: {}
+php_cli_default_version: ""

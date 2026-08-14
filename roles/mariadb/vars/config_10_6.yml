@@ -1,0 +1,4 @@
+---
+_mariadb_config_epoch:
+  server:
+    innodb-read-only-compressed: "OFF"

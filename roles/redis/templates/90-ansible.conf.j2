@@ -1,0 +1,16 @@
+# Ansible managed Redis overrides.
+{% for option, value in redis_server_config.items() %}
+{% if value is sequence and value is not string %}
+{% for repeated_value in value %}
+{{ option }}{% if repeated_value is not none %} {{ repeated_value }}{% endif %}
+{{- '\n' -}}
+{% endfor %}
+{% elif value is sameas true %}
+{{ option }} yes
+{% elif value is sameas false %}
+{{ option }} no
+{% else %}
+{{ option }}{% if value is not none %} {{ value }}{% endif %}
+{% endif %}
+{{- '\n' -}}
+{% endfor %}

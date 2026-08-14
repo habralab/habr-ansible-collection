@@ -1,0 +1,111 @@
+---
+- name: Validate PHP role configuration
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_release'] in php_supported_releases
+      - php_repository in php_supported_repositories
+      - php_versions is mapping
+      - php_versions | length > 0
+    fail_msg: >-
+      php requires Ubuntu Focal or newer, a supported repository source, and
+      a non-empty php_versions mapping.
+  tags:
+    - php
+
+- name: Validate Ondrej PHP repository support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution_release'] in php_ondrej_supported_releases
+    fail_msg: >-
+      ppa_ondrej currently supports only Ubuntu Jammy and Noble. Use the Ubuntu
+      archive or configure an external repository and select unmanaged.
+  when: php_repository == 'ppa_ondrej'
+  tags:
+    - php
+    - php_repository
+
+- name: Configure Ondrej PHP repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - php
+        - php_repository
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ php_ondrej_repository_name }}"
+      url: "{{ php_ondrej_repository_url }}"
+      suite: "{{ ansible_facts['distribution_release'] }}"
+      components:
+        - main
+      key_url: "{{ php_ondrej_repository_key_url }}"
+      state: present
+  when:
+    - php_repository == 'ppa_ondrej'
+    - php_repository_manage | bool
+  tags:
+    - php
+    - php_repository
+    - apt
+
+- name: Apply PHP repository cache update
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - php
+    - php_repository
+    - apt
+
+- name: Validate configured PHP versions
+  ansible.builtin.include_tasks:
+    file: validate_version.yml
+    apply:
+      tags:
+        - php
+  loop: "{{ php_versions | dict2items }}"
+  loop_control:
+    loop_var: php_version_item
+    label: "{{ php_version_item.key }}"
+  tags:
+    - php
+
+- name: Validate the default PHP CLI selection
+  ansible.builtin.assert:
+    that:
+      - php_cli_default_version | string in php_versions
+      - "'cli' in php_versions[php_cli_default_version | string].sapis"
+    fail_msg: >-
+      php_cli_default_version must select an entry in php_versions that enables
+      the cli SAPI when one or more CLI versions are installed.
+  when: >-
+    php_versions | dict2items |
+    selectattr('value.sapis', 'contains', 'cli') | list | length > 0
+  tags:
+    - php
+    - php_alternatives
+
+- name: Install and configure PHP versions
+  ansible.builtin.include_tasks:
+    file: version.yml
+    apply:
+      tags:
+        - php
+  loop: "{{ php_versions | dict2items }}"
+  loop_control:
+    loop_var: php_version_item
+    label: "{{ php_version_item.key }}"
+  tags:
+    - php
+
+- name: Select the default PHP CLI alternatives
+  ansible.builtin.include_tasks:
+    file: alternatives.yml
+    apply:
+      tags:
+        - php
+        - php_alternatives
+  when: php_cli_default_version | length > 0
+  tags:
+    - php
+    - php_alternatives

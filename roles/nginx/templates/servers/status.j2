@@ -1,0 +1,55 @@
+server {
+{% set _listen = item.listen | default(['80', '[::]:80']) %}
+{% set _listen_list = _listen if _listen is sequence and _listen is not string else [_listen] %}
+{% for l in _listen_list %}
+	listen {{ l }};
+{% endfor %}
+
+	server_name {{ item.server_name | default('localhost') }};
+{% if item.access_log is defined %}
+
+	access_log {{ item.access_log }};
+{% endif %}
+{% if item.root is defined %}
+
+	root {{ item.root }};
+{% endif %}
+{# --- access/deny --- #}
+{% if item.access is defined %}
+
+{% for rule in item.access %}
+{% for action, target in rule.items() %}
+{% set _targets = target if target is sequence and target is not string else [target] %}
+{% for t in _targets %}
+	{{ action }} {{ t }};
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{# --- location --- #}
+{% set _default_locations = [
+    {
+        'name': '/',
+        'access': [{'allow': '127.0.0.0/8'}, {'allow': '::1'}, {'deny': 'all'}]
+    }
+] %}
+{% set _locations = item.locations | default(_default_locations) %}
+
+{% for loc in _locations %}
+	location {{ loc.name | default('/') }} {
+		stub_status;
+{# --- location => access/deny --- #}
+{% if loc.access is defined %}
+
+{% for rule in loc.access %}
+{% for action, target in rule.items() %}
+{% set _targets = target if target is sequence and target is not string else [target] %}
+{% for t in _targets %}
+		{{ action }} {{ t }};
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+	}
+{% endfor %}
+}

@@ -1,0 +1,263 @@
+---
+# Tests for direct _nginx_derived_* injection fields.
+# These are internal fields used by the role to inject pre-computed items
+# into the server runtime without going through the normal derivation logic.
+
+- name: "INJECT | _nginx_derived_maps merged into maps registry"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_maps:
+          - name: injected_map
+            source: "$http_x_custom"
+            target: "$myapp_injected"
+            default: "fallback"
+            entries:
+              - match: "v2"
+                value: "backend_v2"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_map"
+      ansible.builtin.set_fact:
+        nginx_t_map: >-
+          {{ _nginx_server_runtime.myapp.maps_registry.derived
+             | selectattr('name', 'equalto', 'injected_map') | first }}
+    - name: "_nginx_derived_maps injected into maps registry"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_map is defined
+          - nginx_t_map.source == '$http_x_custom'
+          - nginx_t_map.default == 'fallback'
+        success_msg: "PASS: _nginx_derived_maps injected into maps registry"
+        fail_msg: "FAIL: map={{ nginx_t_map | to_nice_json }}"
+
+
+- name: "INJECT | _nginx_derived_geos merged into geos registry"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_geos:
+          - name: injected_geo
+            target: "$myapp_injected_geo"
+            default: "0"
+            entries:
+              - match: "10.0.0.0/8"
+                value: "1"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_geo"
+      ansible.builtin.set_fact:
+        nginx_t_geo: >-
+          {{ _nginx_server_runtime.myapp.geos_registry.derived
+             | selectattr('name', 'equalto', 'injected_geo') | first }}
+    - name: "_nginx_derived_geos injected into geos registry"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_geo is defined
+          - nginx_t_geo.target == '$myapp_injected_geo'
+          - nginx_t_geo.entries | length == 1
+        success_msg: "PASS: _nginx_derived_geos injected into geos registry"
+        fail_msg: "FAIL: geo={{ nginx_t_geo | to_nice_json }}"
+
+
+- name: "INJECT | _nginx_derived_proxy_set_header merged into proxy_set_header registry"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_proxy_set_header:
+          - name: X-Real-IP
+            value: "$remote_addr"
+          - name: X-Request-ID
+            value: "$request_id"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "_nginx_derived_proxy_set_header injected correctly"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.proxy_set_header_registry.derived
+              | selectattr('name', 'equalto', 'X-Real-IP') | list | length == 1
+          - _nginx_server_runtime.myapp.proxy_set_header_registry.derived
+              | selectattr('name', 'equalto', 'X-Request-ID') | list | length == 1
+          - (_nginx_server_runtime.myapp.proxy_set_header_registry.derived
+              | selectattr('name', 'equalto', 'X-Real-IP') | first).value == '$remote_addr'
+        success_msg: "PASS: _nginx_derived_proxy_set_header injected correctly"
+        fail_msg: >-
+          FAIL: derived headers={{ _nginx_server_runtime.myapp.proxy_set_header_registry.derived
+            | to_nice_json }}
+
+
+- name: "INJECT | _nginx_derived_locations merged into locations"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_locations:
+          - name: "/internal"
+            internal: true
+            return:
+              code: 200
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_loc"
+      ansible.builtin.set_fact:
+        nginx_t_loc: >-
+          {{ _nginx_server_runtime.myapp.locations
+             | selectattr('name', 'equalto', '/internal') | first }}
+    - name: "_nginx_derived_locations injected into locations"
+      ansible.builtin.assert:
+        that:
+          - nginx_t_loc is defined
+          - nginx_t_loc.internal == true
+        success_msg: "PASS: _nginx_derived_locations injected into locations"
+        fail_msg: "FAIL: location={{ nginx_t_loc | to_nice_json }}"
+
+
+- name: "INJECT | _nginx_derived_if merged into if list"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_if:
+          - condition: "$bad_bot = 1"
+            return:
+              code: 403
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "_nginx_derived_if injected into if list"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp['if'] | length == 1
+          - _nginx_server_runtime.myapp['if'][0].condition == '$bad_bot = 1'
+          - _nginx_server_runtime.myapp['if'][0].return.code == 403
+        success_msg: "PASS: _nginx_derived_if injected into if list"
+        fail_msg: "FAIL: if={{ _nginx_server_runtime.myapp['if'] | to_nice_json }}"
+
+
+- name: "INJECT | _nginx_derived_if and explicit if concatenated without dedup"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_if:
+          - condition: "$bad_bot = 1"
+            return:
+              code: 403
+        if:
+          - condition: "$rate_limited = 1"
+            return:
+              code: 429
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "_nginx_derived_if and explicit if concatenated (no dedup)"
+      ansible.builtin.assert:
+        that:
+          # Both present, no dedup (concatenation only)
+          - _nginx_server_runtime.myapp['if'] | length == 2
+          - _nginx_server_runtime.myapp['if']
+              | selectattr('condition', 'equalto', '$bad_bot = 1') | list | length == 1
+          - _nginx_server_runtime.myapp['if']
+              | selectattr('condition', 'equalto', '$rate_limited = 1') | list | length == 1
+        success_msg: "PASS: _nginx_derived_if and explicit if concatenated (no dedup)"
+        fail_msg: "FAIL: if={{ _nginx_server_runtime.myapp['if'] | to_nice_json }}"
+
+
+- name: "INJECT | _nginx_derived_upstreams merged into upstreams registry"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: myapp
+        server_name: myapp.example.com
+        _nginx_derived_upstreams:
+          - name: myapp_prebuilt
+            hosts:
+              - address: "127.0.0.1:9000"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "_nginx_derived_upstreams present in derived upstreams registry"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime.myapp.upstreams_registry.derived
+              | selectattr('name', 'equalto', 'myapp_prebuilt') | list | length == 1
+        success_msg: "PASS: _nginx_derived_upstreams present in derived upstreams registry"
+        fail_msg: >-
+          FAIL: derived={{ _nginx_server_runtime.myapp.upstreams_registry.derived
+            | map(attribute='name') | list }}

@@ -1,0 +1,15 @@
+/var/log/nginx/*.log {
+        {{ nginx_logrotate_frequency | default(__nginx_layouts_config[_nginx_active_layout].logrotate_frequency, true) }}
+        missingok
+        rotate {{ nginx_logrotate_rotate | default(__nginx_layouts_config[_nginx_active_layout].logrotate_rotate, true) }}
+        compress
+        delaycompress
+        notifempty
+        create 0640 {{ _nginx_runtime_user }} {{ nginx_log_group | default(__nginx_layouts_config[_nginx_active_layout].log_group, true) }}
+        sharedscripts
+        postrotate
+                if [ -f /run/nginx.pid ]; then
+                        kill -USR1 `cat /run/nginx.pid`
+                fi
+        endscript
+}

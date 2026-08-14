@@ -1,0 +1,69 @@
+---
+- name: "FASTCGI | simple landings shape renders try_files, rewrite, and params"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: "landing"
+      server_name: "landing.example.com"
+      listen:
+        - "80"
+      root: "/home/web/sites/landing.example.com/public"
+      index:
+        - "index.html"
+        - "index.php"
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          try_files: "$uri $uri/ @backend"
+        - name: "\\.php"
+          modifier: "~"
+          try_files: "$uri @backend"
+          fastcgi_pass: "unix:/home/web/support/pid/php8.3-web.sock"
+          fastcgi_params:
+            - key: "SCRIPT_FILENAME"
+              value: "$document_root$fastcgi_script_name"
+            - key: "SCRIPT_NAME"
+              value: "$fastcgi_script_name"
+        - name: "@backend"
+          rewrite:
+            - regex: "^(.+)$"
+              replacement: "/index.php"
+              flag: "break"
+          fastcgi_pass: "unix:/home/web/support/pid/php8.3-web.sock"
+          fastcgi_params:
+            - key: "SCRIPT_FILENAME"
+              value: "$document_root$fastcgi_script_name"
+            - key: "SCRIPT_NAME"
+              value: "$fastcgi_script_name"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+
+    - name: "FastCGI shape renders fully"
+      ansible.builtin.assert:
+        that:
+          - "'root /home/web/sites/landing.example.com/public;' in nginx_rendered"
+          - "'index index.html index.php;' in nginx_rendered"
+          - "'location / {' in nginx_rendered"
+          - "'try_files $uri $uri/ @backend;' in nginx_rendered"
+          - "'location ~ \\.php {' in nginx_rendered"
+          - "'fastcgi_pass unix:/home/web/support/pid/php8.3-web.sock;' in nginx_rendered"
+          - "'fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;' in nginx_rendered"
+          - "'fastcgi_param SCRIPT_NAME $fastcgi_script_name;' in nginx_rendered"
+          - "\"rewrite '^(.+)$' '/index.php' break;\" in nginx_rendered"
+          - "'location @backend {' in nginx_rendered"
+        success_msg: "PASS: FastCGI simple_locations shape renders correctly"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"

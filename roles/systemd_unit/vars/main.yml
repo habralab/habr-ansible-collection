@@ -1,0 +1,104 @@
+---
+__systemd_unit_config_keys:
+  - "name"
+  - "scope"
+  - "user"
+  - "state"
+  - "enabled"
+  - "masked"
+  - "service_state"
+  - "force"
+  - "no_block"
+  - "manage_linger"
+  - "mode"
+  - "reload_on_change"
+  - "restart_on_change"
+  - "source"
+
+__systemd_unit_section_order:
+  - "Unit"
+  - "Service"
+  - "Install"
+
+__systemd_unit_section_directive_specs:
+  Unit:
+    Description:
+      render_type: "scalar"
+      value_type: "string"
+    Documentation:
+      render_type: "repeatable"
+      value_type: "list"
+    After:
+      render_type: "repeatable"
+      value_type: "list"
+    Wants:
+      render_type: "repeatable"
+      value_type: "list"
+    Requires:
+      render_type: "repeatable"
+      value_type: "list"
+    PartOf:
+      render_type: "repeatable"
+      value_type: "list"
+  Service:
+    Type:
+      render_type: "scalar"
+      value_type: "string"
+    User:
+      render_type: "scalar"
+      value_type: "string"
+    Group:
+      render_type: "scalar"
+      value_type: "string"
+    WorkingDirectory:
+      render_type: "scalar"
+      value_type: "string"
+    Environment:
+      render_type: "repeatable"
+      value_type: "list"
+    EnvironmentFile:
+      render_type: "repeatable"
+      value_type: "list"
+    ExecStart:
+      render_type: "repeatable"
+      value_type: "list"
+    ExecStartPre:
+      render_type: "repeatable"
+      value_type: "list"
+    ExecStartPost:
+      render_type: "repeatable"
+      value_type: "list"
+    ExecStop:
+      render_type: "repeatable"
+      value_type: "list"
+    ExecReload:
+      render_type: "repeatable"
+      value_type: "list"
+    Restart:
+      render_type: "scalar"
+      value_type: "string"
+    RestartSec:
+      render_type: "scalar"
+      value_type: "string"
+    TimeoutStartSec:
+      render_type: "scalar"
+      value_type: "string"
+    TimeoutStopSec:
+      render_type: "scalar"
+      value_type: "string"
+    KillMode:
+      render_type: "scalar"
+      value_type: "string"
+    RemainAfterExit:
+      render_type: "scalar"
+      value_type: "string"
+  Install:
+    WantedBy:
+      render_type: "repeatable"
+      value_type: "list"
+    RequiredBy:
+      render_type: "repeatable"
+      value_type: "list"
+    Also:
+      render_type: "repeatable"
+      value_type: "list"

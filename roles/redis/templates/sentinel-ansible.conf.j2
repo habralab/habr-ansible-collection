@@ -1,0 +1,21 @@
+# Seeded by Ansible once; Redis Sentinel owns this file after creation.
+bind {{ redis_sentinel_bind }}
+protected-mode {{ redis_sentinel_protected_mode | ternary('yes', 'no') }}
+port {{ redis_sentinel_port }}
+daemonize no
+supervised systemd
+pidfile /run/sentinel/redis-sentinel.pid
+logfile /var/log/redis/redis-sentinel.log
+dir /var/lib/redis
+{% if redis_sentinel_requirepass | length > 0 %}
+requirepass {{ redis_sentinel_requirepass }}
+{% endif %}
+{% for monitor in redis_sentinel_monitors %}
+sentinel monitor {{ monitor.name }} {{ monitor.host }} {{ monitor.port | default(6379) }} {{ monitor.quorum | default(1) }}
+{% if monitor.auth_pass is defined %}
+sentinel auth-pass {{ monitor.name }} {{ monitor.auth_pass }}
+{% endif %}
+{% if monitor.down_after_milliseconds is defined %}
+sentinel down-after-milliseconds {{ monitor.name }} {{ monitor.down_after_milliseconds }}
+{% endif %}
+{% endfor %}

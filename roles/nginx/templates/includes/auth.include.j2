@@ -1,0 +1,22 @@
+satisfy {{ item.satisfy | default('any') }};
+{% if item.access is defined %}
+{% set access_default_action = item.access.default_action | default('deny') %}
+{% if item.access.ip_sets is defined and item.access.ip_sets | length > 0 %}
+
+# IP sets
+{% for ip_set in item.access.ip_sets %}
+{% set set_name = ip_set.name %}
+{% set set_action = ip_set.action | default('allow') %}
+{% for ip_entry in (nginx_ip_sets | default({}))[set_name] | default([]) %}
+{{ set_action }} {{ ip_entry.net }}; # {{ set_name }}{% if ip_entry.remark is defined %} - {{ ip_entry.remark }}{% endif %}{{ '' }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{{ access_default_action }} all;
+{% endif %}
+{% if item.basic is defined and item.basic.banner is defined and item.basic.passwd_lists is defined and item.basic.passwd_lists | length > 0 %}
+
+auth_basic "{{ item.basic.banner }}";
+auth_basic_user_file /etc/nginx/includes/auth.{{ item.name }}.passwd;
+{% endif %}

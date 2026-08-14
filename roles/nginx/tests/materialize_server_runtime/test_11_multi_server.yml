@@ -1,0 +1,231 @@
+---
+# Tests for multi-server scenarios.
+# Verifies namespace isolation between servers and cross-server independence.
+
+- name: "MULTI | two servers produce two independent runtime entries"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+      - name: static
+        server_name: static.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Two servers produce two independent runtime entries"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime | length == 2
+          - _nginx_server_runtime.api is defined
+          - _nginx_server_runtime.static is defined
+        success_msg: "PASS: two servers produce two independent runtime entries"
+        fail_msg: "FAIL: runtime keys={{ _nginx_server_runtime.keys() | list }}"
+
+
+- name: "MULTI | same member name in different servers gets different namespace prefixes"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.0.1:8080"
+      - name: static
+        server_name: static.example.com
+        upstream_members:
+          - name: web1
+            address: "10.0.1.1:8080"
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Same member name in two servers gets different namespaced upstreams"
+      ansible.builtin.assert:
+        that:
+          # api's web1 → api_web1
+          - _nginx_server_runtime.api.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'api_web1') | list | length == 1
+          - (_nginx_server_runtime.api.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'api_web1') | first).hosts[0].address == '10.0.0.1:8080'
+          # static's web1 → static_web1
+          - _nginx_server_runtime.static.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'static_web1') | list | length == 1
+          - (_nginx_server_runtime.static.upstreams_registry.materialized
+              | selectattr('name', 'equalto', 'static_web1') | first).hosts[0].address == '10.0.1.1:8080'
+        success_msg: "PASS: same member name in two servers gets different namespaced upstreams"
+        fail_msg: >-
+          FAIL: api upstreams={{ _nginx_server_runtime.api.upstreams_registry.materialized
+            | map(attribute='name') | list }},
+          static upstreams={{ _nginx_server_runtime.static.upstreams_registry.materialized
+            | map(attribute='name') | list }}
+
+
+- name: "MULTI | server A maintenance does not affect server B"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+        maintenance:
+          enabled: true
+      - name: static
+        server_name: static.example.com
+        # no maintenance
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Maintenance on server A does not bleed into server B"
+      ansible.builtin.assert:
+        that:
+          # api has maintenance maps and if-block
+          - _nginx_server_runtime.api.maps_registry.derived
+              | selectattr('name', 'equalto', 'maintenance_active') | list | length == 1
+          - _nginx_server_runtime.api['if'] | length == 1
+          # static has no maintenance artifacts
+          - _nginx_server_runtime.static.maps_registry.derived
+              | selectattr('name', 'equalto', 'maintenance_active') | list | length == 0
+          - _nginx_server_runtime.static['if'] | length == 0
+        success_msg: "PASS: maintenance on server A does not bleed into server B"
+        fail_msg: >-
+          FAIL: api maps={{ _nginx_server_runtime.api.maps_registry.derived | map(attribute='name') | list }},
+          static maps={{ _nginx_server_runtime.static.maps_registry.derived | map(attribute='name') | list }}
+
+
+- name: "MULTI | filter selects one of two servers, runtime has only selected"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: ["api"]
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+      - name: static
+        server_name: static.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Filter"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime | length == 1
+          - _nginx_server_runtime.api is defined
+          - _nginx_server_runtime.static is not defined
+        success_msg: "PASS: filter 'api' selects only api server from runtime"
+        fail_msg: "FAIL: runtime keys={{ _nginx_server_runtime.keys() | list }}"
+
+
+- name: "MULTI | global nginx_server_maintenance defaults merged per server"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    # Global maintenance defaults (file path)
+    nginx_server_maintenance:
+      file: "/custom/503.html"
+    _nginx_all_servers:
+      - name: api
+        server_name: api.example.com
+        maintenance:
+          enabled: false
+          # inherits file from nginx_server_maintenance global default
+      - name: static
+        server_name: static.example.com
+        maintenance:
+          enabled: false
+          file: "/override/503.html"    # per-server override
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "Extract nginx_t_api_loc"
+      ansible.builtin.set_fact:
+        nginx_t_api_loc: >-
+          {{ _nginx_server_runtime.api.locations
+             | selectattr('name', 'equalto', '@maintenance') | first }}
+        nginx_t_static_loc: >-
+          {{ _nginx_server_runtime.static.locations
+             | selectattr('name', 'equalto', '@maintenance') | first }}
+    - name: "Global maintenance.file default overridden per-server"
+      ansible.builtin.assert:
+        that:
+          # api uses global default file
+          - nginx_t_api_loc.rewrite[0].replacement == '/custom/503.html'
+          # static uses per-server override
+          - nginx_t_static_loc.rewrite[0].replacement == '/override/503.html'
+        success_msg: "PASS: global maintenance.file default overridden per-server"
+        fail_msg: >-
+          FAIL: api maintenance loc={{ nginx_t_api_loc | to_nice_json }},
+          static maintenance loc={{ nginx_t_static_loc | to_nice_json }}
+
+
+- name: "MULTI | servers processed in order, runtime keys stable"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_runtime.yml"
+  vars:
+    nginx_only_servers: []
+    nginx_ip_sets: {}
+    nginx_server_location_presets: {}
+    nginx_server_location_preset_defaults: {}
+    nginx_server_maintenance: {}
+    _nginx_all_servers:
+      - name: alpha
+        server_name: alpha.example.com
+      - name: beta
+        server_name: beta.example.com
+      - name: gamma
+        server_name: gamma.example.com
+  tasks:
+    - name: "Run materializer"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../../../../roles/nginx/tasks/materialize_server_runtime.yml"
+    - name: "All three servers present in runtime"
+      ansible.builtin.assert:
+        that:
+          - _nginx_server_runtime | length == 3
+          - _nginx_server_runtime.alpha is defined
+          - _nginx_server_runtime.beta is defined
+          - _nginx_server_runtime.gamma is defined
+        success_msg: "PASS: all three servers present in runtime"
+        fail_msg: "FAIL: runtime keys={{ _nginx_server_runtime.keys() | list }}"

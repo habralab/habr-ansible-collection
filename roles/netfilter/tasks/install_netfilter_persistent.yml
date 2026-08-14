@@ -1,4 +1,37 @@
 ---
+- name: "Gather installed package facts"
+  ansible.builtin.package_facts:
+    manager: auto
+  tags:
+    - netfilter
+    - apt
+
+- name: "Require explicit permission to replace UFW"
+  ansible.builtin.assert:
+    that:
+      - netfilter_replace_ufw | bool
+    fail_msg: >-
+      The ufw package is installed and conflicts with netfilter-persistent.
+      Set netfilter_replace_ufw=true to let this role remove UFW and take over
+      firewall persistence.
+  when:
+    - "'ufw' in ansible_facts.packages"
+  tags:
+    - netfilter
+    - apt
+
+- name: "Remove UFW before installing netfilter-persistent"
+  ansible.builtin.apt:
+    name: "ufw"
+    state: absent
+  when:
+    - "'ufw' in ansible_facts.packages"
+    - netfilter_replace_ufw | bool
+  become: true
+  tags:
+    - netfilter
+    - apt
+
 - name: "Install base netfilter packages"
   ansible.builtin.apt:
     name:

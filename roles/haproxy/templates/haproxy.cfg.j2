@@ -7,6 +7,9 @@ global
 	user haproxy
 	group haproxy
 	daemon
+{% if haproxy_global_tune_bufsize | string | length > 0 %}
+	tune.bufsize {{ haproxy_global_tune_bufsize }}
+{% endif %}
 
 	# Default SSL material locations
 	ca-base {{ haproxy_global_ssl_ca_base }}

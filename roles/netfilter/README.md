@@ -14,6 +14,8 @@ or firewalld) and dynamic rule management are intentionally out of scope.
 
 - Detects supported OS releases before execution
 - Installs `netfilter-persistent`, `iptables-persistent`, and `ipset-persistent` packages
+- Detects an installed UFW package and requires explicit permission before
+  removing it in favor of `netfilter-persistent`
 - Generates `/etc/iptables/ipsets` for declarative IP set management
 - Generates `/etc/iptables/rules.v4` and `/etc/iptables/rules.v6`
 - Restarts the `netfilter-persistent` service to apply changes upon configuration updates
@@ -72,6 +74,22 @@ Relevant variables:
 
 ---
 
+## UFW replacement
+
+The `ufw` package conflicts with the persistent netfilter packages on supported
+Ubuntu releases. The role checks installed package facts before changing the
+firewall stack; it does not inspect UFW configuration or execute the `ufw`
+command.
+
+If UFW is installed, the role fails by default. Set
+`netfilter_replace_ufw: true` to explicitly allow the role to remove the `ufw`
+package before installing `netfilter-persistent` and its enabled plugins.
+
+This is a package ownership handoff only. The role does not translate or
+preserve UFW rules.
+
+---
+
 ## Configuration variables
 
 This role exposes configuration via variables prefixed with `netfilter_`.
@@ -103,7 +121,7 @@ These concerns are expected to be handled by local daemons or separate logic.
 ## Requirements
 
 - ansible-core >= 2.18
-- Supported platforms: Ubuntu (focal, jammy, noble)
+- Supported platforms: Ubuntu (focal, jammy, noble, resolute)
 
 ---
 

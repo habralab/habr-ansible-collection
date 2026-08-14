@@ -1,0 +1,404 @@
+---
+# Tests for return and rewrite composite rendering in vhost.j2.
+# Covers: return code-only, return url with code, return text with quote escaping,
+# rewrite quote variants, rewrite with flag, multiple rewrites.
+#
+# NOTE: locations go in nginx_server_runtime.locations (not item.locations)
+# because the template replaces item.locations with runtime.locations when defined.
+
+- name: "RETURN | code-only return renders bare integer"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/health"
+          return:
+            code: 204
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return {code:204} → bare code"
+      ansible.builtin.assert:
+        that:
+          - "'return 204;' in nginx_rendered"
+        success_msg: "PASS: return {code:204} → bare code"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "RETURN | return with url uses default 302"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          return:
+            url: "https://new.example.com$request_uri"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return {url:...} defaults to 302"
+      ansible.builtin.assert:
+        that:
+          - "'return 302 https://new.example.com$request_uri;' in nginx_rendered"
+        success_msg: "PASS: return {url:...} defaults to 302"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "RETURN | return with url and explicit code"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          return:
+            code: 301
+            url: "https://new.example.com$request_uri"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return {code:301, url:...} → explicit code used"
+      ansible.builtin.assert:
+        that:
+          - "'return 301 https://new.example.com$request_uri;' in nginx_rendered"
+        success_msg: "PASS: return {code:301, url:...} → explicit code used"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "RETURN | text without single-quote → single-quoted"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/ping"
+          return:
+            code: 200
+            text: "pong"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return text without quote → single-quoted"
+      ansible.builtin.assert:
+        that:
+          - "\"return 200 'pong';\" in nginx_rendered"
+        success_msg: "PASS: return text without quote → single-quoted"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "RETURN | text with single-quote → double-quoted"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/ping"
+          return:
+            code: 200
+            text: "it's ok"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return text with single-quote → double-quoted"
+      ansible.builtin.assert:
+        that:
+          - "'return 200 \"it' ~ \"'\" ~ 's ok\";' in nginx_rendered"
+        success_msg: "PASS: return text with single-quote → double-quoted"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "RETURN | text with both quote types → escaped double-quoted"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/ping"
+          return:
+            code: 200
+            text: "it's \"ok\""
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return text with both quotes → escaped output (no TODO)"
+      ansible.builtin.assert:
+        that:
+          # text has both ' and " → escape path: no simple quoting, falls to escaped double-quotes
+          - "'return 200' in nginx_rendered"
+          - "'# TODO' not in nginx_rendered"
+        success_msg: "PASS: return text with both quotes → escaped output (no TODO)"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "RETURN | string shorthand passes through"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          return: "444"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Return"
+      ansible.builtin.assert:
+        that:
+          - "'return 444;' in nginx_rendered"
+        success_msg: "PASS: return '444' string passes through verbatim"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "REWRITE | simple regex without quotes → single-quoted"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          rewrite:
+            - regex: "^/old/(.*)"
+              replacement: "/new/$1"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Rewrite without quotes → both sides single-quoted"
+      ansible.builtin.assert:
+        that:
+          - "\"rewrite '^/old/(.*)' '/new/$1';\" in nginx_rendered"
+        success_msg: "PASS: rewrite without quotes → both sides single-quoted"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "REWRITE | regex with flag appended"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          rewrite:
+            - regex: "^/api/(.*)"
+              replacement: "/v2/$1"
+              flag: last
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Rewrite with flag → flag appended before semicolon"
+      ansible.builtin.assert:
+        that:
+          - "\"rewrite '^/api/(.*)' '/v2/$1' last;\" in nginx_rendered"
+        success_msg: "PASS: rewrite with flag → flag appended before semicolon"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "REWRITE | regex containing single-quote → double-quoted"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          rewrite:
+            - regex: "^/it's/(.*)"
+              replacement: "/fixed/$1"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Rewrite regex with single-quote → double-quoted"
+      ansible.builtin.assert:
+        that:
+          - "\"rewrite \\\"^/it'\" in nginx_rendered"
+        success_msg: "PASS: rewrite regex with single-quote → double-quoted"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "REWRITE | multiple rewrites all rendered"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations:
+        - name: "/"
+          rewrite:
+            - regex: "^/a/(.*)"
+              replacement: "/x/$1"
+            - regex: "^/b/(.*)"
+              replacement: "/y/$1"
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Multiple rewrites all rendered"
+      ansible.builtin.assert:
+        that:
+          - "\"rewrite '^/a/(.*)' '/x/$1';\" in nginx_rendered"
+          - "\"rewrite '^/b/(.*)' '/y/$1';\" in nginx_rendered"
+        success_msg: "PASS: multiple rewrites all rendered"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"

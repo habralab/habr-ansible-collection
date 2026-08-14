@@ -1,0 +1,404 @@
+---
+# Tests for map and geo block rendering in vhost.j2.
+# Covers: map entries single-quoted, default single-quoted, hostnames/volatile flags,
+# state:absent filtering, geo with/without source, ranges, proxy (string and list),
+# proxy_recursive, volatile, geo entries, missing target → skipped.
+
+- name: "MAP | map entries and default are single-quoted"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry:
+        materialized:
+          - name: backend_selector
+            source: "$cookie_backend"
+            target: "$myapp_backend_selector"
+            default: "web"
+            entries:
+              - match: "v2"
+                value: "web_v2"
+              - match: "v3"
+                value: "web_v3"
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Map entries and default are single-quoted"
+      ansible.builtin.assert:
+        that:
+          - "'map $cookie_backend $myapp_backend_selector {' in nginx_rendered"
+          - "\"\\tdefault 'web';\" in nginx_rendered"
+          - "\"\\t'v2' 'web_v2';\" in nginx_rendered"
+          - "\"\\t'v3' 'web_v3';\" in nginx_rendered"
+        success_msg: "PASS: map entries and default are single-quoted"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "MAP | hostnames and volatile flags rendered"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry:
+        materialized:
+          - name: host_map
+            source: "$host"
+            target: "$myapp_host_target"
+            hostnames: true
+            volatile: true
+            entries: []
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Map hostnames and volatile flags rendered"
+      ansible.builtin.assert:
+        that:
+          - "'\thostnames;' in nginx_rendered"
+          - "'\tvolatile;' in nginx_rendered"
+        success_msg: "PASS: map hostnames and volatile flags rendered"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "MAP | state:absent map excluded from output"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry:
+        materialized:
+          - name: active_map
+            source: "$arg_x"
+            target: "$myapp_active"
+            entries: []
+          - name: removed_map
+            source: "$arg_y"
+            target: "$myapp_removed"
+            state: absent
+            entries: []
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "State:absent map excluded"
+      ansible.builtin.assert:
+        that:
+          - "'$myapp_active' in nginx_rendered"
+          - "'$myapp_removed' not in nginx_rendered"
+        success_msg: "PASS: state:absent map excluded"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "MAP | no maps → no Maps section"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Empty maps → no Maps section"
+      ansible.builtin.assert:
+        that:
+          - "'### Maps' not in nginx_rendered"
+          - "'map ' not in nginx_rendered"
+        success_msg: "PASS: empty maps → no Maps section"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "GEO | geo with source uses 'geo SOURCE TARGET' syntax"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry:
+        materialized:
+          - name: office_geo
+            source: "$http_x_real_ip"
+            target: "$myapp_is_office"
+            default: "0"
+            entries:
+              - match: "10.0.0.0/8"
+                value: "1"
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Geo with source uses two-arg syntax"
+      ansible.builtin.assert:
+        that:
+          - "'geo $http_x_real_ip $myapp_is_office {' in nginx_rendered"
+          - "'\tdefault 0;' in nginx_rendered"
+          - "'\t10.0.0.0/8 1;' in nginx_rendered"
+        success_msg: "PASS: geo with source uses two-arg syntax"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "GEO | geo without source uses 'geo TARGET' syntax"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry:
+        materialized:
+          - name: remote_geo
+            target: "$myapp_is_internal"
+            default: "0"
+            entries:
+              - match: "192.168.0.0/16"
+                value: "1"
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Geo without source uses single-arg syntax"
+      ansible.builtin.assert:
+        that:
+          - "'geo $myapp_is_internal {' in nginx_rendered"
+          - "'geo $http' not in nginx_rendered"
+        success_msg: "PASS: geo without source uses single-arg syntax"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "GEO | ranges flag renders 'ranges;'"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry:
+        materialized:
+          - name: range_geo
+            target: "$myapp_range_result"
+            ranges: true
+            entries:
+              - match: "0.0.0.0-10.0.0.255"
+                value: "private"
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Geo ranges:true → ranges; rendered"
+      ansible.builtin.assert:
+        that:
+          - "'\tranges;' in nginx_rendered"
+        success_msg: "PASS: geo ranges:true → ranges; rendered"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "GEO | proxy as list renders multiple proxy directives"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry:
+        materialized:
+          - name: proxied_geo
+            target: "$myapp_real_ip_geo"
+            proxy:
+              - "10.0.0.1"
+              - "10.0.0.2"
+            proxy_recursive: true
+            entries: []
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Geo proxy list → multiple proxy directives + proxy_recursive"
+      ansible.builtin.assert:
+        that:
+          - "'\tproxy 10.0.0.1;' in nginx_rendered"
+          - "'\tproxy 10.0.0.2;' in nginx_rendered"
+          - "'\tproxy_recursive on;' in nginx_rendered"
+        success_msg: "PASS: geo proxy list → multiple proxy directives + proxy_recursive"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "GEO | state:absent geo excluded from output"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry:
+        materialized:
+          - name: active_geo
+            target: "$myapp_active_geo"
+            entries: []
+          - name: removed_geo
+            target: "$myapp_removed_geo"
+            state: absent
+            entries: []
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "State:absent geo excluded"
+      ansible.builtin.assert:
+        that:
+          - "'$myapp_active_geo' in nginx_rendered"
+          - "'$myapp_removed_geo' not in nginx_rendered"
+        success_msg: "PASS: state:absent geo excluded"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
+
+
+- name: "GEO | geo without target skipped entirely"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: myapp
+      server_name: myapp.example.com
+    nginx_server_runtime:
+      geos_registry:
+        materialized:
+          - name: broken_geo
+            entries: []    # no target → skipped by for loop condition
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+      locations: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+    - name: "Geo without target skipped"
+      ansible.builtin.assert:
+        that:
+          - "'broken_geo' not in nginx_rendered"
+        success_msg: "PASS: geo without target skipped"
+        fail_msg: "FAIL: rendered=\n{{ nginx_rendered }}"
