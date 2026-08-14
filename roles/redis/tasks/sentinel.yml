@@ -1,0 +1,158 @@
+---
+- name: Validate Redis Sentinel configuration
+  ansible.builtin.assert:
+    that:
+      - redis_sentinel_monitors | length > 0
+      - item.name is defined
+      - item.name | length > 0
+      - item.host is defined
+      - item.host | length > 0
+      - item.port | default(6379) | int > 0
+      - item.quorum | default(1) | int > 0
+    fail_msg: >-
+      Each Redis Sentinel monitor requires a name, host, positive port, and
+      positive quorum.
+  loop: "{{ redis_sentinel_monitors }}"
+  loop_control:
+    label: "{{ item.name | default('UNKNOWN') }}"
+  no_log: "{{ redis_sentinel_no_log }}"
+
+- name: Install Redis Sentinel packages
+  ansible.builtin.apt:
+    name: "{{ redis_sentinel_packages }}"
+    state: "{{ redis_sentinel_package_state }}"
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Inspect Redis Sentinel binary
+  ansible.builtin.stat:
+    path: /usr/bin/redis-sentinel
+  register: redis_sentinel_binary
+
+- name: Install Redis Sentinel configuration validator
+  ansible.builtin.copy:
+    src: validate-sentinel-config
+    dest: /usr/local/bin/validate-redis-sentinel-config
+    owner: root
+    group: root
+    mode: "0755"
+  when: redis_sentinel_binary.stat.exists
+
+- name: Stop Redis Sentinel before an explicit reseed
+  ansible.builtin.service:
+    name: "{{ redis_sentinel_service_name }}"
+    state: stopped
+  when:
+    - redis_sentinel_binary.stat.exists
+    - redis_sentinel_reseed | bool
+    - not ansible_check_mode
+
+- name: Remove Redis Sentinel state for an explicit reseed
+  ansible.builtin.file:
+    path: "{{ redis_sentinel_config_file }}"
+    state: absent
+  no_log: "{{ redis_sentinel_no_log }}"
+  when:
+    - redis_sentinel_binary.stat.exists
+    - redis_sentinel_reseed | bool
+
+- name: Seed writable Redis Sentinel state
+  ansible.builtin.template:
+    src: sentinel-ansible.conf.j2
+    dest: "{{ redis_sentinel_config_file }}"
+    owner: redis
+    group: redis
+    mode: "0640"
+    force: false
+    validate: /usr/local/bin/validate-redis-sentinel-config %s
+  no_log: "{{ redis_sentinel_no_log }}"
+  notify:
+    - Restart Redis Sentinel
+  when: redis_sentinel_binary.stat.exists
+
+- name: Ensure Redis Sentinel systemd drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ redis_sentinel_systemd_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: redis_sentinel_binary.stat.exists
+
+- name: Point packaged Redis Sentinel service at writable state
+  ansible.builtin.template:
+    src: redis-sentinel.service.conf.j2
+    dest: "{{ redis_sentinel_systemd_dropin_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd for Redis
+    - Restart Redis Sentinel
+  when: redis_sentinel_binary.stat.exists
+
+- name: Apply Redis Sentinel handlers
+  ansible.builtin.meta: flush_handlers
+  when: redis_sentinel_binary.stat.exists
+
+- name: Ensure Redis Sentinel service state
+  ansible.builtin.service:
+    name: "{{ redis_sentinel_service_name }}"
+    enabled: "{{ redis_sentinel_service_enabled }}"
+    state: "{{ redis_sentinel_service_state }}"
+  when:
+    - redis_sentinel_binary.stat.exists
+    - not ansible_check_mode
+
+- name: Verify Redis Sentinel master discovery
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/redis-cli
+      - --raw
+      - -h
+      - "127.0.0.1"
+      - -p
+      - "{{ redis_sentinel_port | string }}"
+      - SENTINEL
+      - GET-MASTER-ADDR-BY-NAME
+      - "{{ item.name }}"
+  environment:
+    REDISCLI_AUTH: "{{ redis_sentinel_requirepass }}"
+  register: redis_sentinel_discovery
+  changed_when: false
+  failed_when: false
+  until: >-
+    redis_sentinel_discovery.rc == 0
+    and redis_sentinel_discovery.stdout_lines ==
+        [item.host | string, item.port | default(6379) | string]
+  retries: 10
+  delay: 1
+  no_log: "{{ redis_sentinel_no_log }}"
+  loop: "{{ redis_sentinel_monitors }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - redis_sentinel_binary.stat.exists
+    - not ansible_check_mode
+
+- name: Verify connection to Redis discovered through Sentinel
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/redis-cli
+      - --raw
+      - -h
+      - "{{ item.stdout_lines[0] }}"
+      - -p
+      - "{{ item.stdout_lines[1] }}"
+      - ping
+  environment:
+    REDISCLI_AUTH: "{{ item.item.auth_pass }}"
+  changed_when: false
+  no_log: "{{ redis_sentinel_no_log }}"
+  loop: "{{ redis_sentinel_discovery.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - redis_sentinel_binary.stat.exists
+    - not ansible_check_mode
+    - item.item.auth_pass is defined

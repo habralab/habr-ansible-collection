@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: redis
+  author: Habr Team <servers@habr.team>
+  description: Install and configure Redis without replacing package defaults
+  company: Habr
+  license: unlicensed
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+        - resolute
+dependencies: []

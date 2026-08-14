@@ -1,0 +1,33 @@
+#!/bin/sh
+set -u
+
+config_file=$1
+validation_port=$((40000 + ($$ % 20000)))
+output_file=$(mktemp /tmp/redis-sentinel-validation.XXXXXX)
+validation_config=$(mktemp /tmp/redis-sentinel-validation.XXXXXX.conf)
+pid_file="/tmp/redis-sentinel-validation.$$.pid"
+
+cp "$config_file" "$validation_config"
+
+cleanup() {
+    rm -f "$output_file" "$validation_config" "$pid_file"
+}
+trap cleanup EXIT HUP INT TERM
+
+timeout 3 /usr/bin/redis-server "$validation_config" \
+    --sentinel \
+    --bind 127.0.0.1 \
+    --port "$validation_port" \
+    --daemonize no \
+    --supervised no \
+    --logfile "" \
+    --pidfile "$pid_file" \
+    --dir /tmp >"$output_file" 2>&1
+validation_status=$?
+
+if [ "$validation_status" -eq 124 ]; then
+    exit 0
+fi
+
+sed -E 's/(requirepass|auth-pass)( [^ ]+)?/\1 REDACTED/g' "$output_file" >&2
+exit "$validation_status"
