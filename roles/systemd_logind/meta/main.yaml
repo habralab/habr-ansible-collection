@@ -1,6 +1,6 @@
 ---
 galaxy_info:
-  role_name: "logind"
+  role_name: "systemd_logind"
   author: "Habr Team <servers@habr.team>, Vadim Rybalko <vadim@habr.team>"
   description: "Manage systemd-logind states and user lingering"
   company: "Habr"
