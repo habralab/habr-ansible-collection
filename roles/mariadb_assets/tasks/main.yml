@@ -1,0 +1,157 @@
+---
+- name: Validate MariaDB assets input containers
+  ansible.builtin.assert:
+    that:
+      - mariadb_assets_python_packages is sequence
+      - mariadb_assets_python_packages is not string
+      - mariadb_assets_databases is sequence
+      - mariadb_assets_databases is not string
+      - mariadb_assets_users is sequence
+      - mariadb_assets_users is not string
+      - mariadb_assets_login_unix_socket is string
+      - mariadb_assets_login_unix_socket | length > 0
+      - mariadb_assets_login_user is string
+      - mariadb_assets_login_user | length > 0
+    fail_msg: MariaDB assets inputs have invalid container or connection types.
+
+- name: Validate MariaDB database entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    quiet: true
+    fail_msg: Every mariadb_assets_databases entry must be a mapping.
+  loop: "{{ mariadb_assets_databases }}"
+  loop_control:
+    label: "{{ item.name | default('invalid database entry') }}"
+
+- name: Validate MariaDB database contracts
+  ansible.builtin.assert:
+    that:
+      - item.keys() | difference(mariadb_assets_database_fields) | length == 0
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.state is defined
+      - item.state in ['present', 'absent']
+      - item.state == 'absent' or item.encoding is defined
+      - item.state == 'absent' or item.encoding is string
+      - item.state == 'absent' or item.encoding | length > 0
+      - item.state == 'absent' or item.collation is defined
+      - item.state == 'absent' or item.collation is string
+      - item.state == 'absent' or item.collation | length > 0
+    quiet: true
+    fail_msg: >-
+      Database {{ item.name | default('entry') }} must use only name, state,
+      encoding and collation. Present databases require explicit encoding and
+      collation.
+  vars:
+    mariadb_assets_database_fields:
+      - name
+      - state
+      - encoding
+      - collation
+  loop: "{{ mariadb_assets_databases }}"
+  loop_control:
+    label: "{{ item.name | default('invalid database entry') }}"
+
+- name: Validate MariaDB account entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    quiet: true
+    fail_msg: Every mariadb_assets_users entry must be a mapping.
+  loop: "{{ mariadb_assets_users }}"
+  loop_control:
+    label: "{{ item.name | default('invalid account entry') }}"
+
+- name: Validate MariaDB account contracts
+  ansible.builtin.assert:
+    that:
+      - item.keys() | difference(mariadb_assets_user_fields) | length == 0
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.host is defined
+      - item.host is string
+      - item.host | length > 0
+      - item.state is defined
+      - item.state in ['present', 'absent']
+      - item.state == 'absent' or item.password is defined
+      - item.state == 'absent' or item.password is string
+      - item.state == 'absent' or item.password | length > 0
+      - item.state == 'absent' or item.priv is defined
+      - item.state == 'absent' or item.priv is string or item.priv is mapping
+      - item.update_password | default('always') in ['always', 'on_create', 'on_new_username']
+    quiet: true
+    fail_msg: >-
+      Account {{ item.name | default('entry') }} must use only name, host,
+      state, password, priv and update_password. Present accounts require an
+      explicit password and privilege contract.
+  vars:
+    mariadb_assets_user_fields:
+      - name
+      - host
+      - state
+      - password
+      - priv
+      - update_password
+  loop: "{{ mariadb_assets_users }}"
+  loop_control:
+    label: "{{ item.name | default('invalid account entry') }}@{{ item.host | default('?') }}"
+  no_log: true
+
+- name: Install MariaDB Python client packages
+  ansible.builtin.apt:
+    name: "{{ mariadb_assets_python_packages }}"
+    state: present
+
+- name: Inspect MariaDB Python client availability
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_facts['python']['executable'] }}"
+      - -c
+      - import pymysql
+  register: mariadb_assets_pymysql_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Explain unavailable MariaDB asset checks
+  ansible.builtin.debug:
+    msg: >-
+      MariaDB assets cannot be inspected until PyMySQL is installed. Apply the
+      package stage once, then check mode can inspect databases and accounts.
+  when:
+    - ansible_check_mode
+    - mariadb_assets_pymysql_probe.rc != 0
+
+- name: Manage MariaDB databases
+  ansible.mariadb.mariadb_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    collation: "{{ item.collation | default(omit) }}"
+    login_unix_socket: "{{ mariadb_assets_login_unix_socket }}"
+    login_user: "{{ mariadb_assets_login_user }}"
+    config_file: ""
+  loop: "{{ mariadb_assets_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: mariadb_assets_pymysql_probe.rc == 0
+
+- name: Manage MariaDB accounts
+  ansible.mariadb.mariadb_user:
+    name: "{{ item.name }}"
+    host: "{{ item.host }}"
+    state: "{{ item.state }}"
+    password: "{{ item.password | default(omit) }}"
+    priv: "{{ item.priv | default(omit) }}"
+    update_password: "{{ item.update_password | default('always') }}"
+    login_unix_socket: "{{ mariadb_assets_login_unix_socket }}"
+    login_user: "{{ mariadb_assets_login_user }}"
+    config_file: ""
+  loop: "{{ mariadb_assets_users }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.host }}"
+  when: mariadb_assets_pymysql_probe.rc == 0
+  no_log: true

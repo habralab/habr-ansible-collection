@@ -1,0 +1,9 @@
+---
+mariadb_assets_python_packages:
+  - python3-pymysql
+
+mariadb_assets_login_unix_socket: /run/mysqld/mysqld.sock
+mariadb_assets_login_user: root
+
+mariadb_assets_databases: []
+mariadb_assets_users: []

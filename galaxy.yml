@@ -19,6 +19,7 @@ license:
   - MIT
 
 dependencies:
+  ansible.mariadb: ">=6.0.2,<7.0.0"
   ansible.posix: ">=2.2.2,<3.0.0"
 
 repository: https://github.com/habralab/habr-ansible-collection
