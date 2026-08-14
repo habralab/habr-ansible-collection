@@ -31,6 +31,10 @@ These variables populate the global `ssl-default-bind-*` directives in the base 
 - `haproxy_global_ssl_ciphersuites`: List of default bind cipher suites (TLS 1.3).
 - `haproxy_global_ssl_options`: List of SSL options (default: `["ssl-min-ver TLSv1.2", "no-tls-tickets"]`).
 
+### Global Tuning
+- `haproxy_global_tune_bufsize`: Optional HAProxy buffer size rendered as
+  `tune.bufsize` in the `global` section (default: empty, directive omitted).
+
 ### Statistics / Metrics Configuration
 Configures a dedicated frontend for HAProxy stats and Prometheus metrics (deployed as `conf.d/10-stats.cfg`).
 - `haproxy_stats_enabled`: Enable the stats frontend (default: `false`).
