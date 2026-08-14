@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.0.0] - 2026-08-14
+
+### Breaking Changes
+- Replace the standalone `nvm` role and `nvm_users` contract with the
+  runtime-oriented `nodejs` role and `nodejs_runtimes` contract.
+- Rename the `logind` role to `systemd_logind` and
+  `logind_linger_users` to `systemd_logind_linger_users`.
+
+### Added
+- `nodejs`: Provision user-scoped NVM/Node.js runtimes and runtime-bound npm
+  packages, exposing resolved executable paths for downstream automation.
+- `systemd_unit` and `systemd_units`: Manage declarative system and user unit
+  files, lifecycle operations, daemon reloads, and multi-unit iteration.
+- `ssh_authorized_keys`: Compose authorized keys from catalogs, groups, direct
+  entries, and per-user overlays.
+- `nginx`: Add data-driven package, layout, drop-in, virtual host, upstream,
+  cache, map, geo, authentication, FastCGI, and logrotate management.
+- `mariadb`: Install and configure MariaDB Community Server.
+- `mariadb_assets`: Manage MariaDB databases and application accounts.
+- `php`: Install and configure parallel PHP CLI and FPM versions.
+- `redis`: Manage Redis Server and optional Sentinel while preserving package
+  defaults.
+
+### Changed
+- `apt_repo`: Use modern repository key handling while isolating legacy
+  `apt-key` compatibility and making repository cleanup reliable.
+- `haproxy`: Add optional global `tune.bufsize` configuration.
+- `netfilter`: Require explicit permission before replacing UFW and extend
+  package support to newer Ubuntu releases.
+- `users`: Support explicit user home directories.
+- `locale`, `packages`, `timezone`, and `users`: Declare Ubuntu Resolute
+  support.
+- `ci`: Add top-level lint and role-test entry points across Ansible core
+  2.16 through 2.20.
+- `collection`: Declare bounded dependencies on `ansible.mariadb`,
+  `ansible.posix`, and `community.general`.
+
+### Fixed
+- `locale`: Preserve the distribution-managed mode when `/etc/default/locale`
+  is a symlink.
+
 ## [1.9.0] - 2026-05-20
 
 ### Added
