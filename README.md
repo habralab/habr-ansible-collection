@@ -41,6 +41,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `packages`: Declarative management of APT packages and .deb URLs.
 - `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
 - `systemd_unit`: Declarative lifecycle management for one system or user unit.
+- `systemd_units`: Iterates over declarative system and user unit lifecycles.
 - `timezone`: Declarative management of the system timezone.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
 
