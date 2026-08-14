@@ -1,0 +1,57 @@
+---
+- name: Validate systemd_unit role input shape
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config is mapping
+      - systemd_unit_config | length > 0
+    fail_msg: "Variable 'systemd_unit_config' must be a non-empty dictionary."
+    quiet: true
+  tags:
+    - systemd
+    - systemd-unit
+
+- name: Validate one declarative systemd unit
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - systemd
+        - systemd-unit
+  tags:
+    - systemd
+    - systemd-unit
+
+- name: Materialize one declarative systemd unit runtime
+  ansible.builtin.include_tasks:
+    file: materialize.yml
+    apply:
+      tags:
+        - systemd
+        - systemd-unit
+  tags:
+    - systemd
+    - systemd-unit
+
+- name: Ensure one declarative systemd unit is present
+  ansible.builtin.include_tasks:
+    file: present.yml
+    apply:
+      tags:
+        - systemd
+        - systemd-unit
+  when: systemd_unit_config.state == 'present'
+  tags:
+    - systemd
+    - systemd-unit
+
+- name: Ensure one declarative systemd unit is absent
+  ansible.builtin.include_tasks:
+    file: absent.yml
+    apply:
+      tags:
+        - systemd
+        - systemd-unit
+  when: systemd_unit_config.state == 'absent'
+  tags:
+    - systemd
+    - systemd-unit

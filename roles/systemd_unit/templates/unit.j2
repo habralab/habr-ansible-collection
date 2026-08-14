@@ -1,0 +1,13 @@
+{% for section in _systemd_unit_runtime.sections %}
+[{{ section['name'] }}]
+{% for directive in section['directives'] %}
+{% if directive['render_type'] == 'scalar' %}
+{{ directive['key'] }}={{ directive['value'] }}
+{% elif directive['render_type'] == 'repeatable' %}
+{% for value in directive['values'] %}
+{{ directive['key'] }}={{ value }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% endfor %}

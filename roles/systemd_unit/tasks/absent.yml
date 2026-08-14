@@ -1,0 +1,46 @@
+---
+- name: Converge system-scoped unit to stopped/disabled before removal
+  ansible.builtin.systemd_service:
+    name: "{{ _systemd_unit_runtime.name }}"
+    enabled: false
+    masked: false
+    state: stopped
+  become: true
+  failed_when: false
+  when: _systemd_unit_runtime.scope == 'system'
+
+- name: Converge user-scoped unit to stopped/disabled before removal
+  ansible.builtin.systemd_service:
+    name: "{{ _systemd_unit_runtime.name }}"
+    enabled: false
+    masked: false
+    state: stopped
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "{{ _systemd_unit_runtime.user_context.runtime_dir }}"
+  become: true
+  become_user: "{{ _systemd_unit_runtime.user_context.name }}"
+  failed_when: false
+  when: _systemd_unit_runtime.scope == 'user'
+
+- name: Remove one declarative systemd unit file
+  ansible.builtin.file:
+    path: "{{ _systemd_unit_runtime.file.path }}"
+    state: absent
+  register: systemd_unit_removed_result
+  become: "{{ _systemd_unit_runtime.scope == 'system' }}"
+  become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
+
+- name: Reload system manager after unit file removal
+  ansible.builtin.include_tasks:
+    file: reload_system.yml
+  when:
+    - _systemd_unit_runtime.scope == 'system'
+    - systemd_unit_removed_result.changed
+
+- name: Reload user manager after unit file removal
+  ansible.builtin.include_tasks:
+    file: reload_user.yml
+  when:
+    - _systemd_unit_runtime.scope == 'user'
+    - systemd_unit_removed_result.changed

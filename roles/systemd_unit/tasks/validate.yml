@@ -1,0 +1,155 @@
+---
+- name: Validate required systemd_unit keys
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.name is defined
+      - systemd_unit_config.name is string
+      - systemd_unit_config.name | length > 0
+      - systemd_unit_config.name not in ['.', '..']
+      - "'/' not in systemd_unit_config.name"
+      - systemd_unit_config.name | regex_search('[\\r\\n]') is none
+      - systemd_unit_config.scope is defined
+      - systemd_unit_config.scope in ['system', 'user']
+      - systemd_unit_config.state is defined
+      - systemd_unit_config.state in ['present', 'absent']
+    fail_msg: >-
+      systemd_unit_config must define a safe non-empty unit name without path
+      separators, valid scope ('system' or 'user'), and valid state ('present'
+      or 'absent').
+    quiet: true
+
+- name: Validate supported systemd_unit keys
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.keys() | difference(__systemd_unit_config_keys) | length == 0
+    fail_msg: >-
+      systemd_unit_config contains unsupported keys: {{
+        systemd_unit_config.keys() | difference(__systemd_unit_config_keys) | join(', ')
+      }}.
+    quiet: true
+
+- name: Validate user requirement for user-scoped units
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.user is defined
+      - systemd_unit_config.user is string
+      - systemd_unit_config.user | length > 0
+    fail_msg: "systemd_unit_config.user is required for scope=user."
+    quiet: true
+  when: systemd_unit_config.scope == 'user'
+
+- name: Validate lifecycle keys for one systemd unit
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.enabled is not defined or systemd_unit_config.enabled is boolean
+      - systemd_unit_config.masked is not defined or systemd_unit_config.masked is boolean
+      - >-
+        systemd_unit_config.service_state is not defined
+        or systemd_unit_config.service_state in ['started', 'stopped', 'restarted', 'reloaded']
+      - systemd_unit_config.force is not defined or systemd_unit_config.force is boolean
+      - systemd_unit_config.no_block is not defined or systemd_unit_config.no_block is boolean
+      - systemd_unit_config.manage_linger is not defined or systemd_unit_config.manage_linger is boolean
+      - systemd_unit_config.reload_on_change is not defined or systemd_unit_config.reload_on_change is boolean
+      - systemd_unit_config.restart_on_change is not defined or systemd_unit_config.restart_on_change is boolean
+      - >-
+        not (
+          systemd_unit_config.reload_on_change | default(false) | bool
+          and systemd_unit_config.restart_on_change | default(false) | bool
+        )
+      - >-
+        systemd_unit_config.scope == 'user'
+        or not (systemd_unit_config.manage_linger | default(false) | bool)
+      - >-
+        systemd_unit_config.mode is not defined
+        or (
+          systemd_unit_config.mode is string
+          and systemd_unit_config.mode is regex('^0?[0-7]{3,4}$')
+        )
+    fail_msg: >-
+      Lifecycle flags must be boolean, service_state must be supported, mode
+      must be an octal string, manage_linger is valid only for scope=user, and
+      reload_on_change conflicts with restart_on_change.
+    quiet: true
+
+- name: Validate source declaration for present systemd units
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source is defined
+      - systemd_unit_config.source is mapping
+      - >-
+        systemd_unit_config.source.keys()
+        | difference(['content', 'template', 'src', 'model'])
+        | length == 0
+      - >-
+        (
+          (1 if systemd_unit_config.source.content is defined else 0)
+          + (1 if systemd_unit_config.source.template is defined else 0)
+          + (1 if systemd_unit_config.source.src is defined else 0)
+          + (1 if systemd_unit_config.source.model is defined else 0)
+        ) == 1
+    fail_msg: >-
+      state=present requires source to contain exactly one supported key:
+      content, template, src, or model.
+    quiet: true
+  when: systemd_unit_config.state == 'present'
+
+- name: Validate inline content source
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source.content is string
+    fail_msg: "source.content must be a string."
+    quiet: true
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.content is defined
+
+- name: Validate controller template source
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source.template is string
+      - systemd_unit_config.source.template | length > 0
+    fail_msg: "source.template must be a non-empty string."
+    quiet: true
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.template is defined
+
+- name: Validate controller file source
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source.src is string
+      - systemd_unit_config.source.src | length > 0
+    fail_msg: "source.src must be a non-empty string."
+    quiet: true
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.src is defined
+
+- name: Validate model source shape
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source.model is mapping
+      - systemd_unit_config.source.model | length > 0
+      - >-
+        systemd_unit_config.source.model.keys()
+        | difference(__systemd_unit_section_order)
+        | length == 0
+    fail_msg: >-
+      source.model must be a non-empty mapping containing only Unit, Service,
+      and Install sections.
+    quiet: true
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.model is defined
+
+- name: Validate model-backed unit sections
+  ansible.builtin.include_tasks:
+    file: validate_model_section.yml
+  loop: "{{ __systemd_unit_section_order }}"
+  loop_control:
+    loop_var: _systemd_unit_section_name
+    label: "{{ _systemd_unit_section_name }}"
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.model is defined
+    - systemd_unit_config.source.model[_systemd_unit_section_name] is defined

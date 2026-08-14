@@ -36,10 +36,11 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
 - `locale`: Declarative management of generated system locales and default `LANG`.
-- `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
 - `packages`: Declarative management of APT packages and .deb URLs.
+- `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
+- `systemd_unit`: Declarative lifecycle management for one system or user unit.
 - `timezone`: Declarative management of the system timezone.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
 
