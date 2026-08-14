@@ -1,0 +1,90 @@
+---
+- name: Query installed npm package version
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [nodejs_runtime_result.npm_bin, 'list', '--depth=0', '--json']
+        + (
+          ['--global']
+          if current_nodejs_npm_package.global | default(true) | bool
+          else []
+        )
+        + [current_nodejs_npm_package.name]
+      }}
+    chdir: >-
+      {{
+        omit
+        if current_nodejs_npm_package.global | default(true) | bool
+        else current_nodejs_npm_package.path
+      }}
+  become: true
+  become_user: "{{ nodejs_runtime_result.user }}"
+  environment:
+    PATH: "{{ nodejs_runtime_result.exec_path }}"
+  register: _nodejs_npm_package_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Normalize npm package convergence state
+  ansible.builtin.set_fact:
+    _nodejs_npm_package_installed_version: >-
+      {{
+        ((_nodejs_npm_package_query.stdout | default('{}', true) | from_json).get(
+          'dependencies', {}
+        ).get(current_nodejs_npm_package.name, {})).get('version', '')
+      }}
+    _nodejs_npm_package_requested_version: >-
+      {{ current_nodejs_npm_package['version'] | default('') }}
+
+- name: Report npm package change in check mode
+  ansible.builtin.debug:
+    msg: >-
+      npm package '{{ current_nodejs_npm_package.name }}' would be installed for
+      runtime '{{ nodejs_runtime_result.name }}'.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - _nodejs_npm_package_installed_version | length == 0
+      or (
+        _nodejs_npm_package_requested_version | length > 0
+        and _nodejs_npm_package_installed_version != _nodejs_npm_package_requested_version
+      )
+
+- name: Install runtime-bound npm package through explicit npm binary
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [nodejs_runtime_result.npm_bin, 'install']
+        + (
+          ['--global']
+          if current_nodejs_npm_package.global | default(true) | bool
+          else ['--no-save']
+        )
+        + [
+          current_nodejs_npm_package.name
+          ~ (
+            '@' ~ _nodejs_npm_package_requested_version
+            if _nodejs_npm_package_requested_version | length > 0
+            else ''
+          )
+        ]
+      }}
+    chdir: >-
+      {{
+        omit
+        if current_nodejs_npm_package.global | default(true) | bool
+        else current_nodejs_npm_package.path
+      }}
+  become: true
+  become_user: "{{ nodejs_runtime_result.user }}"
+  environment:
+    PATH: "{{ nodejs_runtime_result.exec_path }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - _nodejs_npm_package_installed_version | length == 0
+      or (
+        _nodejs_npm_package_requested_version | length > 0
+        and _nodejs_npm_package_installed_version != _nodejs_npm_package_requested_version
+      )

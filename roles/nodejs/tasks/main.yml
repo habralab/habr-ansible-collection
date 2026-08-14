@@ -1,0 +1,54 @@
+---
+- name: Validate nodejs role input shape
+  ansible.builtin.assert:
+    that:
+      - nodejs_runtimes is sequence
+      - nodejs_runtimes is not string
+      - nodejs_runtimes | length > 0
+    fail_msg: "Variable 'nodejs_runtimes' must be a non-empty list."
+    quiet: true
+  tags:
+    - nodejs
+
+- name: Validate each declarative Node.js runtime
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - nodejs
+  loop: "{{ nodejs_runtimes }}"
+  loop_control:
+    loop_var: current_nodejs_runtime
+    label: "{{ current_nodejs_runtime.name | default('UNKNOWN') }}"
+  tags:
+    - nodejs
+
+- name: Initialize normalized Node.js runtime results
+  ansible.builtin.set_fact:
+    nodejs_runtime_results: {}
+  tags:
+    - nodejs
+
+- name: Validate unique Node.js runtime names
+  ansible.builtin.assert:
+    that:
+      - >-
+        nodejs_runtimes | map(attribute='name') | list | unique | length
+        == nodejs_runtimes | length
+    fail_msg: "Each item in 'nodejs_runtimes' must use a unique name."
+    quiet: true
+  tags:
+    - nodejs
+
+- name: Materialize each declarative Node.js runtime
+  ansible.builtin.include_tasks:
+    file: runtime.yml
+    apply:
+      tags:
+        - nodejs
+  loop: "{{ nodejs_runtimes }}"
+  loop_control:
+    loop_var: current_nodejs_runtime
+    label: "{{ current_nodejs_runtime.name | default('UNKNOWN') }}"
+  tags:
+    - nodejs

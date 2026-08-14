@@ -1,0 +1,186 @@
+---
+- name: Lookup passwd entry for NVM-backed runtime user
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _nodejs_runtime.user }}"
+    fail_key: false
+  register: _nodejs_nvm_target_user_getent
+
+- name: Normalize NVM-backed runtime user availability
+  ansible.builtin.set_fact:
+    _nodejs_nvm_target_user_exists: >-
+      {{
+        _nodejs_nvm_target_user_getent.ansible_facts.getent_passwd is defined
+        and _nodejs_nvm_target_user_getent.ansible_facts.getent_passwd.get(
+          _nodejs_runtime.user
+        ) is not none
+      }}
+
+- name: Fail if missing user for NVM-backed runtime
+  ansible.builtin.assert:
+    that:
+      - _nodejs_nvm_target_user_exists
+    fail_msg: >-
+      The user '{{ _nodejs_runtime.user }}' does not exist on the target system.
+      Please ensure the user is created before provisioning the NVM-backed runtime
+      '{{ _nodejs_runtime.name }}'.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Skip missing user validation in check mode for NVM-backed runtime
+  ansible.builtin.debug:
+    msg: >-
+      User '{{ _nodejs_runtime.user }}' is missing, but the role is running in
+      check mode. User-dependent runtime tasks are skipped during dry-run for
+      '{{ _nodejs_runtime.name }}'.
+  when:
+    - ansible_check_mode
+    - not _nodejs_nvm_target_user_exists
+
+- name: Normalize passwd facts for NVM-backed runtime user
+  ansible.builtin.set_fact:
+    _nodejs_nvm_target_user_fact: "{{ _nodejs_nvm_target_user_getent.ansible_facts.getent_passwd[_nodejs_runtime.user] }}"
+  when: _nodejs_nvm_target_user_exists
+
+- name: Initialize NVM-backed runtime context
+  ansible.builtin.set_fact:
+    _nodejs_runtime_context:
+      provider: "nvm"
+      name: "{{ _nodejs_runtime.name }}"
+      scope: "{{ _nodejs_runtime.scope }}"
+      state: "{{ _nodejs_runtime.state }}"
+      user: "{{ _nodejs_runtime.user }}"
+      version_requested: "{{ _nodejs_runtime.version }}"
+      user_home: "{{ _nodejs_nvm_target_user_fact[4] }}"
+      user_shell: "{{ _nodejs_nvm_target_user_fact[5] }}"
+      nvm_dir: "{{ _nodejs_nvm_target_user_fact[4] ~ '/.nvm' }}"
+      profile_path: >-
+        {{
+          _nodejs_nvm_target_user_fact[4]
+          ~ '/'
+          ~ (_nodejs_runtime.profile | default(nodejs_nvm_profile))
+        }}
+  when: _nodejs_nvm_target_user_exists
+
+- name: Clone NVM repository for runtime user
+  ansible.builtin.git:
+    repo: "{{ nodejs_nvm_repo }}"
+    dest: "{{ _nodejs_runtime_context.nvm_dir }}"
+    version: "{{ _nodejs_runtime.nvm_version | default(nodejs_nvm_version) }}"
+    depth: 1
+    update: true
+    accept_hostkey: true
+    recursive: false
+  become: true
+  become_user: "{{ _nodejs_runtime.user }}"
+  diff: false
+  when: _nodejs_nvm_target_user_exists
+
+- name: Add NVM configuration to runtime user profile
+  ansible.builtin.blockinfile:
+    path: "{{ _nodejs_runtime_context.profile_path }}"
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: NVM"
+    block: |
+      export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  become: true
+  become_user: "{{ _nodejs_runtime.user }}"
+  when: _nodejs_nvm_target_user_exists
+
+- name: Query requested Node.js version for NVM-backed runtime
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_runtime_context.nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm version {{ _nodejs_runtime.version | quote }}
+  args:
+    executable: "/bin/bash"
+  become: true
+  become_user: "{{ _nodejs_runtime.user }}"
+  register: _nodejs_nvm_requested_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: _nodejs_nvm_target_user_exists
+
+- name: Query default Node.js alias for NVM-backed runtime
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_runtime_context.nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm version default
+  args:
+    executable: "/bin/bash"
+  become: true
+  become_user: "{{ _nodejs_runtime.user }}"
+  register: _nodejs_nvm_default_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: _nodejs_nvm_target_user_exists
+
+- name: Install requested Node.js version through NVM
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_runtime_context.nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm install {{ _nodejs_runtime.version | quote }}
+  args:
+    executable: "/bin/bash"
+  become: true
+  become_user: "{{ _nodejs_runtime.user }}"
+  changed_when: true
+  when:
+    - _nodejs_nvm_target_user_exists
+    - not ansible_check_mode
+    - _nodejs_nvm_requested_version_query.stdout | default('N/A') | trim == 'N/A'
+
+- name: Report Node.js runtime change in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Node.js runtime '{{ _nodejs_runtime.name }}' or its NVM default alias
+      would change.
+  changed_when: true
+  when:
+    - _nodejs_nvm_target_user_exists
+    - ansible_check_mode
+    - >-
+      _nodejs_nvm_requested_version_query.stdout | default('N/A') | trim == 'N/A'
+      or _nodejs_nvm_default_version_query.stdout | default('N/A') | trim
+         != _nodejs_nvm_requested_version_query.stdout | default('') | trim
+
+- name: Set requested Node.js version as NVM default
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_runtime_context.nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm alias default {{ _nodejs_runtime.version | quote }}
+  args:
+    executable: "/bin/bash"
+  become: true
+  become_user: "{{ _nodejs_runtime.user }}"
+  changed_when: true
+  when:
+    - _nodejs_nvm_target_user_exists
+    - not ansible_check_mode
+    - >-
+      _nodejs_nvm_requested_version_query.stdout | default('N/A') | trim == 'N/A'
+      or _nodejs_nvm_default_version_query.stdout | default('N/A') | trim
+         != _nodejs_nvm_requested_version_query.stdout | default('') | trim
+
+- name: Record NVM-backed runtime provider state
+  ansible.builtin.set_fact:
+    _nodejs_runtime_provider_result:
+      provider: "nvm"
+      name: "{{ _nodejs_runtime_context.name }}"
+      scope: "{{ _nodejs_runtime_context.scope }}"
+      state: "{{ _nodejs_runtime_context.state }}"
+      user: "{{ _nodejs_runtime_context.user }}"
+      version_requested: "{{ _nodejs_runtime_context.version_requested }}"
+      user_home: "{{ _nodejs_runtime_context.user_home }}"
+      nvm_dir: "{{ _nodejs_runtime_context.nvm_dir }}"
+      profile_path: "{{ _nodejs_runtime_context.profile_path }}"
+  when: _nodejs_nvm_target_user_exists

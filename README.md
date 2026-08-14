@@ -38,7 +38,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `locale`: Declarative management of generated system locales and default `LANG`.
 - `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
-- `nvm`: Multi-user Node Version Manager (NVM) installation from git.
+- `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
 - `packages`: Declarative management of APT packages and .deb URLs.
 - `timezone`: Declarative management of the system timezone.
 - `users`: Declarative management of Linux users (UIDs, shells, groups).
@@ -54,9 +54,15 @@ Reference roles using FQCN:
     - name: habr.linuxhost.users
       vars:
         users_list: [{ name: "web", groups: ["www-data"] }]
-    - name: habr.linuxhost.nvm
+    - name: habr.linuxhost.nodejs
       vars:
-        nvm_users: [{ name: "web" }]
+        nodejs_runtimes:
+          - name: "web-main"
+            provider: "nvm"
+            scope: "user"
+            user: "web"
+            version: "22"
+            state: "present"
 ```
 
 ## Principles

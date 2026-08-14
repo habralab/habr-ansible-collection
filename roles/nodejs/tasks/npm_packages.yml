@@ -1,0 +1,40 @@
+---
+- name: Validate runtime-bound npm package declarations
+  ansible.builtin.assert:
+    that:
+      - _nodejs_runtime.npm_packages is sequence
+      - _nodejs_runtime.npm_packages is not string
+      - current_nodejs_npm_package is mapping
+      - current_nodejs_npm_package.name is string
+      - current_nodejs_npm_package.name | length > 0
+      - current_nodejs_npm_package.global is not defined or current_nodejs_npm_package.global is boolean
+      - >-
+        current_nodejs_npm_package['version'] is not defined
+        or (
+          current_nodejs_npm_package['version'] is string
+          and current_nodejs_npm_package['version'] | length > 0
+        )
+      - >-
+        (current_nodejs_npm_package.global | default(true) | bool)
+        or (
+          current_nodejs_npm_package.path is defined
+          and current_nodejs_npm_package.path is string
+          and current_nodejs_npm_package.path | length > 0
+        )
+    fail_msg: >-
+      Each item in 'npm_packages' for runtime '{{ _nodejs_runtime.name }}' must
+      define a non-empty name. Optional global must be boolean and defaults to
+      true; global=false also requires a non-empty path.
+    quiet: true
+  loop: "{{ _nodejs_runtime.npm_packages }}"
+  loop_control:
+    loop_var: current_nodejs_npm_package
+    label: "{{ current_nodejs_npm_package.name | default('UNKNOWN') }}"
+
+- name: Converge runtime-bound npm packages
+  ansible.builtin.include_tasks:
+    file: npm_package.yml
+  loop: "{{ _nodejs_runtime.npm_packages }}"
+  loop_control:
+    loop_var: current_nodejs_npm_package
+    label: "{{ current_nodejs_npm_package.name }}"
