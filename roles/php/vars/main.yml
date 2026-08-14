@@ -1,0 +1,20 @@
+---
+php_supported_releases:
+  - focal
+  - jammy
+  - noble
+  - resolute
+
+php_ondrej_supported_releases:
+  - jammy
+  - noble
+
+php_supported_repositories:
+  - ubuntu
+  - ppa_ondrej
+  - unmanaged
+
+php_supported_sapis:
+  - cli
+  - fpm
+  - dev

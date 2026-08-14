@@ -1,0 +1,47 @@
+---
+- name: "Validate PHP version entry | {{ php_version_item.key }}"
+  ansible.builtin.assert:
+    that:
+      - php_version_item.key | string is match('^[0-9]+\\.[0-9]+$')
+      - php_version_item.value is mapping
+      - php_version_item.value.sapis is defined
+      - php_version_item.value.sapis is sequence
+      - php_version_item.value.sapis is not string
+      - php_version_item.value.sapis | length > 0
+      - php_version_item.value.sapis | difference(php_supported_sapis) | length == 0
+      - php_version_item.value.extensions | default([]) is sequence
+      - php_version_item.value.extensions | default([]) is not string
+      - php_version_item.value.cli_ini | default({}) is mapping
+      - php_version_item.value.fpm_ini | default({}) is mapping
+      - php_version_item.value.fpm_pools | default({}) is mapping
+    fail_msg: >-
+      Each php_versions entry must use a quoted major.minor key, contain one or
+      more supported SAPIs, and use lists/maps for extensions and configuration.
+
+- name: "Validate PHP FPM pools | {{ php_version_item.key }}"
+  ansible.builtin.assert:
+    that:
+      - php_pool_item.key is match('^[A-Za-z0-9_.-]+$')
+      - php_pool_item.value is mapping
+      - php_pool_item.value.state | default('present') in ['present', 'absent']
+      - php_pool_item.value.settings | default({}) is mapping
+      - >-
+        php_pool_item.value.state | default('present') == 'absent'
+        or php_pool_item.value.settings | length > 0
+      - php_pool_item.value.directories | default([]) is sequence
+      - php_pool_item.value.directories | default([]) is not string
+    fail_msg: >-
+      FPM pools require a safe name, state present or absent, a settings map for
+      present pools, and an optional directories list.
+  loop: "{{ php_version_item.value.fpm_pools | default({}) | dict2items }}"
+  loop_control:
+    loop_var: php_pool_item
+    label: "{{ php_version_item.key }} / {{ php_pool_item.key }}"
+
+- name: "Reject FPM configuration without the FPM SAPI | {{ php_version_item.key }}"
+  ansible.builtin.assert:
+    that:
+      - php_version_item.value.fpm_ini | default({}) | length == 0
+      - php_version_item.value.fpm_pools | default({}) | length == 0
+    fail_msg: fpm_ini and fpm_pools require the fpm SAPI.
+  when: "'fpm' not in php_version_item.value.sapis"

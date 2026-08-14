@@ -1,0 +1,5 @@
+; Managed by Ansible. Local changes will be overwritten.
+[{{ php_fpm_pool_name }}]
+{% for option, value in php_fpm_pool.settings.items() %}
+{{ option }} = {{ value }}
+{% endfor %}
