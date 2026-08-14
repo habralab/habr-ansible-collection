@@ -1,0 +1,32 @@
+---
+- name: Validate systemd_units role input shape
+  ansible.builtin.assert:
+    that:
+      - systemd_units_items is sequence
+      - systemd_units_items is not string
+      - systemd_units_items | length > 0
+    fail_msg: "Variable 'systemd_units_items' must be a non-empty list."
+    quiet: true
+  tags:
+    - systemd
+    - systemd-unit
+    - systemd-units
+
+- name: Materialize each declarative systemd unit
+  ansible.builtin.include_role:
+    name: habr.linuxhost.systemd_unit
+    apply:
+      tags:
+        - systemd
+        - systemd-unit
+        - systemd-units
+  vars:
+    systemd_unit_config: "{{ current_systemd_unit }}"
+  loop: "{{ systemd_units_items }}"
+  loop_control:
+    loop_var: current_systemd_unit
+    label: "{{ current_systemd_unit.name | default('UNKNOWN') }}"
+  tags:
+    - systemd
+    - systemd-unit
+    - systemd-units
