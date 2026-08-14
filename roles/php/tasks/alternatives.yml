@@ -1,0 +1,44 @@
+---
+- name: Inspect the selected PHP CLI executable
+  ansible.builtin.stat:
+    path: "/usr/bin/php{{ php_cli_default_version }}"
+  register: php_cli_default_executable
+
+- name: Select the default PHP executable
+  community.general.alternatives:
+    name: php
+    path: "/usr/bin/php{{ php_cli_default_version }}"
+    state: selected
+  when: php_cli_default_executable.stat.exists
+
+- name: Select the default PHP Phar executables
+  community.general.alternatives:
+    name: "{{ php_alternative.name }}"
+    path: "{{ php_alternative.path }}"
+    state: selected
+  loop:
+    - name: phar
+      path: "/usr/bin/phar{{ php_cli_default_version }}"
+    - name: phar.phar
+      path: "/usr/bin/phar.phar{{ php_cli_default_version }}"
+  loop_control:
+    loop_var: php_alternative
+    label: "{{ php_alternative.name }}"
+  when: php_cli_default_executable.stat.exists
+
+- name: Select the default PHP development executables
+  community.general.alternatives:
+    name: "{{ php_alternative.name }}"
+    path: "{{ php_alternative.path }}"
+    state: selected
+  loop:
+    - name: phpize
+      path: "/usr/bin/phpize{{ php_cli_default_version }}"
+    - name: php-config
+      path: "/usr/bin/php-config{{ php_cli_default_version }}"
+  loop_control:
+    loop_var: php_alternative
+    label: "{{ php_alternative.name }}"
+  when:
+    - php_cli_default_executable.stat.exists
+    - "'dev' in php_versions[php_cli_default_version].sapis"

@@ -1,0 +1,44 @@
+---
+- name: "Create PHP FPM pool directories | {{ php_fpm_pool_item.key }}"
+  ansible.builtin.file:
+    path: "{{ php_fpm_directory.path }}"
+    state: directory
+    owner: "{{ php_fpm_directory.owner | default(omit) }}"
+    group: "{{ php_fpm_directory.group | default(omit) }}"
+    mode: "{{ php_fpm_directory.mode | default(omit) }}"
+  loop: "{{ php_fpm_pool_item.value.directories | default([]) }}"
+  loop_control:
+    loop_var: php_fpm_directory
+    label: "{{ php_fpm_directory.path }}"
+  when: php_fpm_pool_item.value.state | default('present') == 'present'
+
+- name: "Manage PHP FPM pool | {{ php_fpm_pool_item.key }}"
+  ansible.builtin.template:
+    src: fpm-pool.conf.j2
+    dest: >-
+      /etc/php/{{ php_version_item.key }}/fpm/pool.d/90-ansible-{{ php_fpm_pool_item.key }}.conf
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    php_fpm_pool_name: "{{ php_fpm_pool_item.key }}"
+    php_fpm_pool: "{{ php_fpm_pool_item.value }}"
+  register: php_fpm_pool_template_result
+  when: php_fpm_pool_item.value.state | default('present') == 'present'
+
+- name: "Remove PHP FPM pool | {{ php_fpm_pool_item.key }}"
+  ansible.builtin.file:
+    path: >-
+      /etc/php/{{ php_version_item.key }}/fpm/pool.d/90-ansible-{{ php_fpm_pool_item.key }}.conf
+    state: absent
+  register: php_fpm_pool_remove_result
+  when: php_fpm_pool_item.value.state | default('present') == 'absent'
+
+- name: "Record changed PHP FPM pool | {{ php_fpm_pool_item.key }}"
+  ansible.builtin.set_fact:
+    php_fpm_pool_changed: >-
+      {{
+        php_fpm_pool_changed | default(false)
+        or php_fpm_pool_template_result.changed | default(false)
+        or php_fpm_pool_remove_result.changed | default(false)
+      }}

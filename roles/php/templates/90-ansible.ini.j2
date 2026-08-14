@@ -1,0 +1,4 @@
+; Managed by Ansible. Local changes will be overwritten.
+{% for option, value in php_ini_options | dictsort %}
+{{ option }} = {{ value }}
+{% endfor %}

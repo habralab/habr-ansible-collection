@@ -1,0 +1,108 @@
+---
+- name: "Build PHP package list | {{ php_version_item.key }}"
+  ansible.builtin.set_fact:
+    php_version_packages: >-
+      {{
+        (
+          ['php' ~ php_version_item.key]
+          | product(php_version_item.value.sapis)
+          | map('join', '-')
+          | list
+          + ['php' ~ php_version_item.key]
+            | product(php_version_item.value.extensions | default([]))
+            | map('join', '-')
+            | list
+          + php_version_item.value.packages | default([])
+        ) | unique | list
+      }}
+
+- name: "Reset PHP FPM change tracking | {{ php_version_item.key }}"
+  ansible.builtin.set_fact:
+    php_fpm_pool_changed: false
+
+- name: "Install PHP packages | {{ php_version_item.key }}"
+  ansible.builtin.apt:
+    name: "{{ php_version_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  register: php_version_package_result
+  tags:
+    - php_packages
+    - apt
+
+- name: "Inspect PHP configuration directory | {{ php_version_item.key }}"
+  ansible.builtin.stat:
+    path: "/etc/php/{{ php_version_item.key }}"
+  register: php_version_config_directory
+
+- name: "Configure PHP version | {{ php_version_item.key }}"
+  when: php_version_config_directory.stat.exists
+  block:
+    - name: "Configure PHP CLI | {{ php_version_item.key }}"
+      ansible.builtin.template:
+        src: 90-ansible.ini.j2
+        dest: "/etc/php/{{ php_version_item.key }}/cli/conf.d/90-ansible.ini"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        php_ini_options: "{{ php_version_item.value.cli_ini | default({}) }}"
+      register: php_cli_ini_result
+      when: "'cli' in php_version_item.value.sapis"
+
+    - name: "Configure PHP FPM | {{ php_version_item.key }}"
+      ansible.builtin.template:
+        src: 90-ansible.ini.j2
+        dest: "/etc/php/{{ php_version_item.key }}/fpm/conf.d/90-ansible.ini"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        php_ini_options: "{{ php_version_item.value.fpm_ini | default({}) }}"
+      register: php_fpm_ini_result
+      when: "'fpm' in php_version_item.value.sapis"
+
+    - name: "Manage PHP FPM pools | {{ php_version_item.key }}"
+      ansible.builtin.include_tasks: fpm_pool.yml
+      loop: "{{ php_version_item.value.fpm_pools | default({}) | dict2items }}"
+      loop_control:
+        loop_var: php_fpm_pool_item
+        label: "{{ php_version_item.key }} / {{ php_fpm_pool_item.key }}"
+      when: "'fpm' in php_version_item.value.sapis"
+
+    - name: "Disable the packaged PHP FPM pool | {{ php_version_item.key }}"
+      ansible.builtin.file:
+        path: "/etc/php/{{ php_version_item.key }}/fpm/pool.d/www.conf"
+        state: absent
+      register: php_fpm_default_pool_result
+      when:
+        - "'fpm' in php_version_item.value.sapis"
+        - not php_version_item.value.fpm_default_pool_enabled | default(true) | bool
+
+    - name: "Validate PHP FPM configuration | {{ php_version_item.key }}"
+      ansible.builtin.command:
+        argv:
+          - "/usr/sbin/php-fpm{{ php_version_item.key }}"
+          - --test
+      changed_when: false
+      when:
+        - "'fpm' in php_version_item.value.sapis"
+        - not ansible_check_mode
+
+    - name: "Ensure PHP FPM service state | {{ php_version_item.key }}"
+      ansible.builtin.service:
+        name: "php{{ php_version_item.key }}-fpm"
+        enabled: "{{ php_version_item.value.fpm_service_enabled | default(true) }}"
+        state: >-
+          {{
+            'reloaded'
+            if php_version_package_result.changed
+              or php_fpm_ini_result.changed | default(false)
+              or php_fpm_pool_changed | default(false)
+              or php_fpm_default_pool_result.changed | default(false)
+            else php_version_item.value.fpm_service_state | default('started')
+          }}
+      when:
+        - "'fpm' in php_version_item.value.sapis"
+        - not ansible_check_mode
