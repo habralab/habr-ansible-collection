@@ -1,5 +1,5 @@
 ---
-- name: Ensure unit directory exists for one declarative systemd unit
+- name: Ensure directory exists for one declarative systemd artifact
   ansible.builtin.file:
     path: "{{ _systemd_unit_runtime.file.dir }}"
     state: directory
@@ -9,7 +9,7 @@
   become: "{{ _systemd_unit_runtime.scope == 'system' }}"
   become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
 
-- name: Materialize unit from rendered content
+- name: Materialize systemd artifact from rendered content
   ansible.builtin.copy:
     content: "{{ _systemd_unit_runtime.rendered_content }}"
     dest: "{{ _systemd_unit_runtime.file.path }}"
@@ -21,7 +21,7 @@
   become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
   when: _systemd_unit_runtime.source_mode in ['model', 'content']
 
-- name: Materialize unit from controller template
+- name: Materialize systemd artifact from controller template
   ansible.builtin.template:
     src: "{{ systemd_unit_config.source.template }}"
     dest: "{{ _systemd_unit_runtime.file.path }}"
@@ -33,7 +33,7 @@
   become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
   when: _systemd_unit_runtime.source_mode == 'template'
 
-- name: Materialize unit from controller file
+- name: Materialize systemd artifact from controller file
   ansible.builtin.copy:
     src: "{{ systemd_unit_config.source.src }}"
     dest: "{{ _systemd_unit_runtime.file.path }}"
@@ -45,7 +45,7 @@
   become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
   when: _systemd_unit_runtime.source_mode == 'src'
 
-- name: Consolidate unit materialization change state
+- name: Consolidate systemd artifact materialization change state
   ansible.builtin.set_fact:
     _systemd_unit_runtime: >-
       {{
@@ -61,7 +61,7 @@
         )
       }}
 
-- name: Resolve effective lifecycle after unit materialization
+- name: Resolve effective lifecycle after systemd artifact materialization
   ansible.builtin.set_fact:
     _systemd_unit_runtime: >-
       {{
@@ -79,24 +79,24 @@
         )
       }}
 
-- name: Reload system manager after unit file changes
+- name: Reload system manager after systemd artifact changes
   ansible.builtin.include_tasks:
     file: reload_system.yml
   when:
     - _systemd_unit_runtime.scope == 'system'
     - _systemd_unit_runtime.file_changed | default(false)
 
-- name: Reload user manager after unit file changes
+- name: Reload user manager after systemd artifact changes
   ansible.builtin.include_tasks:
     file: reload_user.yml
   when:
     - _systemd_unit_runtime.scope == 'user'
     - _systemd_unit_runtime.file_changed | default(false)
 
-- name: Skip lifecycle transitions in check mode for newly materialized units
+- name: Skip lifecycle transitions in check mode for changed systemd artifacts
   ansible.builtin.debug:
     msg: >-
-      Unit file for '{{ _systemd_unit_runtime.name }}' would change in check mode.
+      Systemd artifact for '{{ _systemd_unit_runtime.name }}' would change in check mode.
       Lifecycle transitions are skipped because the manager cannot load a file
       that was not actually written during dry-run.
   when:

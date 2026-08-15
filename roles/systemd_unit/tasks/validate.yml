@@ -28,6 +28,23 @@
       }}.
     quiet: true
 
+- name: Validate systemd drop-in declaration
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.drop_in is string
+      - systemd_unit_config.drop_in | length > 5
+      - systemd_unit_config.drop_in is regex('^[A-Za-z0-9@_-][A-Za-z0-9_.@-]*[.]conf$')
+      - "'..' not in systemd_unit_config.drop_in"
+      - systemd_unit_config.enabled is not defined
+      - systemd_unit_config.masked is not defined
+      - systemd_unit_config.force is not defined
+    fail_msg: >-
+      drop_in must be a safe .conf filename. Drop-ins may manage parent-unit
+      service_state and change-triggered reload/restart, but cannot manage
+      enabled, masked, or force lifecycle fields.
+    quiet: true
+  when: systemd_unit_config.drop_in is defined
+
 - name: Validate user requirement for user-scoped units
   ansible.builtin.assert:
     that:

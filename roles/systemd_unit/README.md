@@ -1,13 +1,13 @@
 # Systemd Unit
 
-Declaratively manages one systemd unit file and its lifecycle in the system or
-user manager scope.
+Declaratively manages one systemd unit file or drop-in and its lifecycle in the
+system or user manager scope.
 
 ## Scope
 
 - Validate and normalize one unit declaration.
-- Materialize a unit from YAML model, inline content, controller template, or
-  controller file.
+- Materialize a unit or drop-in from YAML model, inline content, controller
+  template, or controller file.
 - Resolve system and user unit paths and execution contexts.
 - Reload the appropriate manager after file changes.
 - Converge enabled, masked, and service state.
@@ -28,6 +28,8 @@ Required fields:
 - `scope`: `system` or `user`.
 - `state`: `present` or `absent`.
 - `user`: Required for `scope: user`.
+- `drop_in`: Optional safe `.conf` filename. When set, manage only that file in
+  the parent unit's drop-in directory.
 
 Optional lifecycle fields:
 
@@ -45,6 +47,9 @@ Optional lifecycle fields:
 `restart_on_change` and `reload_on_change` are mutually exclusive. If neither
 is enabled, a changed file causes only `daemon-reload`; runtime state changes
 only when `service_state` is explicitly set.
+
+Drop-ins cannot set `enabled`, `masked`, or `force`: those fields express
+ownership of the parent unit rather than ownership of one supplemental file.
 
 ## Unit Sources
 
@@ -116,6 +121,30 @@ source:
 The path follows the standard `ansible.builtin.copy` controller-side lookup
 rules. An absolute path may be used for a consumer-owned unit file.
 
+## Drop-ins
+
+Set `drop_in` to manage a file below the parent unit's `.d` directory while
+targeting lifecycle operations at the parent unit:
+
+```yaml
+systemd_unit_config:
+  name: "mongod.service"
+  drop_in: "habr-rseq.conf"
+  scope: "system"
+  state: "present"
+  restart_on_change: true
+  source:
+    model:
+      Service:
+        Environment:
+          - "GLIBC_TUNABLES=glibc.pthread.rseq=1"
+```
+
+The destination is `/etc/systemd/system/<name>.d/<drop_in>` for system scope
+or `~/.config/systemd/user/<name>.d/<drop_in>` for user scope. Source modes,
+manager reloads, and change-triggered parent reload/restart behave as for unit
+files.
+
 ## Removal
 
 No source is required for removal:
@@ -127,8 +156,11 @@ systemd_unit_config:
   state: "absent"
 ```
 
-The role attempts to stop and disable the unit, removes its file, and reloads
-the appropriate manager.
+For a unit file, the role attempts to stop and disable the unit, removes its
+file, and reloads the appropriate manager. For a drop-in, it removes only the
+drop-in and never stops, disables, unmasks, or removes the parent unit. An
+explicit `service_state` or change-triggered reload/restart may still target the
+parent after manager reload.
 
 ## Check Mode
 
