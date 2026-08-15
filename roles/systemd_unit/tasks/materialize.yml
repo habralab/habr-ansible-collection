@@ -25,6 +25,8 @@
   ansible.builtin.set_fact:
     _systemd_unit_runtime:
       name: "{{ systemd_unit_config.name }}"
+      artifact: "{{ 'drop_in' if systemd_unit_config.drop_in is defined else 'unit' }}"
+      drop_in: "{{ systemd_unit_config.drop_in | default('') }}"
       scope: "{{ systemd_unit_config.scope }}"
       state: "{{ systemd_unit_config.state }}"
       enabled: "{{ systemd_unit_config.enabled if systemd_unit_config.enabled is defined else omit }}"
@@ -47,14 +49,18 @@
         path: >-
           {{
             '/etc/systemd/system/' ~ systemd_unit_config.name
+            ~ ('.d/' ~ systemd_unit_config.drop_in if systemd_unit_config.drop_in is defined else '')
             if systemd_unit_config.scope == 'system'
             else _systemd_unit_target_user_fact[4] ~ '/.config/systemd/user/' ~ systemd_unit_config.name
+            ~ ('.d/' ~ systemd_unit_config.drop_in if systemd_unit_config.drop_in is defined else '')
           }}
         dir: >-
           {{
             '/etc/systemd/system'
+            ~ ('/' ~ systemd_unit_config.name ~ '.d' if systemd_unit_config.drop_in is defined else '')
             if systemd_unit_config.scope == 'system'
             else _systemd_unit_target_user_fact[4] ~ '/.config/systemd/user'
+            ~ ('/' ~ systemd_unit_config.name ~ '.d' if systemd_unit_config.drop_in is defined else '')
           }}
         owner: "{{ 'root' if systemd_unit_config.scope == 'system' else systemd_unit_config.user }}"
         group: "{{ 'root' if systemd_unit_config.scope == 'system' else _systemd_unit_target_user_fact[2] }}"

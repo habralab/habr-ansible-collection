@@ -7,7 +7,9 @@
     state: stopped
   become: true
   failed_when: false
-  when: _systemd_unit_runtime.scope == 'system'
+  when:
+    - _systemd_unit_runtime.artifact == 'unit'
+    - _systemd_unit_runtime.scope == 'system'
 
 - name: Converge user-scoped unit to stopped/disabled before removal
   ansible.builtin.systemd_service:
@@ -21,9 +23,11 @@
   become: true
   become_user: "{{ _systemd_unit_runtime.user_context.name }}"
   failed_when: false
-  when: _systemd_unit_runtime.scope == 'user'
+  when:
+    - _systemd_unit_runtime.artifact == 'unit'
+    - _systemd_unit_runtime.scope == 'user'
 
-- name: Remove one declarative systemd unit file
+- name: Remove one declarative systemd artifact
   ansible.builtin.file:
     path: "{{ _systemd_unit_runtime.file.path }}"
     state: absent
@@ -31,16 +35,66 @@
   become: "{{ _systemd_unit_runtime.scope == 'system' }}"
   become_user: "{{ omit if _systemd_unit_runtime.scope == 'system' else _systemd_unit_runtime.user_context.name }}"
 
-- name: Reload system manager after unit file removal
+- name: Reload system manager after systemd artifact removal
   ansible.builtin.include_tasks:
     file: reload_system.yml
   when:
     - _systemd_unit_runtime.scope == 'system'
     - systemd_unit_removed_result.changed
 
-- name: Reload user manager after unit file removal
+- name: Reload user manager after systemd artifact removal
   ansible.builtin.include_tasks:
     file: reload_user.yml
   when:
     - _systemd_unit_runtime.scope == 'user'
     - systemd_unit_removed_result.changed
+
+- name: Resolve effective lifecycle after drop-in removal
+  ansible.builtin.set_fact:
+    _systemd_unit_runtime: >-
+      {{
+        _systemd_unit_runtime | combine(
+          {
+            'file_changed': systemd_unit_removed_result.changed,
+            'effective_service_state': (
+              'restarted'
+              if systemd_unit_removed_result.changed and _systemd_unit_runtime.restart_on_change
+              else 'reloaded'
+              if systemd_unit_removed_result.changed and _systemd_unit_runtime.reload_on_change
+              else _systemd_unit_runtime.service_state
+            )
+          },
+          recursive=True
+        )
+      }}
+  when: _systemd_unit_runtime.artifact == 'drop_in'
+
+- name: Skip parent-unit lifecycle in check mode after simulated drop-in removal
+  ansible.builtin.debug:
+    msg: >-
+      Drop-in '{{ _systemd_unit_runtime.drop_in }}' for
+      '{{ _systemd_unit_runtime.name }}' would be removed in check mode.
+      Parent-unit lifecycle is skipped because the manager still sees the file.
+  when:
+    - _systemd_unit_runtime.artifact == 'drop_in'
+    - ansible_check_mode
+    - _systemd_unit_runtime.file_changed | default(false)
+    - _systemd_unit_runtime.effective_service_state | length > 0
+
+- name: Apply parent lifecycle after system-scoped drop-in removal
+  ansible.builtin.include_tasks:
+    file: lifecycle_system.yml
+  when:
+    - _systemd_unit_runtime.artifact == 'drop_in'
+    - _systemd_unit_runtime.scope == 'system'
+    - not (ansible_check_mode and (_systemd_unit_runtime.file_changed | default(false)))
+    - _systemd_unit_runtime.effective_service_state | length > 0
+
+- name: Apply parent lifecycle after user-scoped drop-in removal
+  ansible.builtin.include_tasks:
+    file: lifecycle_user.yml
+  when:
+    - _systemd_unit_runtime.artifact == 'drop_in'
+    - _systemd_unit_runtime.scope == 'user'
+    - not (ansible_check_mode and (_systemd_unit_runtime.file_changed | default(false)))
+    - _systemd_unit_runtime.effective_service_state | length > 0

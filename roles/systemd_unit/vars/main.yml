@@ -4,6 +4,7 @@ __systemd_unit_config_keys:
   - "scope"
   - "user"
   - "state"
+  - "drop_in"
   - "enabled"
   - "masked"
   - "service_state"
