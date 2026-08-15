@@ -1,0 +1,9 @@
+---
+- name: Restart MongoDB
+  ansible.builtin.service:
+    name: "{{ mongodb_service_name }}"
+    state: restarted
+    enabled: "{{ mongodb_service_enabled }}"
+  when:
+    - mongodb_service_state == 'started'
+    - not ansible_check_mode

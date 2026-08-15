@@ -1,0 +1,35 @@
+---
+- name: Build effective MongoDB configuration
+  ansible.builtin.include_tasks: build_config.yml
+  when: mongodb_config_manage | bool
+
+- name: Deploy MongoDB replica set keyfile
+  ansible.builtin.copy:
+    content: "{{ mongodb_security_keyfile_content | trim }}\n"
+    dest: "{{ mongodb_security_keyfile_path }}"
+    owner: mongodb
+    group: mongodb
+    mode: "0400"
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  notify: Restart MongoDB
+  when:
+    - mongodb_security_keyfile_state == 'present'
+
+- name: Remove explicitly absent MongoDB keyfile
+  ansible.builtin.file:
+    path: "{{ mongodb_security_keyfile_path }}"
+    state: absent
+  notify: Restart MongoDB
+  when: mongodb_security_keyfile_state == 'absent'
+
+- name: Deploy MongoDB configuration
+  ansible.builtin.template:
+    src: mongod.conf.j2
+    dest: "{{ mongodb_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/bin/mongod --config %s --help
+  no_log: "{{ mongodb_config_no_log }}"
+  notify: Restart MongoDB
+  when: mongodb_config_manage | bool

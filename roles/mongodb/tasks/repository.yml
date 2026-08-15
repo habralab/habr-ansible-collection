@@ -1,0 +1,23 @@
+---
+- name: Configure official MongoDB APT repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - mongodb
+        - mongodb_repository
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ mongodb_repository_name }}"
+      url: "{{ mongodb_repository_url }}"
+      suite: "{{ mongodb_repository_suite_effective }}/mongodb-org/{{ mongodb_version }}"
+      components:
+        - multiverse
+      arch: "{{ mongodb_architecture_effective }}"
+      key_url: "{{ mongodb_repository_key_url }}"
+      state: present
+  tags:
+    - mongodb
+    - mongodb_repository
+    - apt
