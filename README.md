@@ -38,6 +38,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `locale`: Declarative management of generated system locales and default `LANG`.
 - `mariadb`: Installs and configures MariaDB Community Server from its upstream repository.
 - `mariadb_assets`: Manages MariaDB databases and application accounts.
+- `mongodb`: Installs MongoDB Community Server with optional authorization and replica-set bootstrap.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nginx`: Installs and configures Nginx using a layout-driven approach (Debian/Upstream).
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.

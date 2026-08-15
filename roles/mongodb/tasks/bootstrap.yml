@@ -1,0 +1,151 @@
+---
+- name: Inspect MongoDB shell binary
+  ansible.builtin.stat:
+    path: /usr/bin/mongosh
+  register: mongodb_shell_binary
+
+- name: Require MongoDB shell for topology and authentication bootstrap
+  ansible.builtin.assert:
+    that:
+      - mongodb_shell_binary.stat.exists
+    fail_msg: >-
+      MongoDB bootstrap requires /usr/bin/mongosh. Add the mongodb-mongosh
+      package to mongodb_packages or disable replica-set/authentication
+      bootstrap.
+
+- name: Wait for local MongoDB listener
+  ansible.builtin.wait_for:
+    host: "{{ mongodb_bootstrap_host }}"
+    port: "{{ mongodb_net_port }}"
+    state: started
+    timeout: 60
+
+- name: Ensure MongoDB bootstrap script directory exists
+  ansible.builtin.file:
+    path: "{{ mongodb_bootstrap_scripts_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install MongoDB bootstrap scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ mongodb_bootstrap_scripts_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - replica-status.js
+    - replica-init.js
+    - replica-primary.js
+    - admin-create.js
+    - auth-health.js
+
+- name: Inspect MongoDB replica set state
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mongosh
+      - --quiet
+      - --host
+      - "{{ mongodb_bootstrap_host }}"
+      - --port
+      - "{{ mongodb_net_port | string }}"
+      - "{{ mongodb_bootstrap_scripts_dir }}/replica-status.js"
+  environment: &mongodb_bootstrap_environment
+    MONGODB_ADMIN_DATABASE: "{{ mongodb_admin_database }}"
+    MONGODB_ADMIN_USER: "{{ mongodb_admin_user }}"
+    MONGODB_ADMIN_PASSWORD: "{{ mongodb_admin_password }}"
+    MONGODB_ADMIN_ROLES: "{{ mongodb_admin_roles | to_json }}"
+    MONGODB_REPLICA_SET_NAME: "{{ mongodb_replica_set_name }}"
+    MONGODB_REPLICA_SET_MEMBER: "{{ mongodb_replica_set_member }}"
+  register: mongodb_replica_set_status
+  changed_when: false
+  failed_when: mongodb_replica_set_status.rc not in [0, 94]
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when: mongodb_replica_set_initiate | bool
+
+- name: Initiate MongoDB replica set
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mongosh
+      - --quiet
+      - --host
+      - "{{ mongodb_bootstrap_host }}"
+      - --port
+      - "{{ mongodb_net_port | string }}"
+      - "{{ mongodb_bootstrap_scripts_dir }}/replica-init.js"
+  environment: *mongodb_bootstrap_environment
+  changed_when: true
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when:
+    - mongodb_replica_set_initiate | bool
+    - mongodb_replica_set_status.rc == 94
+
+- name: Wait for MongoDB replica set primary
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mongosh
+      - --quiet
+      - --host
+      - "{{ mongodb_bootstrap_host }}"
+      - --port
+      - "{{ mongodb_net_port | string }}"
+      - "{{ mongodb_bootstrap_scripts_dir }}/replica-primary.js"
+  environment: *mongodb_bootstrap_environment
+  register: mongodb_replica_set_primary
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: mongodb_replica_set_primary.rc == 0
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when: mongodb_replica_set_initiate | bool
+
+- name: Probe MongoDB administrative authentication
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mongosh
+      - --quiet
+      - --host
+      - "{{ mongodb_bootstrap_host }}"
+      - --port
+      - "{{ mongodb_net_port | string }}"
+      - "{{ mongodb_bootstrap_scripts_dir }}/auth-health.js"
+  environment: *mongodb_bootstrap_environment
+  register: mongodb_admin_authentication
+  changed_when: false
+  failed_when: false
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when: mongodb_security_authorization | bool
+
+- name: Create first MongoDB administrator through localhost exception
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mongosh
+      - --quiet
+      - --host
+      - "{{ mongodb_bootstrap_host }}"
+      - --port
+      - "{{ mongodb_net_port | string }}"
+      - "{{ mongodb_bootstrap_scripts_dir }}/admin-create.js"
+  environment: *mongodb_bootstrap_environment
+  changed_when: true
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when:
+    - mongodb_security_authorization | bool
+    - mongodb_admin_authentication.rc != 0
+
+- name: Verify MongoDB administrative authentication
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/mongosh
+      - --quiet
+      - --host
+      - "{{ mongodb_bootstrap_host }}"
+      - --port
+      - "{{ mongodb_net_port | string }}"
+      - "{{ mongodb_bootstrap_scripts_dir }}/auth-health.js"
+  environment: *mongodb_bootstrap_environment
+  changed_when: false
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when: mongodb_security_authorization | bool

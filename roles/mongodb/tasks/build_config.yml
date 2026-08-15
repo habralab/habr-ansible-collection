@@ -1,0 +1,51 @@
+---
+- name: Build MongoDB base configuration
+  ansible.builtin.set_fact:
+    mongodb_config_effective: >-
+      {{ mongodb_config_base | combine(mongodb_config_overrides, recursive=true) }}
+  no_log: "{{ mongodb_config_no_log }}"
+
+- name: Add MongoDB replica set configuration
+  ansible.builtin.set_fact:
+    mongodb_config_effective: >-
+      {{
+        mongodb_config_effective
+        | combine(
+            {'replication': {'replSetName': mongodb_replica_set_name}},
+            recursive=true
+          )
+      }}
+  no_log: "{{ mongodb_config_no_log }}"
+  when: mongodb_replica_set_name | length > 0
+
+- name: Add MongoDB authorization configuration
+  ansible.builtin.set_fact:
+    mongodb_config_effective: >-
+      {{
+        mongodb_config_effective
+        | combine(
+            {
+              'security': {
+                'authorization': 'enabled',
+                'keyFile': mongodb_security_keyfile_path
+              }
+            },
+            recursive=true
+          )
+      }}
+  no_log: "{{ mongodb_config_no_log }}"
+  when:
+    - mongodb_security_authorization | bool
+    - mongodb_replica_set_name | length > 0
+
+- name: Add standalone MongoDB authorization configuration
+  ansible.builtin.set_fact:
+    mongodb_config_effective: >-
+      {{
+        mongodb_config_effective
+        | combine({'security': {'authorization': 'enabled'}}, recursive=true)
+      }}
+  no_log: "{{ mongodb_config_no_log }}"
+  when:
+    - mongodb_security_authorization | bool
+    - mongodb_replica_set_name | length == 0

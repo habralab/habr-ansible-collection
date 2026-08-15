@@ -1,0 +1,159 @@
+---
+- name: Test MongoDB compatibility validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Accept every repository-published MongoDB platform
+      ansible.builtin.include_role:
+        name: mongodb
+        tasks_from: validate
+      vars:
+        ansible_facts:
+          distribution: Ubuntu
+          distribution_release: "{{ item.suite }}"
+          architecture: x86_64
+          kernel: 7.0.14-generic
+        mongodb_version: "{{ item.version }}"
+        mongodb_platform_policy: repository
+      loop:
+        - {version: "7.0", suite: focal}
+        - {version: "7.0", suite: jammy}
+        - {version: "8.0", suite: focal}
+        - {version: "8.0", suite: jammy}
+        - {version: "8.0", suite: noble}
+        - {version: "8.2", suite: focal}
+        - {version: "8.2", suite: jammy}
+        - {version: "8.2", suite: noble}
+        - {version: "8.3", suite: focal}
+        - {version: "8.3", suite: jammy}
+        - {version: "8.3", suite: noble}
+      loop_control:
+        label: "MongoDB {{ item.version }} on {{ item.suite }}"
+
+    - name: Accept explicit MongoDB 8.3 Noble fallback on Resolute
+      ansible.builtin.include_role:
+        name: mongodb
+        tasks_from: validate
+      vars:
+        ansible_facts:
+          distribution: Ubuntu
+          distribution_release: resolute
+          architecture: x86_64
+          kernel: 7.0.0-29-generic
+        mongodb_version: "8.3"
+        mongodb_platform_policy: repository
+        mongodb_repository_suite: noble
+        mongodb_tcmalloc_rseq_workaround: true
+
+    - name: Accept every upstream-certified MongoDB platform
+      ansible.builtin.include_role:
+        name: mongodb
+        tasks_from: validate
+      vars:
+        ansible_facts:
+          distribution: Ubuntu
+          distribution_release: "{{ item.suite }}"
+          architecture: aarch64
+          kernel: 7.0.14-generic
+        mongodb_version: "{{ item.version }}"
+        mongodb_platform_policy: upstream
+      loop:
+        - {version: "7.0", suite: focal}
+        - {version: "7.0", suite: jammy}
+        - {version: "8.0", suite: focal}
+        - {version: "8.0", suite: jammy}
+        - {version: "8.0", suite: noble}
+        - {version: "8.2", suite: focal}
+        - {version: "8.2", suite: jammy}
+        - {version: "8.2", suite: noble}
+        - {version: "8.3", suite: focal}
+        - {version: "8.3", suite: jammy}
+        - {version: "8.3", suite: noble}
+      loop_control:
+        label: "MongoDB {{ item.version }} on {{ item.suite }}"
+
+    - name: Reset upstream policy rejection result
+      ansible.builtin.set_fact:
+        mongodb_upstream_policy_rejected: false
+
+    - name: Reject Resolute under upstream platform policy
+      block:
+        - name: Validate unsupported upstream combination
+          ansible.builtin.include_role:
+            name: mongodb
+            tasks_from: validate
+          vars:
+            ansible_facts:
+              distribution: Ubuntu
+              distribution_release: resolute
+              architecture: x86_64
+              kernel: 7.0.14-generic
+            mongodb_version: "8.0"
+            mongodb_platform_policy: upstream
+      rescue:
+        - name: Record upstream policy rejection
+          ansible.builtin.set_fact:
+            mongodb_upstream_policy_rejected: true
+
+    - name: Verify upstream policy rejection
+      ansible.builtin.assert:
+        that:
+          - mongodb_upstream_policy_rejected
+
+    - name: Reset unmanaged topology rejection result
+      ansible.builtin.set_fact:
+        mongodb_unmanaged_topology_failure: ""
+
+    - name: Reject topology without configuration ownership
+      block:
+        - name: Validate unmanaged replica-set configuration
+          ansible.builtin.include_role:
+            name: mongodb
+            tasks_from: validate
+          vars:
+            ansible_facts:
+              distribution: Ubuntu
+              distribution_release: noble
+              architecture: x86_64
+              kernel: 7.0.14-generic
+            mongodb_version: "8.3"
+            mongodb_platform_policy: upstream
+            mongodb_replica_set_name: unmanaged-rs
+      rescue:
+        - name: Record unmanaged topology rejection
+          ansible.builtin.set_fact:
+            mongodb_unmanaged_topology_failure: "{{ ansible_failed_result.msg }}"
+
+    - name: Verify unmanaged topology rejection
+      ansible.builtin.assert:
+        that:
+          - "'explicit ownership' in mongodb_unmanaged_topology_failure"
+
+    - name: Reset unsafe kernel rejection result
+      ansible.builtin.set_fact:
+        mongodb_unsafe_kernel_failure: ""
+
+    - name: Reject MongoDB on an unsafe kernel
+      block:
+        - name: Validate unsafe kernel combination
+          ansible.builtin.include_role:
+            name: mongodb
+            tasks_from: validate
+          vars:
+            ansible_facts:
+              distribution: Ubuntu
+              distribution_release: jammy
+              architecture: x86_64
+              kernel: 7.0.0-27-generic
+            mongodb_version: "8.3"
+            mongodb_platform_policy: upstream
+      rescue:
+        - name: Record unsafe kernel rejection
+          ansible.builtin.set_fact:
+            mongodb_unsafe_kernel_failure: "{{ ansible_failed_result.msg }}"
+
+    - name: Verify unsafe kernel rejection
+      ansible.builtin.assert:
+        that:
+          - "'incompatible with Linux kernels' in mongodb_unsafe_kernel_failure"
