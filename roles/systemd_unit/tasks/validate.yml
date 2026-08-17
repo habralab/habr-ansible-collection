@@ -153,7 +153,7 @@
         | length == 0
     fail_msg: >-
       source.model must be a non-empty mapping containing only Unit, Service,
-      and Install sections.
+      Timer, and Install sections.
     quiet: true
   when:
     - systemd_unit_config.state == 'present'
@@ -170,3 +170,38 @@
     - systemd_unit_config.state == 'present'
     - systemd_unit_config.source.model is defined
     - systemd_unit_config.source.model[_systemd_unit_section_name] is defined
+
+- name: Validate model-backed timer contract
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.name is regex('[.]timer$')
+      - >-
+        systemd_unit_config.drop_in is defined
+        or systemd_unit_config.source.model.Timer.OnActiveSec is defined
+        or systemd_unit_config.source.model.Timer.OnBootSec is defined
+        or systemd_unit_config.source.model.Timer.OnStartupSec is defined
+        or systemd_unit_config.source.model.Timer.OnUnitActiveSec is defined
+        or systemd_unit_config.source.model.Timer.OnUnitInactiveSec is defined
+        or systemd_unit_config.source.model.Timer.OnCalendar is defined
+    fail_msg: >-
+      A model-backed Timer section requires a .timer unit name. Full timer
+      units also require at least one OnActiveSec, OnBootSec, OnStartupSec,
+      OnUnitActiveSec, OnUnitInactiveSec, or OnCalendar trigger; drop-ins may
+      inherit triggers from their parent unit.
+    quiet: true
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.model is defined
+    - systemd_unit_config.source.model.Timer is defined
+
+- name: Require Timer section for model-backed timer units
+  ansible.builtin.assert:
+    that:
+      - systemd_unit_config.source.model.Timer is defined
+    fail_msg: "A model-backed .timer unit requires a Timer section."
+    quiet: true
+  when:
+    - systemd_unit_config.state == 'present'
+    - systemd_unit_config.source.model is defined
+    - systemd_unit_config.name is regex('[.]timer$')
+    - systemd_unit_config.drop_in is not defined

@@ -123,6 +123,11 @@
           } -%}
       {%- if spec.value_type == 'string' -%}
       {%- set directive = directive | combine({'value': section[directive_name]}) -%}
+      {%- elif spec.value_type == 'boolean' -%}
+      {%- set directive = directive | combine({'value': 'yes' if section[directive_name] else 'no'}) -%}
+      {%- elif spec.value_type == 'string_or_list' -%}
+      {%- set values = [section[directive_name]] if section[directive_name] is string else section[directive_name] -%}
+      {%- set directive = directive | combine({'values': values}) -%}
       {%- else -%}
       {%- set directive = directive | combine({'values': section[directive_name]}) -%}
       {%- endif -%}

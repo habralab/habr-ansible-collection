@@ -1,0 +1,151 @@
+---
+- name: Test systemd_unit timer model contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    test_timer_config: &test_timer_config
+      name: "geoipupdate.timer"
+      scope: "system"
+      state: "present"
+      enabled: true
+      service_state: "started"
+      source:
+        model:
+          Unit:
+            Description: "Update MaxMind databases"
+          Timer:
+            OnBootSec: "15m"
+            OnCalendar:
+              - "Wed *-*-* 06:00"
+              - "Sun *-*-* 06:00"
+            AccuracySec: "5m"
+            RandomizedDelaySec: "1h"
+            Persistent: true
+            Unit: "geoipupdate.service"
+          Install:
+            WantedBy:
+              - "timers.target"
+  tasks:
+    - name: Validate timer declaration
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: validate
+      vars:
+        systemd_unit_config: *test_timer_config
+
+    - name: Materialize normalized timer data
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: materialize
+      vars:
+        systemd_unit_config: *test_timer_config
+
+    - name: Assert timer normalization and rendering
+      ansible.builtin.assert:
+        that:
+          - _systemd_unit_runtime.file.path == '/etc/systemd/system/geoipupdate.timer'
+          - _systemd_unit_runtime.sections | map(attribute='name') | list == ['Unit', 'Timer', 'Install']
+          - "'OnBootSec=15m' in _systemd_unit_runtime.rendered_content"
+          - >-
+            _systemd_unit_runtime.rendered_content
+            | regex_findall('(?m)^OnCalendar=')
+            | length == 2
+          - "'Persistent=yes' in _systemd_unit_runtime.rendered_content"
+          - "'Unit=geoipupdate.service' in _systemd_unit_runtime.rendered_content"
+          - "'WantedBy=timers.target' in _systemd_unit_runtime.rendered_content"
+        quiet: true
+
+    - name: Validate timer drop-in inheriting parent triggers
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: validate
+      vars:
+        systemd_unit_config:
+          name: "geoipupdate.timer"
+          drop_in: "accuracy.conf"
+          scope: "system"
+          state: "present"
+          source:
+            model:
+              Timer:
+                AccuracySec: "30m"
+
+    - name: Reject Timer section on a non-timer unit
+      block:
+        - name: Validate Timer section with invalid unit suffix
+          ansible.builtin.include_role:
+            name: systemd_unit
+            tasks_from: validate
+          vars:
+            systemd_unit_config:
+              name: "geoipupdate.service"
+              scope: "system"
+              state: "present"
+              source:
+                model:
+                  Timer:
+                    OnCalendar: "weekly"
+
+        - name: Fail when invalid timer suffix was accepted
+          ansible.builtin.fail:
+            msg: "Timer section unexpectedly accepted a non-timer unit name."
+      rescue:
+        - name: Assert expected timer suffix validation failure
+          ansible.builtin.assert:
+            that:
+              - "'.timer unit name' in ansible_failed_result.msg"
+            quiet: true
+
+    - name: Reject timer model without a trigger
+      block:
+        - name: Validate timer model without a trigger
+          ansible.builtin.include_role:
+            name: systemd_unit
+            tasks_from: validate
+          vars:
+            systemd_unit_config:
+              name: "geoipupdate.timer"
+              scope: "system"
+              state: "present"
+              source:
+                model:
+                  Timer:
+                    Persistent: true
+
+        - name: Fail when triggerless timer was accepted
+          ansible.builtin.fail:
+            msg: "Timer model unexpectedly accepted no trigger."
+      rescue:
+        - name: Assert expected timer trigger validation failure
+          ansible.builtin.assert:
+            that:
+              - "'at least one' in ansible_failed_result.msg"
+            quiet: true
+
+    - name: Reject string timer boolean
+      block:
+        - name: Validate string timer boolean
+          ansible.builtin.include_role:
+            name: systemd_unit
+            tasks_from: validate
+          vars:
+            systemd_unit_config:
+              name: "geoipupdate.timer"
+              scope: "system"
+              state: "present"
+              source:
+                model:
+                  Timer:
+                    OnCalendar: "weekly"
+                    Persistent: "yes"
+
+        - name: Fail when string timer boolean was accepted
+          ansible.builtin.fail:
+            msg: "Timer model unexpectedly accepted a string boolean."
+      rescue:
+        - name: Assert expected timer boolean validation failure
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result is defined
+            quiet: true

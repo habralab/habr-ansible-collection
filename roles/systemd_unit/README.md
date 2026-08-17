@@ -85,8 +85,50 @@ systemd_unit_config:
 ```
 
 Model mode intentionally supports a conservative subset of the `Unit`,
-`Service`, and `Install` sections. Unsupported systemd syntax should use one of
-the raw source modes.
+`Service`, `Timer`, and `Install` sections. Unsupported systemd syntax should
+use one of the raw source modes.
+
+### Timer Model
+
+Timer units use the same lifecycle and system/user scope contract as services.
+The model requires a `.timer` unit name, a `Timer` section, and at least one
+trigger for a full unit. A timer drop-in may inherit triggers from its parent.
+Trigger directives accept either one string or a list of strings; boolean
+directives use native YAML booleans.
+Empty trigger values are rejected by the model. Use a raw source mode when a
+drop-in intentionally needs systemd's empty-assignment reset semantics.
+
+```yaml
+systemd_unit_config:
+  name: "geoipupdate.timer"
+  scope: "user"
+  user: "web"
+  state: "present"
+  enabled: true
+  service_state: "started"
+  restart_on_change: true
+  manage_linger: true
+  source:
+    model:
+      Unit:
+        Description: "Update MaxMind databases"
+      Timer:
+        OnCalendar:
+          - "Wed *-*-* 06:00"
+          - "Sun *-*-* 06:00"
+        Persistent: true
+        RandomizedDelaySec: "1h"
+        Unit: "geoipupdate.service"
+      Install:
+        WantedBy:
+          - "timers.target"
+```
+
+Supported triggers are `OnActiveSec`, `OnBootSec`, `OnStartupSec`,
+`OnUnitActiveSec`, `OnUnitInactiveSec`, and `OnCalendar`. The model also
+supports `AccuracySec`, `RandomizedDelaySec`, `OnClockChange`,
+`OnTimezoneChange`, `Unit`, `Persistent`, `WakeSystem`, and
+`RemainAfterElapse` across the supported Ubuntu matrix.
 
 ### Inline Content
 
@@ -175,4 +217,5 @@ does not pretend that enabling lingering created this runtime directory.
 - Package or application deployment.
 - PM2- or NVM-specific service semantics.
 - Bulk iteration; use `habr.linuxhost.systemd_units` for multiple units.
-- Exhaustive modeling of every systemd directive and unit type.
+- Exhaustive modeling of every systemd directive and unit type beyond services
+  and timers.

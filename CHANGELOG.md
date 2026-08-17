@@ -10,6 +10,10 @@
 - `mongodb_assets`: Manage MongoDB application users, role assignments, and
   authentication restrictions without creating or dropping application data.
 
+### Changed
+- `systemd_unit`: Render and validate systemd timer units directly from the
+  YAML model in both system and user scopes.
+
 ## [2.0.0] - 2026-08-14
 
 ### Breaking Changes
