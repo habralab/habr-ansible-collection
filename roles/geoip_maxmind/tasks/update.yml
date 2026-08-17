@@ -1,0 +1,60 @@
+---
+- name: Inspect requested MaxMind GeoIP databases
+  ansible.builtin.stat:
+    path: "{{ geoip_maxmind_database_directory }}/{{ item }}.mmdb"
+  loop: "{{ geoip_maxmind_edition_ids }}"
+  register: geoip_maxmind_database_stats
+
+- name: Resolve whether a MaxMind GeoIP download is required
+  ansible.builtin.set_fact:
+    geoip_maxmind_update_required: >-
+      {{ geoip_maxmind_database_stats.results
+         | map(attribute='stat.exists')
+         | select('equalto', false)
+         | list
+         | length > 0 }}
+
+- name: Report missing MaxMind GeoIP databases in check mode
+  ansible.builtin.debug:
+    msg: "Missing MaxMind databases would be downloaded."
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - geoip_maxmind_update_required
+
+- name: Download missing MaxMind GeoIP databases
+  ansible.builtin.command:
+    argv:
+      - "{{ geoip_maxmind_binary }}"
+      - -f
+      - "{{ geoip_maxmind_config_path }}"
+      - -d
+      - "{{ geoip_maxmind_database_directory }}"
+  become: true
+  no_log: "{{ geoip_maxmind_config_no_log }}"
+  when:
+    - not ansible_check_mode
+    - geoip_maxmind_update_required
+  changed_when: true
+
+- name: Verify requested MaxMind GeoIP databases
+  ansible.builtin.stat:
+    path: "{{ geoip_maxmind_database_directory }}/{{ item }}.mmdb"
+  loop: "{{ geoip_maxmind_edition_ids }}"
+  register: geoip_maxmind_updated_database_stats
+  when:
+    - not ansible_check_mode
+    - geoip_maxmind_update_required
+
+- name: Assert requested MaxMind GeoIP databases are available
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: >-
+      geoipupdate completed without materializing
+      {{ item.item }}.mmdb in {{ geoip_maxmind_database_directory }}.
+  loop: "{{ geoip_maxmind_updated_database_stats.results }}"
+  when:
+    - not ansible_check_mode
+    - geoip_maxmind_update_required

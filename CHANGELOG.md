@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- `geoip_maxmind`: Install `geoipupdate`, manage MaxMind credentials and
+  database editions, and bootstrap missing databases without nginx coupling.
 - `mongodb`: Install MongoDB Community Server with optional authorization and
   single-member replica-set bootstrap.
 - `mongodb_assets`: Manage MongoDB application users, role assignments, and

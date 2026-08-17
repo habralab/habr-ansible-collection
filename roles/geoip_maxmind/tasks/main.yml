@@ -1,0 +1,14 @@
+---
+- name: Validate MaxMind GeoIP contract
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Install MaxMind GeoIP packages
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Configure MaxMind GeoIP updates
+  ansible.builtin.import_tasks: configure.yml
+  when: geoip_maxmind_config_manage | bool
+
+- name: Download missing MaxMind GeoIP databases
+  ansible.builtin.import_tasks: update.yml
+  when: geoip_maxmind_update_on_configure | bool

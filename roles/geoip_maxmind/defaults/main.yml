@@ -1,0 +1,30 @@
+---
+geoip_maxmind_packages:
+  - geoipupdate
+  - libmaxminddb0
+  - mmdb-bin
+geoip_maxmind_package_state: present
+
+geoip_maxmind_config_manage: true
+geoip_maxmind_config_path: /etc/GeoIP.conf
+geoip_maxmind_config_owner: root
+geoip_maxmind_config_group: root
+geoip_maxmind_config_mode: "0600"
+geoip_maxmind_config_no_log: true
+
+geoip_maxmind_account_id: ""
+geoip_maxmind_license_key: ""
+geoip_maxmind_edition_ids:
+  - GeoLite2-Country
+  - GeoLite2-City
+geoip_maxmind_database_directory: /usr/share/GeoIP
+
+geoip_maxmind_host: ""
+geoip_maxmind_proxy: ""
+geoip_maxmind_proxy_user_password: ""
+geoip_maxmind_preserve_file_times: false
+geoip_maxmind_lock_file: ""
+geoip_maxmind_retry_for: ""
+
+geoip_maxmind_update_on_configure: true
+geoip_maxmind_binary: /usr/bin/geoipupdate

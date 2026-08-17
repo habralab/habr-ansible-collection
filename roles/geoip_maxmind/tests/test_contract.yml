@@ -1,0 +1,78 @@
+---
+- name: Test MaxMind GeoIP contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      distribution: Ubuntu
+      distribution_release: noble
+    geoip_maxmind_account_id: "123456"
+    geoip_maxmind_license_key: secret
+    geoip_maxmind_edition_ids:
+      - GeoLite2-Country
+      - GeoLite2-City
+      - GeoLite2-ASN
+  tasks:
+    - name: Validate a complete MaxMind GeoIP contract
+      ansible.builtin.include_role:
+        name: geoip_maxmind
+        tasks_from: validate
+
+    - name: Initialize invalid edition result
+      ansible.builtin.set_fact:
+        geoip_maxmind_invalid_edition_rejected: false
+
+    - name: Reject an invalid MaxMind edition ID
+      block:
+        - name: Validate an invalid MaxMind edition ID
+          ansible.builtin.include_role:
+            name: geoip_maxmind
+            tasks_from: validate
+          vars:
+            geoip_maxmind_edition_ids:
+              - "GeoLite2-City invalid"
+      rescue:
+        - name: Record invalid MaxMind edition rejection
+          ansible.builtin.set_fact:
+            geoip_maxmind_invalid_edition_rejected: true
+
+    - name: Verify invalid MaxMind edition rejection
+      ansible.builtin.assert:
+        that:
+          - geoip_maxmind_invalid_edition_rejected
+        quiet: true
+
+    - name: Initialize missing credentials result
+      ansible.builtin.set_fact:
+        geoip_maxmind_missing_credentials_rejected: false
+
+    - name: Reject missing managed credentials
+      block:
+        - name: Validate missing managed credentials
+          ansible.builtin.include_role:
+            name: geoip_maxmind
+            tasks_from: validate
+          vars:
+            geoip_maxmind_account_id: ""
+            geoip_maxmind_license_key: ""
+      rescue:
+        - name: Record missing credentials rejection
+          ansible.builtin.set_fact:
+            geoip_maxmind_missing_credentials_rejected: true
+
+    - name: Verify missing credentials rejection
+      ansible.builtin.assert:
+        that:
+          - geoip_maxmind_missing_credentials_rejected
+        quiet: true
+
+    - name: Validate externally managed configuration
+      ansible.builtin.include_role:
+        name: geoip_maxmind
+        tasks_from: validate
+      vars:
+        geoip_maxmind_config_manage: false
+        geoip_maxmind_update_on_configure: false
+        geoip_maxmind_account_id: ""
+        geoip_maxmind_license_key: ""

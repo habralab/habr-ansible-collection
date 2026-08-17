@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: geoip_maxmind
+  author: Habr Team <servers@habr.team>
+  description: Install geoipupdate and manage MaxMind GeoIP databases
+  company: Habr
+  license: unlicensed
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+        - resolute
+dependencies: []

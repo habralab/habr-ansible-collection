@@ -1,0 +1,44 @@
+---
+- name: Test MaxMind GeoIP database no-op
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../defaults/main.yml
+  tasks:
+    - name: Select no-op test MaxMind GeoIP values
+      ansible.builtin.set_fact:
+        geoip_maxmind_database_directory: >-
+          /tmp/habr-geoip-maxmind-noop-{{ ansible_version.full }}
+        geoip_maxmind_edition_ids:
+          - GeoLite2-Country
+          - GeoLite2-City
+
+    - name: Create no-op test database directory
+      ansible.builtin.file:
+        path: "{{ geoip_maxmind_database_directory }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create existing test databases
+      ansible.builtin.copy:
+        content: test
+        dest: "{{ geoip_maxmind_database_directory }}/{{ item }}.mmdb"
+        mode: "0600"
+      loop: "{{ geoip_maxmind_edition_ids }}"
+
+    - name: Evaluate MaxMind GeoIP initial update
+      ansible.builtin.include_role:
+        name: geoip_maxmind
+        tasks_from: update
+
+    - name: Verify MaxMind GeoIP update is a no-op
+      ansible.builtin.assert:
+        that:
+          - not geoip_maxmind_update_required
+        quiet: true
+
+    - name: Remove no-op test database directory
+      ansible.builtin.file:
+        path: "{{ geoip_maxmind_database_directory }}"
+        state: absent
