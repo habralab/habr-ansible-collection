@@ -1,0 +1,16 @@
+---
+- name: Test MongoDB assets default no-op
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Run MongoDB assets with defaults
+      ansible.builtin.include_role:
+        name: mongodb_assets
+
+    - name: Verify no users require dependency preparation
+      ansible.builtin.assert:
+        that:
+          - __mongodb_assets_users | length == 0
+          - mongodb_assets_pymongo_probe is not defined
+        quiet: true

@@ -1,0 +1,168 @@
+---
+- name: Test MongoDB assets contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Validate a complete MongoDB asset contract
+      ansible.builtin.include_role:
+        name: mongodb_assets
+        tasks_from: validate
+      vars:
+        mongodb_assets_login_user: automation-admin
+        mongodb_assets_login_password: secret
+        mongodb_assets:  # noqa var-naming[no-role-prefix]
+          - database: application
+            state: present
+            users:
+              - name: application
+                state: present
+                password: secret
+                roles:
+                  - role: readWrite
+                    db: application
+                authentication_restrictions:
+                  - clientSource:
+                      - 127.0.0.1
+                      - ::1
+              - name: retired-worker
+                state: absent
+
+    - name: Verify nested users are flattened with their database identity
+      ansible.builtin.assert:
+        that:
+          - __mongodb_assets_users | length == 2
+          - __mongodb_assets_users[0].database == 'application'
+          - __mongodb_assets_users[0].roles[0].role == 'readWrite'
+          - __mongodb_assets_users[1].state == 'absent'
+        quiet: true
+
+    - name: Initialize duplicate rejection result
+      ansible.builtin.set_fact:
+        mongodb_assets_duplicate_rejected: false
+
+    - name: Reject duplicate database contracts
+      block:
+        - name: Validate duplicate MongoDB databases
+          ansible.builtin.include_role:
+            name: mongodb_assets
+            tasks_from: validate
+          vars:
+            mongodb_assets:  # noqa var-naming[no-role-prefix]
+              - database: duplicate
+                state: present
+                users: []
+              - database: duplicate
+                state: present
+                users: []
+      rescue:
+        - name: Record duplicate database rejection
+          ansible.builtin.set_fact:
+            mongodb_assets_duplicate_rejected: true
+
+    - name: Verify duplicate database rejection
+      ansible.builtin.assert:
+        that:
+          - mongodb_assets_duplicate_rejected
+        quiet: true
+
+    - name: Initialize malformed role rejection result
+      ansible.builtin.set_fact:
+        mongodb_assets_role_rejected: false
+
+    - name: Reject string-form role assignments
+      block:
+        - name: Validate malformed MongoDB role assignment
+          ansible.builtin.include_role:
+            name: mongodb_assets
+            tasks_from: validate
+          vars:
+            mongodb_assets_login_user: automation-admin
+            mongodb_assets_login_password: secret
+            mongodb_assets:  # noqa var-naming[no-role-prefix]
+              - database: application
+                state: present
+                users:
+                  - name: application
+                    state: present
+                    password: secret
+                    roles:
+                      - readWrite
+      rescue:
+        - name: Record malformed role rejection
+          ansible.builtin.set_fact:
+            mongodb_assets_role_rejected: true
+
+    - name: Verify malformed role rejection
+      ansible.builtin.assert:
+        that:
+          - mongodb_assets_role_rejected
+        quiet: true
+
+    - name: Initialize duplicate user rejection result
+      ansible.builtin.set_fact:
+        mongodb_assets_user_duplicate_rejected: false
+
+    - name: Reject duplicate users in one authentication database
+      block:
+        - name: Validate duplicate MongoDB users
+          ansible.builtin.include_role:
+            name: mongodb_assets
+            tasks_from: validate
+          vars:
+            mongodb_assets_login_user: automation-admin
+            mongodb_assets_login_password: secret
+            mongodb_assets:  # noqa var-naming[no-role-prefix]
+              - database: application
+                state: present
+                users:
+                  - name: duplicate
+                    state: absent
+                  - name: duplicate
+                    state: absent
+      rescue:
+        - name: Record duplicate user rejection
+          ansible.builtin.set_fact:
+            mongodb_assets_user_duplicate_rejected: true
+
+    - name: Verify duplicate user rejection
+      ansible.builtin.assert:
+        that:
+          - mongodb_assets_user_duplicate_rejected
+        quiet: true
+
+    - name: Initialize malformed restriction rejection result
+      ansible.builtin.set_fact:
+        mongodb_assets_restriction_rejected: false
+
+    - name: Reject malformed authentication restrictions
+      block:
+        - name: Validate malformed MongoDB authentication restriction
+          ansible.builtin.include_role:
+            name: mongodb_assets
+            tasks_from: validate
+          vars:
+            mongodb_assets_login_user: automation-admin
+            mongodb_assets_login_password: secret
+            mongodb_assets:  # noqa var-naming[no-role-prefix]
+              - database: application
+                state: present
+                users:
+                  - name: application
+                    state: present
+                    password: secret
+                    roles:
+                      - role: readWrite
+                        db: application
+                    authentication_restrictions:
+                      - clientSource: 127.0.0.1
+      rescue:
+        - name: Record malformed restriction rejection
+          ansible.builtin.set_fact:
+            mongodb_assets_restriction_rejected: true
+
+    - name: Verify malformed restriction rejection
+      ansible.builtin.assert:
+        that:
+          - mongodb_assets_restriction_rejected
+        quiet: true

@@ -1,0 +1,36 @@
+---
+- name: Validate MongoDB assets contract
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - mongodb_assets
+  tags:
+    - mongodb_assets
+
+- name: Prepare MongoDB assets dependencies
+  ansible.builtin.include_tasks:
+    file: packages.yml
+    apply:
+      tags:
+        - mongodb_assets
+        - mongodb_assets_packages
+  when: __mongodb_assets_users | length > 0
+  tags:
+    - mongodb_assets
+    - mongodb_assets_packages
+
+- name: Reconcile MongoDB application users
+  ansible.builtin.include_tasks:
+    file: users.yml
+    apply:
+      tags:
+        - mongodb_assets
+        - mongodb_assets_users
+  when:
+    - __mongodb_assets_users | length > 0
+    - mongodb_assets_pymongo_probe.rc == 0
+    - mongodb_assets_pymongo_probe.stdout is version(__mongodb_assets_min_pymongo_version, '>=')
+  tags:
+    - mongodb_assets
+    - mongodb_assets_users
