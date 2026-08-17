@@ -1,0 +1,21 @@
+# Managed by Ansible (habr.linuxhost.geoip_maxmind)
+AccountID {{ geoip_maxmind_account_id }}
+LicenseKey {{ geoip_maxmind_license_key }}
+EditionIDs {{ geoip_maxmind_edition_ids | join(' ') }}
+DatabaseDirectory {{ geoip_maxmind_database_directory }}
+{% if geoip_maxmind_host | length > 0 %}
+Host {{ geoip_maxmind_host }}
+{% endif %}
+{% if geoip_maxmind_proxy | length > 0 %}
+Proxy {{ geoip_maxmind_proxy }}
+{% endif %}
+{% if geoip_maxmind_proxy_user_password | length > 0 %}
+ProxyUserPassword {{ geoip_maxmind_proxy_user_password }}
+{% endif %}
+PreserveFileTimes {{ geoip_maxmind_preserve_file_times | bool | int }}
+{% if geoip_maxmind_lock_file | length > 0 %}
+LockFile {{ geoip_maxmind_lock_file }}
+{% endif %}
+{% if geoip_maxmind_retry_for | length > 0 %}
+RetryFor {{ geoip_maxmind_retry_for }}
+{% endif %}

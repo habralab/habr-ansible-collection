@@ -1,0 +1,6 @@
+---
+geoip_maxmind_supported_releases:
+  - focal
+  - jammy
+  - noble
+  - resolute
