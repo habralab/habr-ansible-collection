@@ -1,0 +1,21 @@
+---
+- name: Manage MongoDB application users
+  community.mongodb.mongodb_user:
+    database: "{{ item.database }}"
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    password: "{{ item.password | default(omit) }}"
+    roles: "{{ item.roles | default(omit) }}"
+    update_password: "{{ item.update_password | default('on_create') }}"
+    authentication_restrictions: "{{ item.authentication_restrictions | default([]) }}"
+    login_host: "{{ mongodb_assets_login_host }}"
+    login_port: "{{ mongodb_assets_login_port }}"
+    login_database: "{{ mongodb_assets_login_database }}"
+    login_user: "{{ mongodb_assets_login_user }}"
+    login_password: "{{ mongodb_assets_login_password }}"
+    replica_set: "{{ mongodb_assets_replica_set if mongodb_assets_replica_set | length > 0 else omit }}"
+    strict_compatibility: true
+  loop: "{{ __mongodb_assets_users }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.database }}"
+  no_log: true

@@ -1,0 +1,12 @@
+---
+mongodb_assets_python_packages:
+  - python3-pymongo
+
+mongodb_assets_login_host: 127.0.0.1
+mongodb_assets_login_port: 27017
+mongodb_assets_login_database: admin
+mongodb_assets_login_user: ""
+mongodb_assets_login_password: ""
+mongodb_assets_replica_set: ""
+
+mongodb_assets: []  # noqa var-naming[no-role-prefix]
