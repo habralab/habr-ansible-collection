@@ -1,0 +1,9 @@
+---
+- name: Restart cron after hostname change
+  ansible.builtin.systemd_service:
+    name: "{{ hostname_cron_service_name }}"
+    state: restarted
+  become: true
+  when:
+    - hostname_restart_cron | bool
+    - hostname_cron_service_name in (ansible_facts['services'] | default({}))

@@ -1,0 +1,22 @@
+---
+- name: Validate hostname role options
+  ansible.builtin.assert:
+    that:
+      - hostname_manage is boolean
+      - hostname_name is string
+      - hostname_cloud_init_preserve is boolean
+      - hostname_restart_cron is boolean
+    fail_msg: Hostname role switches must be boolean and hostname_name must be a string.
+
+- name: Validate hostname management support and effective name
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - hostname_use in ['systemd', 'debian', 'generic']
+      - hostname_var_name is match(hostname_var_pattern)
+      - not (hostname_var_name is match(hostname_var_ipv4_pattern))
+    fail_msg: >-
+      Hostname management requires Ubuntu and a valid lowercase static hostname
+      no longer than 64 characters. Set hostname_name explicitly when
+      inventory_hostname is an IP address or a non-hostname inventory alias.
+  when: hostname_manage | bool

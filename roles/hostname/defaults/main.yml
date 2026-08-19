@@ -1,0 +1,11 @@
+---
+hostname_manage: false
+hostname_name: ""
+hostname_use: systemd
+
+hostname_cloud_init_preserve: true
+hostname_cloud_init_config_dir: /etc/cloud/cloud.cfg.d
+hostname_cloud_init_config_file: /etc/cloud/cloud.cfg.d/99-ansible-hostname.cfg
+
+hostname_restart_cron: true
+hostname_cron_service_name: cron.service

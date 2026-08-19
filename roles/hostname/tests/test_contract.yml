@@ -1,0 +1,51 @@
+---
+- name: Test hostname role contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      distribution: Ubuntu
+  tasks:
+    - name: Verify default role invocation is a no-op
+      ansible.builtin.include_role:
+        name: hostname
+
+    - name: Validate inventory hostname fallback
+      ansible.builtin.include_role:
+        name: hostname
+        tasks_from: validate
+      vars:
+        hostname_manage: true
+
+    - name: Validate explicit FQDN
+      ansible.builtin.include_role:
+        name: hostname
+        tasks_from: validate
+      vars:
+        hostname_manage: true
+        hostname_name: web-01.example.net
+
+    - name: Initialize invalid hostname result
+      ansible.builtin.set_fact:
+        hostname_invalid_name_rejected: false
+
+    - name: Reject an IP address as static hostname
+      block:
+        - name: Validate IP address hostname
+          ansible.builtin.include_role:
+            name: hostname
+            tasks_from: validate
+          vars:
+            hostname_manage: true
+            hostname_name: 192.0.2.1
+      rescue:
+        - name: Record invalid hostname rejection
+          ansible.builtin.set_fact:
+            hostname_invalid_name_rejected: true
+
+    - name: Verify invalid hostname rejection
+      ansible.builtin.assert:
+        that:
+          - hostname_invalid_name_rejected
+        quiet: true
