@@ -1,0 +1,10 @@
+---
+hostname_var_name: >-
+  {{
+    hostname_name | trim
+    if hostname_name | trim | length > 0
+    else inventory_hostname
+  }}
+hostname_var_pattern: >-
+  ^(?=.{1,64}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$
+hostname_var_ipv4_pattern: '^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$'

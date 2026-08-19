@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: hostname
+  author: Habr Team <servers@habr.team>
+  description: Manage the persistent Ubuntu hostname and cloud-init preservation
+  company: Habr
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+        - resolute
+dependencies: []

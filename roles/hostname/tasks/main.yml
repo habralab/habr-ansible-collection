@@ -1,0 +1,47 @@
+---
+- name: Validate hostname configuration
+  ansible.builtin.import_tasks: validate.yml
+  tags:
+    - hostname
+
+- name: Inspect cloud-init configuration directory
+  ansible.builtin.stat:
+    path: "{{ hostname_cloud_init_config_dir }}"
+  register: hostname_cloud_init_config_dir_stat
+  when: hostname_manage | bool
+  tags:
+    - hostname
+    - cloud_init
+
+- name: Configure cloud-init hostname preservation
+  ansible.builtin.copy:
+    content: "preserve_hostname: {{ hostname_cloud_init_preserve | ternary('true', 'false') }}\n"
+    dest: "{{ hostname_cloud_init_config_file }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - hostname_manage | bool
+    - hostname_cloud_init_config_dir_stat.stat.isdir | default(false)
+  become: true
+  tags:
+    - hostname
+    - cloud_init
+
+- name: Read service state for hostname change handlers
+  ansible.builtin.service_facts:
+  when:
+    - hostname_manage | bool
+    - hostname_restart_cron | bool
+  tags:
+    - hostname
+
+- name: Set system hostname
+  ansible.builtin.hostname:
+    name: "{{ hostname_var_name }}"
+    use: "{{ hostname_use }}"
+  when: hostname_manage | bool
+  become: true
+  notify: Restart cron after hostname change
+  tags:
+    - hostname
