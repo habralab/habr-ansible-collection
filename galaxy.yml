@@ -1,7 +1,7 @@
 ---
 namespace: habr
 name: linuxhost
-version: 2.0.0
+version: 2.1.0
 readme: README.md
 
 authors:
@@ -30,6 +30,7 @@ issues: https://github.com/habralab/habr-ansible-collection/issues
 build_ignore:
   - "*.tar.gz"
   - "*.gitkeep"
+  - "AGENTS.md"
   - ".agents"
   - ".ansible"
   - ".ansible-lint"
