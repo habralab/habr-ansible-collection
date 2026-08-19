@@ -1,0 +1,36 @@
+---
+- name: Test MongoDB configuration composition
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Build secured replica set configuration
+      ansible.builtin.include_role:
+        name: mongodb
+        tasks_from: build_config
+      vars:
+        mongodb_config_no_log: false
+        mongodb_replica_set_name: expected-rs
+        mongodb_security_authorization: true
+        mongodb_config_overrides:
+          storage:
+            wiredTiger:
+              engineConfig:
+                cacheSizeGB: 1
+          replication:
+            replSetName: ignored-rs
+          security:
+            authorization: disabled
+
+    - name: Verify MongoDB configuration composition
+      ansible.builtin.assert:
+        that:
+          - mongodb_config_effective.storage.dbPath == '/var/lib/mongodb'
+          - mongodb_config_effective.storage.wiredTiger.engineConfig.cacheSizeGB == 1
+          - mongodb_config_effective.systemLog.logAppend is boolean
+          - mongodb_config_effective.systemLog.logAppend
+          - mongodb_config_effective.net.port is number
+          - mongodb_config_effective.net.port == 27017
+          - mongodb_config_effective.replication.replSetName == 'expected-rs'
+          - mongodb_config_effective.security.authorization == 'enabled'
+          - mongodb_config_effective.security.keyFile == '/etc/mongodb-keyfile'

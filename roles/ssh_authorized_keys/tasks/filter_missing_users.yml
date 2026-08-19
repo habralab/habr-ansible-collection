@@ -1,0 +1,42 @@
+---
+- name: Identify missing authorized key target users
+  ansible.builtin.set_fact:
+    _ssh_authorized_keys_missing_users: >-
+      {{
+        _ssh_authorized_keys_contract.keys()
+        | difference(ansible_facts.getent_passwd.keys() | list)
+        | sort
+      }}
+
+- name: Validate authorized key target users
+  ansible.builtin.assert:
+    that:
+      - _ssh_authorized_keys_missing_users | length == 0
+    quiet: true
+    fail_msg: >-
+      Authorized key contracts reference users that do not exist:
+      {{ _ssh_authorized_keys_missing_users | join(', ') }}.
+  when: ssh_authorized_keys_fail_on_missing_user | bool
+
+- name: Report skipped authorized key target users
+  ansible.builtin.debug:
+    msg: >-
+      Skipping authorized key contracts for users that do not exist:
+      {{ _ssh_authorized_keys_missing_users | join(', ') }}.
+  when:
+    - not ssh_authorized_keys_fail_on_missing_user | bool
+    - _ssh_authorized_keys_missing_users | length > 0
+
+- name: Exclude missing users from the effective authorized keys contract
+  ansible.builtin.set_fact:
+    _ssh_authorized_keys_contract: >-
+      {{
+        _ssh_authorized_keys_contract
+        | dict2items
+        | rejectattr('key', 'in', _ssh_authorized_keys_missing_users)
+        | list
+        | items2dict
+      }}
+  when:
+    - not ssh_authorized_keys_fail_on_missing_user | bool
+    - _ssh_authorized_keys_missing_users | length > 0

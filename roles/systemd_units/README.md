@@ -55,6 +55,9 @@ systemd_units_items:
 
 The wrapper processes declarations sequentially. Duplicate declarations are not
 merged or deduplicated; operators should declare each effective unit once.
+For a service/timer pair, declare the `.service` first and the `.timer` second.
+The service normally needs only materialization, while the timer owns
+`enabled: true` and `service_state: started`.
 
 ## Tags
 

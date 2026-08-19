@@ -1,0 +1,23 @@
+---
+- name: Test MongoDB default configuration no-op
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load MongoDB role defaults
+      ansible.builtin.include_vars:
+        file: ../defaults/main.yml
+
+    - name: Exercise MongoDB configuration tasks with defaults
+      ansible.builtin.include_role:
+        name: mongodb
+        tasks_from: config
+
+    - name: Verify default configuration ownership is disabled
+      ansible.builtin.assert:
+        that:
+          - not mongodb_config_manage
+          - mongodb_security_keyfile_state == 'unmanaged'
+          - mongodb_tcmalloc_rseq_workaround is none
+          - mongodb_config_effective is not defined
+        quiet: true

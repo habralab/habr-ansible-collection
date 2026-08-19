@@ -1,0 +1,110 @@
+---
+- name: Test systemd_unit drop-in contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    test_drop_in_config: &test_drop_in_config
+      name: "mongod.service"
+      drop_in: "habr-rseq.conf"
+      scope: "system"
+      state: "present"
+      restart_on_change: true
+      source:
+        model:
+          Service:
+            Environment:
+              - "GLIBC_TUNABLES=glibc.pthread.rseq=1"
+  tasks:
+    - name: Validate drop-in declaration
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: validate
+      vars:
+        systemd_unit_config: *test_drop_in_config
+
+    - name: Materialize normalized drop-in data
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: materialize
+      vars:
+        systemd_unit_config: *test_drop_in_config
+
+    - name: Assert system drop-in normalization and rendering
+      ansible.builtin.assert:
+        that:
+          - _systemd_unit_runtime.artifact == 'drop_in'
+          - _systemd_unit_runtime.file.path == '/etc/systemd/system/mongod.service.d/habr-rseq.conf'
+          - _systemd_unit_runtime.file.dir == '/etc/systemd/system/mongod.service.d'
+          - "'Environment=GLIBC_TUNABLES=glibc.pthread.rseq=1' in _systemd_unit_runtime.rendered_content"
+        quiet: true
+
+    - name: Materialize legacy unit path without drop-in
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: materialize
+      vars:
+        systemd_unit_config:
+          name: "example.service"
+          scope: "system"
+          state: "absent"
+
+    - name: Assert unit-file path remains backward compatible
+      ansible.builtin.assert:
+        that:
+          - _systemd_unit_runtime.artifact == 'unit'
+          - _systemd_unit_runtime.file.path == '/etc/systemd/system/example.service'
+          - _systemd_unit_runtime.file.dir == '/etc/systemd/system'
+        quiet: true
+
+    - name: Prepare absent drop-in runtime without parent lifecycle ownership
+      ansible.builtin.set_fact:
+        _systemd_unit_runtime:
+          name: "external.service"
+          artifact: "drop_in"
+          drop_in: "habr-test.conf"
+          scope: "user"
+          service_state: ""
+          restart_on_change: false
+          reload_on_change: false
+          file:
+            path: "/tmp/habr-systemd-unit-missing/external.service.d/habr-test.conf"
+          user_context:
+            name: "{{ lookup('env', 'USER') }}"
+            runtime_dir: "/tmp/habr-systemd-unit-missing/runtime"
+
+    - name: Exercise absent drop-in path
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: absent
+
+    - name: Assert absent drop-in leaves parent lifecycle untouched
+      ansible.builtin.assert:
+        that:
+          - not systemd_unit_removed_result.changed
+          - _systemd_unit_runtime.effective_service_state == ''
+        quiet: true
+
+    - name: Verify drop-in rejects parent-unit ownership fields
+      block:
+        - name: Validate invalid drop-in declaration
+          ansible.builtin.include_role:
+            name: systemd_unit
+            tasks_from: validate
+          vars:
+            systemd_unit_config:
+              name: "mongod.service"
+              drop_in: "habr-rseq.conf"
+              scope: "system"
+              state: "absent"
+              enabled: true
+
+        - name: Fail when invalid drop-in was accepted
+          ansible.builtin.fail:
+            msg: "Drop-in unexpectedly accepted parent-unit ownership fields."
+      rescue:
+        - name: Assert expected drop-in validation failure
+          ansible.builtin.assert:
+            that:
+              - "'cannot manage' in ansible_failed_result.msg"
+            quiet: true

@@ -1,0 +1,139 @@
+---
+- name: Resolve MongoDB platform values
+  ansible.builtin.set_fact:
+    mongodb_repository_suite_effective: >-
+      {{ mongodb_repository_suite | default(ansible_facts['distribution_release'], true) }}
+    mongodb_architecture_effective: >-
+      {{ mongodb_architecture_map.get(ansible_facts['architecture'], '') }}
+    mongodb_kernel_version: "{{ ansible_facts['kernel'].split('-') | first }}"
+
+- name: Validate MongoDB base contract
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_release'] in ['focal', 'jammy', 'noble', 'resolute']
+      - mongodb_version in mongodb_repository_matrix
+      - mongodb_platform_policy in ['upstream', 'repository']
+      - mongodb_architecture_effective | length > 0
+      - mongodb_packages is sequence
+      - mongodb_packages is not string
+      - mongodb_packages | length > 0
+      - mongodb_package_state in ['present', 'latest']
+      - mongodb_service_state in ['started', 'stopped']
+      - mongodb_tcmalloc_rseq_workaround is none or mongodb_tcmalloc_rseq_workaround is boolean
+      - mongodb_tcmalloc_rseq_drop_in is string
+      - mongodb_tcmalloc_rseq_drop_in | length > 0
+      - mongodb_config_manage is boolean
+      - mongodb_config_overrides is mapping
+      - mongodb_security_keyfile_state in ['unmanaged', 'present', 'absent']
+      - mongodb_net_port | int > 0
+      - mongodb_net_port | int < 65536
+    fail_msg: >-
+      mongodb requires Ubuntu Focal through Resolute on amd64/arm64, a
+      supported MongoDB repository version, valid package/service states, and
+      a mapping in mongodb_config_overrides.
+
+- name: Validate MongoDB configuration ownership contract
+  ansible.builtin.assert:
+    that:
+      - >-
+        mongodb_config_manage
+        or mongodb_replica_set_name | length == 0
+      - >-
+        mongodb_config_manage
+        or not mongodb_security_authorization
+    fail_msg: >-
+      Replica-set or authorization configuration requires explicit ownership
+      of mongodb_config_path through mongodb_config_manage: true.
+
+- name: Validate MongoDB repository availability
+  ansible.builtin.assert:
+    that:
+      - mongodb_repository_suite_effective in mongodb_repository_matrix[mongodb_version]
+    fail_msg: >-
+      The official MongoDB APT repository does not publish MongoDB
+      {{ mongodb_version }} for suite {{ mongodb_repository_suite_effective }}.
+
+- name: Validate upstream-certified MongoDB platform
+  ansible.builtin.assert:
+    that:
+      - mongodb_repository_suite_effective == ansible_facts['distribution_release']
+      - ansible_facts['distribution_release'] in mongodb_upstream_platform_matrix[mongodb_version]
+    fail_msg: >-
+      MongoDB {{ mongodb_version }} on Ubuntu
+      {{ ansible_facts['distribution_release'] }} is not in MongoDB's published
+      platform support matrix. Set mongodb_platform_policy: repository only
+      when accepting a repository-published but not upstream-certified build.
+  when: mongodb_platform_policy == 'upstream'
+
+- name: Reject MongoDB 8.x on incompatible Linux kernels
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (
+          mongodb_version is version('8.0', '>=')
+          and mongodb_kernel_version is version('6.19', '>=')
+          and mongodb_kernel_version is version('7.0.14', '<')
+        )
+        or (
+          mongodb_version is version('8.2', '>=')
+          and mongodb_tcmalloc_rseq_workaround | default(false, true) | bool
+        )
+    fail_msg: >-
+      MongoDB 8.x is incompatible with Linux kernels from 6.19 through 7.0.13.
+      This host runs {{ ansible_facts['kernel'] }}; boot a kernel older than
+      6.19 or at least 7.0.14 before provisioning MongoDB. MongoDB 8.2 and
+      newer can explicitly accept the lower-performance glibc RSEQ fallback
+      with mongodb_tcmalloc_rseq_workaround: true.
+
+- name: Validate MongoDB TCMalloc RSEQ workaround contract
+  ansible.builtin.assert:
+    that:
+      - mongodb_version is version('8.2', '>=')
+    fail_msg: >-
+      mongodb_tcmalloc_rseq_workaround is supported only for MongoDB 8.2 and
+      newer, whose startup path can fall back from TCMalloc per-CPU caches.
+  when: mongodb_tcmalloc_rseq_workaround is sameas true
+
+- name: Validate MongoDB keyfile management contract
+  ansible.builtin.assert:
+    that:
+      - mongodb_security_keyfile_content is string
+      - mongodb_security_keyfile_content | trim | length >= 6
+      - mongodb_security_keyfile_content | trim | length <= 1024
+      - mongodb_security_keyfile_content | trim is match('^[A-Za-z0-9+/=]+$')
+    fail_msg: >-
+      A present MongoDB keyfile requires a 6-1024 character base64 value.
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when: mongodb_security_keyfile_state == 'present'
+
+- name: Validate MongoDB replica set contract
+  ansible.builtin.assert:
+    that:
+      - mongodb_replica_set_name | length > 0
+      - mongodb_replica_set_member is match('^[A-Za-z0-9][A-Za-z0-9.-]*:[0-9]+$')
+      - not (mongodb_replica_set_member.split(':') | first is match('^[0-9.]+$'))
+    fail_msg: >-
+      Replica set bootstrap requires mongodb_replica_set_name and one
+      DNS-hostname member in host:port form. IP-only member identities are not
+      supported by this bootstrap contract.
+  when: mongodb_replica_set_initiate | bool
+
+- name: Validate MongoDB authorization contract
+  ansible.builtin.assert:
+    that:
+      - mongodb_admin_database | length > 0
+      - mongodb_admin_user | length > 0
+      - mongodb_admin_password | length > 0
+      - mongodb_admin_roles is sequence
+      - mongodb_admin_roles is not string
+      - mongodb_admin_roles | length > 0
+      - >-
+        mongodb_replica_set_name | length == 0
+        or mongodb_security_keyfile_state == 'present'
+    fail_msg: >-
+      Authorization requires an administrative database/user/password and
+      roles. Replica sets additionally require an explicitly managed keyfile
+      shared by every member.
+  no_log: "{{ mongodb_bootstrap_no_log }}"
+  when: mongodb_security_authorization | bool

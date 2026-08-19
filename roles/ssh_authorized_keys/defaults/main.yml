@@ -5,3 +5,4 @@ ssh_authorized_keys_contract: {}
 ssh_authorized_keys_users_base: {}
 ssh_authorized_keys_users_overlay: {}
 ssh_authorized_keys_manage_dir: true
+ssh_authorized_keys_fail_on_missing_user: true

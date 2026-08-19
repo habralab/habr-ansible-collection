@@ -1,0 +1,59 @@
+---
+mongodb_repository_matrix:
+  "7.0":
+    - focal
+    - jammy
+  "8.0":
+    - focal
+    - jammy
+    - noble
+  "8.2":
+    - focal
+    - jammy
+    - noble
+  "8.3":
+    - focal
+    - jammy
+    - noble
+
+mongodb_upstream_platform_matrix:
+  "7.0":
+    - focal
+    - jammy
+  "8.0":
+    - focal
+    - jammy
+    - noble
+  "8.2":
+    - focal
+    - jammy
+    - noble
+  "8.3":
+    - focal
+    - jammy
+    - noble
+
+mongodb_repository_key_version_map:
+  "7.0": "7.0"
+  "8.0": "8.0"
+  "8.2": "8.0"
+  "8.3": "8.0"
+
+mongodb_architecture_map:
+  x86_64: amd64
+  aarch64: arm64
+
+mongodb_config_base:
+  storage:
+    dbPath: "{{ mongodb_storage_db_path }}"
+  systemLog:
+    destination: file
+    logAppend: "{{ mongodb_system_log_append }}"
+    path: "{{ mongodb_system_log_path }}"
+  net:
+    port: "{{ mongodb_net_port }}"
+    bindIp: "{{ mongodb_net_bind_ip }}"
+  processManagement:
+    timeZoneInfo: "{{ mongodb_process_management_time_zone_info }}"
+
+mongodb_bootstrap_scripts_dir: /usr/local/libexec/habr-mongodb

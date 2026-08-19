@@ -1,0 +1,34 @@
+---
+- name: Test MaxMind GeoIP configuration materialization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../defaults/main.yml
+  vars:
+    geoip_maxmind_account_id: "123456"
+    geoip_maxmind_license_key: secret
+  tasks:
+    - name: Select test MaxMind GeoIP configuration values
+      ansible.builtin.set_fact:
+        geoip_maxmind_edition_ids:
+          - GeoLite2-Country
+          - GeoLite2-City
+          - GeoLite2-ASN
+        geoip_maxmind_database_directory: /srv/GeoIP
+
+    - name: Render MaxMind GeoIP configuration
+      ansible.builtin.set_fact:
+        geoip_maxmind_test_config: >-
+          {{ lookup('ansible.builtin.template', '../templates/GeoIP.conf.j2') }}
+
+    - name: Verify materialized MaxMind GeoIP configuration
+      ansible.builtin.assert:
+        that:
+          - >-
+            'EditionIDs GeoLite2-Country GeoLite2-City GeoLite2-ASN'
+            in geoip_maxmind_test_config
+          - >-
+            ('DatabaseDirectory ' ~ geoip_maxmind_database_directory)
+            in geoip_maxmind_test_config
+        quiet: true

@@ -1,0 +1,61 @@
+---
+- name: Test missing authorized key users
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      getent_passwd:
+        root:
+          - x
+          - '0'
+          - '0'
+          - root
+          - /root
+          - /bin/bash
+    ssh_authorized_keys_test_contract:
+      root:
+        add_keys:
+          - test_operator
+      _habr_authorized_keys_missing_user_:
+        add_keys:
+          - test_operator
+  tasks:
+    - name: Initialize effective authorized keys contract
+      ansible.builtin.set_fact:
+        _ssh_authorized_keys_contract: "{{ ssh_authorized_keys_test_contract }}"
+
+    - name: Initialize strict mode result
+      ansible.builtin.set_fact:
+        ssh_authorized_keys_missing_user_rejected: false
+
+    - name: Reject a missing user in strict mode
+      block:
+        - name: Apply strict missing-user policy
+          ansible.builtin.include_role:
+            name: ssh_authorized_keys
+            tasks_from: filter_missing_users
+      rescue:
+        - name: Record strict mode rejection
+          ansible.builtin.set_fact:
+            ssh_authorized_keys_missing_user_rejected: true
+
+    - name: Verify strict mode rejection
+      ansible.builtin.assert:
+        that:
+          - ssh_authorized_keys_missing_user_rejected
+        quiet: true
+
+    - name: Skip a missing user in housekeeping mode
+      ansible.builtin.include_role:
+        name: ssh_authorized_keys
+        tasks_from: filter_missing_users
+      vars:
+        ssh_authorized_keys_fail_on_missing_user: false
+
+    - name: Verify the missing user contract was filtered
+      ansible.builtin.assert:
+        that:
+          - _ssh_authorized_keys_missing_users == ['_habr_authorized_keys_missing_user_']
+          - _ssh_authorized_keys_contract.keys() | list == ['root']
+        quiet: true

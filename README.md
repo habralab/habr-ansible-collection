@@ -35,9 +35,12 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `dell_openmanage`: Configures Dell OpenManage iSM APT repository and installs Dell iSM packages.
 - `haproxy`: Installs HAProxy and configures modular `conf.d` directory structure.
 - `garagehq`: Installs and configures [Garage](https://garagehq.deuxfleurs.fr/) S3-compatible storage.
+- `geoip_maxmind`: Installs `geoipupdate` and manages MaxMind GeoIP databases without consumer coupling.
 - `locale`: Declarative management of generated system locales and default `LANG`.
 - `mariadb`: Installs and configures MariaDB Community Server from its upstream repository.
 - `mariadb_assets`: Manages MariaDB databases and application accounts.
+- `mongodb`: Installs MongoDB Community Server with optional authorization and replica-set bootstrap.
+- `mongodb_assets`: Manages MongoDB application users and database-scoped privileges.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nginx`: Installs and configures Nginx using a layout-driven approach (Debian/Upstream).
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.

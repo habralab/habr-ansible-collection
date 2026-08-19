@@ -8,6 +8,7 @@
       - ssh_authorized_keys_users_base is mapping
       - ssh_authorized_keys_users_overlay is mapping
       - ssh_authorized_keys_manage_dir is boolean
+      - ssh_authorized_keys_fail_on_missing_user is boolean
     fail_msg: Authorized keys inputs have invalid container or option types.
 
 - name: Validate authorized keys input mode
@@ -120,21 +121,8 @@
     database: passwd
   when: _ssh_authorized_keys_contract | length > 0
 
-- name: Validate authorized key target users
-  ansible.builtin.assert:
-    that:
-      - >-
-        _ssh_authorized_keys_contract.keys()
-        | difference(ansible_facts.getent_passwd.keys() | list)
-        | length == 0
-    quiet: true
-    fail_msg: >-
-      Authorized key contracts reference users that do not exist:
-      {{
-        _ssh_authorized_keys_contract.keys()
-        | difference(ansible_facts.getent_passwd.keys() | list)
-        | join(', ')
-      }}.
+- name: Apply authorized key target user policy
+  ansible.builtin.import_tasks: filter_missing_users.yml
   when: _ssh_authorized_keys_contract | length > 0
 
 - name: Validate authorized key group references

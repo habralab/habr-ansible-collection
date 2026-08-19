@@ -22,6 +22,31 @@
           and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is string
         )
         or (
+          _systemd_unit_directive.value.value_type == 'boolean'
+          and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is boolean
+        )
+        or (
+          _systemd_unit_directive.value.value_type == 'string_or_list'
+          and (
+            (
+              systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is string
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key]
+                  | length > 0
+            )
+            or (
+              systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is sequence
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is not string
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] | length > 0
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key]
+                  | select('string') | list | length
+                == systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] | length
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key]
+                  | reject('equalto', '') | list | length
+                == systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] | length
+            )
+          )
+        )
+        or (
           _systemd_unit_directive.value.value_type == 'list'
           and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is sequence
           and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is not string

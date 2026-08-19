@@ -1,0 +1,184 @@
+---
+- name: Validate MongoDB role configuration
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - mongodb
+  tags:
+    - mongodb
+
+- name: Configure MongoDB repository
+  ansible.builtin.include_tasks:
+    file: repository.yml
+    apply:
+      tags:
+        - mongodb
+        - mongodb_repository
+  when: mongodb_repository_manage | bool
+  tags:
+    - mongodb
+    - mongodb_repository
+
+- name: Apply MongoDB repository cache update
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - mongodb
+    - mongodb_repository
+
+- name: Inspect MongoDB package availability in check mode
+  ansible.builtin.command:
+    argv:
+      - apt-cache
+      - show
+      - "{{ item }}"
+  loop: "{{ mongodb_packages }}"
+  register: mongodb_package_availability
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: ansible_check_mode
+  tags:
+    - mongodb
+    - mongodb_packages
+
+- name: Report MongoDB packages pending repository materialization
+  ansible.builtin.debug:
+    msg: >-
+      MongoDB packages will become available after the repository is
+      materialized during a normal run.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - mongodb_package_availability.results | selectattr('rc', 'ne', 0) | list | length > 0
+  tags:
+    - mongodb
+    - mongodb_packages
+
+- name: Install MongoDB packages
+  ansible.builtin.apt:
+    name: "{{ mongodb_packages }}"
+    state: "{{ mongodb_package_state }}"
+    update_cache: true
+    cache_valid_time: 3600
+  when: >-
+    not ansible_check_mode
+    or mongodb_package_availability.results
+       | selectattr('rc', 'ne', 0)
+       | list
+       | length == 0
+  tags:
+    - mongodb
+    - mongodb_packages
+
+- name: Inspect MongoDB server binary
+  ansible.builtin.stat:
+    path: /usr/bin/mongod
+  register: mongodb_server_binary
+  tags:
+    - mongodb
+    - mongodb_packages
+    - mongodb_config
+
+- name: Require MongoDB server binary after package installation
+  ansible.builtin.assert:
+    that:
+      - mongodb_server_binary.stat.exists
+    fail_msg: >-
+      MongoDB packages did not provide /usr/bin/mongod. Check the selected
+      repository suite, version, architecture, and package list.
+  when: not ansible_check_mode
+  tags:
+    - mongodb
+    - mongodb_packages
+
+- name: Manage MongoDB TCMalloc RSEQ systemd drop-in
+  ansible.builtin.include_role:
+    name: habr.linuxhost.systemd_unit
+    apply:
+      tags:
+        - mongodb
+        - mongodb_config
+        - systemd
+        - systemd-unit
+  vars:
+    systemd_unit_config: >-
+      {{
+        {
+          'name': mongodb_service_name ~ '.service',
+          'drop_in': mongodb_tcmalloc_rseq_drop_in,
+          'scope': 'system',
+          'state': ('present' if mongodb_tcmalloc_rseq_workaround else 'absent'),
+          'restart_on_change': mongodb_service_state == 'started'
+        }
+        | combine(
+            {
+              'source': {
+                'model': {
+                  'Service': {
+                    'Environment': ['GLIBC_TUNABLES=glibc.pthread.rseq=1']
+                  }
+                }
+              }
+            }
+            if mongodb_tcmalloc_rseq_workaround
+            else {}
+          )
+      }}
+  when:
+    - mongodb_server_binary.stat.exists
+    - mongodb_tcmalloc_rseq_workaround is not none
+  tags:
+    - mongodb
+    - mongodb_config
+    - systemd
+    - systemd-unit
+
+- name: Manage MongoDB configuration
+  ansible.builtin.include_tasks:
+    file: config.yml
+    apply:
+      tags:
+        - mongodb
+        - mongodb_config
+        - mongodb_security
+  when: mongodb_server_binary.stat.exists
+  tags:
+    - mongodb
+    - mongodb_config
+    - mongodb_security
+
+- name: Ensure MongoDB service state
+  ansible.builtin.service:
+    name: "{{ mongodb_service_name }}"
+    enabled: "{{ mongodb_service_enabled }}"
+    state: "{{ mongodb_service_state }}"
+  when: mongodb_server_binary.stat.exists
+  tags:
+    - mongodb
+    - mongodb_packages
+
+- name: Apply MongoDB configuration handlers
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - mongodb
+    - mongodb_config
+    - mongodb_security
+
+- name: Bootstrap MongoDB topology and authentication
+  ansible.builtin.include_tasks:
+    file: bootstrap.yml
+    apply:
+      tags:
+        - mongodb
+        - mongodb_replica_set
+        - mongodb_security
+  when:
+    - mongodb_server_binary.stat.exists
+    - mongodb_service_state == 'started'
+    - not ansible_check_mode
+    - mongodb_replica_set_initiate | bool or mongodb_security_authorization | bool
+  tags:
+    - mongodb
+    - mongodb_replica_set
+    - mongodb_security

@@ -4,6 +4,7 @@ __systemd_unit_config_keys:
   - "scope"
   - "user"
   - "state"
+  - "drop_in"
   - "enabled"
   - "masked"
   - "service_state"
@@ -18,6 +19,7 @@ __systemd_unit_config_keys:
 __systemd_unit_section_order:
   - "Unit"
   - "Service"
+  - "Timer"
   - "Install"
 
 __systemd_unit_section_directive_specs:
@@ -92,6 +94,49 @@ __systemd_unit_section_directive_specs:
     RemainAfterExit:
       render_type: "scalar"
       value_type: "string"
+  Timer:
+    OnActiveSec:
+      render_type: "repeatable"
+      value_type: "string_or_list"
+    OnBootSec:
+      render_type: "repeatable"
+      value_type: "string_or_list"
+    OnStartupSec:
+      render_type: "repeatable"
+      value_type: "string_or_list"
+    OnUnitActiveSec:
+      render_type: "repeatable"
+      value_type: "string_or_list"
+    OnUnitInactiveSec:
+      render_type: "repeatable"
+      value_type: "string_or_list"
+    OnCalendar:
+      render_type: "repeatable"
+      value_type: "string_or_list"
+    AccuracySec:
+      render_type: "scalar"
+      value_type: "string"
+    RandomizedDelaySec:
+      render_type: "scalar"
+      value_type: "string"
+    OnClockChange:
+      render_type: "scalar"
+      value_type: "boolean"
+    OnTimezoneChange:
+      render_type: "scalar"
+      value_type: "boolean"
+    Unit:
+      render_type: "scalar"
+      value_type: "string"
+    Persistent:
+      render_type: "scalar"
+      value_type: "boolean"
+    WakeSystem:
+      render_type: "scalar"
+      value_type: "boolean"
+    RemainAfterElapse:
+      render_type: "scalar"
+      value_type: "boolean"
   Install:
     WantedBy:
       render_type: "repeatable"

@@ -1,0 +1,45 @@
+---
+- name: Validate MaxMind GeoIP base contract
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_release'] in geoip_maxmind_supported_releases
+      - geoip_maxmind_packages is sequence
+      - geoip_maxmind_packages is not string
+      - geoip_maxmind_packages | length > 0
+      - geoip_maxmind_package_state in ['present', 'latest']
+      - geoip_maxmind_config_manage is boolean
+      - geoip_maxmind_config_no_log is boolean
+      - geoip_maxmind_update_on_configure is boolean
+      - geoip_maxmind_preserve_file_times is boolean
+      - geoip_maxmind_edition_ids is sequence
+      - geoip_maxmind_edition_ids is not string
+      - geoip_maxmind_edition_ids | length > 0
+      - geoip_maxmind_edition_ids | unique | length == geoip_maxmind_edition_ids | length
+      - geoip_maxmind_database_directory is match('^/')
+      - geoip_maxmind_config_path is match('^/')
+      - geoip_maxmind_binary is match('^/')
+    fail_msg: >-
+      geoip_maxmind requires Ubuntu Focal through Resolute, non-empty package
+      and edition lists, absolute paths, and boolean lifecycle controls.
+
+- name: Validate MaxMind GeoIP edition identifiers
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item is match('^[A-Za-z0-9][A-Za-z0-9-]*$')
+    fail_msg: "Invalid MaxMind edition ID: {{ item }}"
+  loop: "{{ geoip_maxmind_edition_ids }}"
+
+- name: Validate managed MaxMind GeoIP credentials
+  ansible.builtin.assert:
+    that:
+      - geoip_maxmind_account_id | string | length > 0
+      - geoip_maxmind_account_id | string is match('^[0-9]+$')
+      - geoip_maxmind_license_key is string
+      - geoip_maxmind_license_key | length > 0
+    fail_msg: >-
+      Managing GeoIP.conf requires a numeric MaxMind account ID and a non-empty
+      license key.
+  no_log: "{{ geoip_maxmind_config_no_log }}"
+  when: geoip_maxmind_config_manage | bool

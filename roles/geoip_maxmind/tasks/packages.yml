@@ -1,0 +1,9 @@
+---
+- name: Install MaxMind GeoIP packages
+  ansible.builtin.apt:
+    name: "{{ geoip_maxmind_packages }}"
+    state: "{{ geoip_maxmind_package_state }}"
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  become: true

@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+## [2.1.0] - 2026-08-19
+
+### Added
+- `geoip_maxmind`: Install `geoipupdate`, manage MaxMind credentials and
+  database editions, and bootstrap missing databases without nginx coupling.
+- `mongodb`: Install MongoDB Community Server with optional authorization and
+  single-member replica-set bootstrap.
+- `mongodb_assets`: Manage MongoDB application users, role assignments, and
+  authentication restrictions without creating or dropping application data.
+
+### Changed
+- `systemd_unit`: Manage unit drop-ins and render and validate timer units
+  directly from the YAML model in both system and user scopes.
+- `ssh_authorized_keys`: Optionally report and skip contracts for Unix users
+  absent from a host during broad housekeeping passes.
+- `collection`: Declare the `community.mongodb` dependency used by the MongoDB
+  roles.
+
 ## [2.0.0] - 2026-08-14
 
 ### Breaking Changes

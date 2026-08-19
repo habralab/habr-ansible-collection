@@ -1,0 +1,51 @@
+---
+mongodb_version: "8.0"
+mongodb_platform_policy: upstream
+
+mongodb_repository_manage: true
+mongodb_repository_name: mongodb-org
+mongodb_repository_url: https://repo.mongodb.org/apt/ubuntu
+mongodb_repository_key_url: >-
+  https://pgp.mongodb.com/server-{{ mongodb_repository_key_version_map[mongodb_version] }}.asc
+mongodb_repository_suite: ""
+
+mongodb_packages:
+  - mongodb-org
+mongodb_package_state: present
+
+mongodb_service_name: mongod
+mongodb_service_enabled: true
+mongodb_service_state: started
+mongodb_tcmalloc_rseq_workaround: null
+mongodb_tcmalloc_rseq_drop_in: habr-rseq.conf
+
+mongodb_config_manage: false
+mongodb_config_path: /etc/mongod.conf
+mongodb_config_no_log: true
+mongodb_config_overrides: {}
+
+mongodb_storage_db_path: /var/lib/mongodb
+mongodb_system_log_path: /var/log/mongodb/mongod.log
+mongodb_system_log_append: true
+mongodb_net_port: 27017
+mongodb_net_bind_ip: 127.0.0.1
+mongodb_process_management_time_zone_info: /usr/share/zoneinfo
+
+mongodb_replica_set_name: ""
+mongodb_replica_set_initiate: false
+mongodb_replica_set_member: "localhost:{{ mongodb_net_port }}"
+
+mongodb_security_authorization: false
+mongodb_security_keyfile_path: /etc/mongodb-keyfile
+mongodb_security_keyfile_state: unmanaged
+mongodb_security_keyfile_content: ""
+
+mongodb_admin_database: admin
+mongodb_admin_user: ""
+mongodb_admin_password: ""
+mongodb_admin_roles:
+  - role: root
+    db: admin
+
+mongodb_bootstrap_host: 127.0.0.1
+mongodb_bootstrap_no_log: true

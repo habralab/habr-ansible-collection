@@ -10,7 +10,8 @@ exclusive mode, so keys outside the role's catalog remain untouched.
 
 - ansible-core 2.16 or newer;
 - the `ansible.posix` collection;
-- every user referenced by a contract must already exist.
+- target users normally exist before the role runs; missing users fail by
+  default and can be explicitly skipped for housekeeping passes.
 
 The collection declares `ansible.posix` as a transitive dependency. Consumers
 installing `habr.linuxhost` with `ansible-galaxy` do not need to list it again.
@@ -183,6 +184,20 @@ removal.
   policy; default `{}`.
 - `ssh_authorized_keys_manage_dir`: allow `ansible.posix.authorized_key` to
   create and manage each user's `.ssh` directory; default `true`.
+- `ssh_authorized_keys_fail_on_missing_user`: fail when a contract references
+  a Unix user that does not exist; default `true`. Set to `false` to log and
+  skip all contracts for absent users while continuing with users present on
+  the host.
 
 When directory management is enabled, newly created SSH directories and
 `authorized_keys` files receive ownership appropriate for the target user.
+
+For broad housekeeping runs whose inventory policy can reference accounts not
+present on every host:
+
+```yaml
+ssh_authorized_keys_fail_on_missing_user: false
+```
+
+Skipped usernames are emitted through an Ansible `debug` task at normal
+verbosity. Their contracts are removed before group and key resolution.

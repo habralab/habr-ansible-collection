@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: mongodb
+  author: Habr Team <servers@habr.team>
+  description: Install and configure MongoDB Community Server
+  company: Habr
+  license: unlicensed
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+        - resolute
+dependencies: []

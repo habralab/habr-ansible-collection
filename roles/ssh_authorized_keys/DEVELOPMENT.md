@@ -15,6 +15,8 @@ user baseline + one effective inventory overlay
             v
       effective contract
             |
+      target user filter
+            |
       group expansion
             |
             v
@@ -81,7 +83,8 @@ Before key-management tasks begin:
 - direct contract and base/overlay policy modes must not be mixed;
 - catalog entries must be non-empty literal public-key strings;
 - key groups must contain only known catalog identifiers;
-- every target Unix user must already exist;
+- missing target Unix users must either fail validation or be explicitly
+  reported and filtered according to `ssh_authorized_keys_fail_on_missing_user`;
 - user contracts must contain only the four documented fields;
 - user contract fields must be lists;
 - every referenced key group must exist;
@@ -98,8 +101,11 @@ The role manages only explicitly referenced catalog keys. It intentionally
 leaves `exclusive` disabled so that adopting the role does not remove keys
 owned by another system or keys not yet represented in the catalog.
 
-Users are expected to be provisioned before this role. Directory creation and
-ownership management are delegated to `ansible.posix.authorized_key` and are
+Users are normally expected to be provisioned before this role. Broad
+housekeeping passes may set `ssh_authorized_keys_fail_on_missing_user` to
+`false`; absent users are then reported and removed from the effective contract
+before group expansion. Directory creation and ownership management for
+remaining users are delegated to `ansible.posix.authorized_key` and are
 controlled by `ssh_authorized_keys_manage_dir`.
 
 The catalog stores literal public keys. Supporting remote URLs or controller

@@ -1,0 +1,262 @@
+---
+- name: Validate MongoDB assets input containers
+  ansible.builtin.assert:
+    that:
+      - mongodb_assets_python_packages is sequence
+      - mongodb_assets_python_packages is not string
+      - mongodb_assets is sequence
+      - mongodb_assets is not string
+      - mongodb_assets_login_host is string
+      - mongodb_assets_login_host | length > 0
+      - mongodb_assets_login_port | int > 0
+      - mongodb_assets_login_port | int < 65536
+      - mongodb_assets_login_database is string
+      - mongodb_assets_login_database | length > 0
+      - mongodb_assets_login_user is string
+      - mongodb_assets_login_password is string
+      - mongodb_assets_replica_set is string
+    fail_msg: MongoDB assets inputs have invalid container or connection types.
+    quiet: true
+  no_log: true
+
+- name: Validate MongoDB Python package entries
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item | length > 0
+    fail_msg: mongodb_assets_python_packages entries must be non-empty strings.
+    quiet: true
+  loop: "{{ mongodb_assets_python_packages }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Validate MongoDB database entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    fail_msg: Every mongodb_assets entry must be a mapping.
+    quiet: true
+  loop: "{{ mongodb_assets }}"
+  loop_control:
+    label: "{{ item.database | default('invalid database entry') if item is mapping else 'invalid database entry' }}"
+  no_log: true
+
+- name: Validate MongoDB database contracts
+  ansible.builtin.assert:
+    that:
+      - item.keys() | difference(__mongodb_assets_database_fields) | length == 0
+      - item.database is defined
+      - item.database is string
+      - item.database | length > 0
+      - item.state is defined
+      - item.state == 'present'
+      - item.users is defined
+      - item.users is sequence
+      - item.users is not string
+    fail_msg: >-
+      Each mongodb_assets entry must use only database, state, and users.
+      Database state is limited to present and users must be a list.
+    quiet: true
+  loop: "{{ mongodb_assets }}"
+  loop_control:
+    label: "{{ item.database | default('invalid database entry') }}"
+  no_log: true
+
+- name: Reject duplicate MongoDB database entries
+  ansible.builtin.assert:
+    that:
+      - >-
+        mongodb_assets | map(attribute='database') | unique | list | length
+        == mongodb_assets | length
+    fail_msg: mongodb_assets contains duplicate database entries.
+    quiet: true
+  no_log: true
+
+- name: Validate MongoDB user entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item.1 is mapping
+    fail_msg: Every MongoDB database user entry must be a mapping.
+    quiet: true
+  loop: "{{ mongodb_assets | subelements('users') }}"
+  loop_control:
+    label: >-
+      {{ item.0.database }} / {{
+        item.1.name | default('invalid user entry')
+        if item.1 is mapping
+        else 'invalid user entry'
+      }}
+  no_log: true
+
+- name: Validate MongoDB user contracts
+  ansible.builtin.assert:
+    that:
+      - item.1.keys() | difference(__mongodb_assets_user_fields) | length == 0
+      - item.1.name is defined
+      - item.1.name is string
+      - item.1.name | length > 0
+      - item.1.state is defined
+      - item.1.state in ['present', 'absent']
+      - item.1.state == 'absent' or item.1.password is defined
+      - item.1.state == 'absent' or item.1.password is string
+      - item.1.state == 'absent' or item.1.password | length > 0
+      - item.1.state == 'present' or item.1.password is not defined
+      - item.1.state == 'absent' or item.1.roles is defined
+      - item.1.state == 'absent' or item.1.roles is sequence
+      - item.1.state == 'absent' or item.1.roles is not string
+      - item.1.state == 'absent' or item.1.roles | length > 0
+      - item.1.state == 'present' or item.1.roles is not defined
+      - item.1.update_password | default('on_create') in ['on_create', 'always']
+      - >-
+        item.1.authentication_restrictions is not defined
+        or (
+          item.1.authentication_restrictions is sequence
+          and item.1.authentication_restrictions is not string
+        )
+      - item.1.state == 'present' or item.1.update_password is not defined
+      - item.1.state == 'present' or item.1.authentication_restrictions is not defined
+    fail_msg: >-
+      MongoDB users must use only name, state, password, roles,
+      update_password, and authentication_restrictions. Present users require
+      a non-empty password and role list; absent users accept only name and
+      state.
+    quiet: true
+  loop: "{{ mongodb_assets | subelements('users') }}"
+  loop_control:
+    label: "{{ item.1.name | default('invalid user entry') }}@{{ item.0.database }}"
+  no_log: true
+
+- name: Initialize normalized MongoDB user contracts
+  ansible.builtin.set_fact:
+    __mongodb_assets_users: []
+  no_log: true
+
+- name: Flatten MongoDB user contracts
+  ansible.builtin.set_fact:
+    __mongodb_assets_users: >-
+      {{
+        __mongodb_assets_users
+        + [item.1 | combine({'database': item.0.database})]
+      }}
+  loop: "{{ mongodb_assets | subelements('users') }}"
+  loop_control:
+    label: "{{ item.1.name }}@{{ item.0.database }}"
+  no_log: true
+
+- name: Reject duplicate MongoDB users within databases
+  ansible.builtin.assert:
+    that:
+      - >-
+        item.users | map(attribute='name') | unique | list | length
+        == item.users | length
+    fail_msg: "Database {{ item.database }} contains duplicate MongoDB users."
+    quiet: true
+  loop: "{{ mongodb_assets }}"
+  loop_control:
+    label: "{{ item.database }}"
+  no_log: true
+
+- name: Validate MongoDB role entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item.1 is mapping
+    fail_msg: Every MongoDB role assignment must be a mapping.
+    quiet: true
+  loop: >-
+    {{
+      __mongodb_assets_users
+      | selectattr('state', 'equalto', 'present')
+      | list
+      | subelements('roles')
+    }}
+  loop_control:
+    label: "{{ item.0.name }}@{{ item.0.database }} role"
+  no_log: true
+
+- name: Validate MongoDB role assignment contracts
+  ansible.builtin.assert:
+    that:
+      - item.1.keys() | difference(__mongodb_assets_role_fields) | length == 0
+      - item.1.role is defined
+      - item.1.role is string
+      - item.1.role | length > 0
+      - item.1.db is defined
+      - item.1.db is string
+      - item.1.db | length > 0
+    fail_msg: Every MongoDB role assignment requires non-empty role and db fields.
+    quiet: true
+  loop: >-
+    {{
+      __mongodb_assets_users
+      | selectattr('state', 'equalto', 'present')
+      | list
+      | subelements('roles')
+    }}
+  loop_control:
+    label: "{{ item.0.name }}@{{ item.0.database }} role"
+  no_log: true
+
+- name: Validate MongoDB authentication restriction entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item.1 is mapping
+    fail_msg: Every MongoDB authentication restriction must be a mapping.
+    quiet: true
+  loop: >-
+    {{
+      __mongodb_assets_users
+      | selectattr('authentication_restrictions', 'defined')
+      | list
+      | subelements('authentication_restrictions')
+    }}
+  loop_control:
+    label: "{{ item.0.name }}@{{ item.0.database }} restriction"
+  no_log: true
+
+- name: Validate MongoDB authentication restriction contracts
+  ansible.builtin.assert:
+    that:
+      - item.1.keys() | difference(__mongodb_assets_restriction_fields) | length == 0
+      - item.1.keys() | length > 0
+      - >-
+        item.1.clientSource is not defined
+        or (
+          item.1.clientSource is sequence
+          and item.1.clientSource is not string
+          and item.1.clientSource | length > 0
+          and item.1.clientSource | reject('string') | list | length == 0
+        )
+      - >-
+        item.1.serverAddress is not defined
+        or (
+          item.1.serverAddress is sequence
+          and item.1.serverAddress is not string
+          and item.1.serverAddress | length > 0
+          and item.1.serverAddress | reject('string') | list | length == 0
+        )
+    fail_msg: >-
+      Authentication restrictions accept only non-empty clientSource and
+      serverAddress string lists.
+    quiet: true
+  loop: >-
+    {{
+      __mongodb_assets_users
+      | selectattr('authentication_restrictions', 'defined')
+      | list
+      | subelements('authentication_restrictions')
+    }}
+  loop_control:
+    label: "{{ item.0.name }}@{{ item.0.database }} restriction"
+  no_log: true
+
+- name: Validate MongoDB administrative credentials
+  ansible.builtin.assert:
+    that:
+      - mongodb_assets_login_user | length > 0
+      - mongodb_assets_login_password | length > 0
+    fail_msg: >-
+      Non-empty mongodb_assets requires explicit administrative login_user and
+      login_password values.
+    quiet: true
+  when: __mongodb_assets_users | length > 0
+  no_log: true

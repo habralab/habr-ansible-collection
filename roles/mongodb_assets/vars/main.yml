@@ -1,0 +1,23 @@
+---
+__mongodb_assets_database_fields:
+  - database
+  - state
+  - users
+
+__mongodb_assets_user_fields:
+  - name
+  - state
+  - password
+  - roles
+  - update_password
+  - authentication_restrictions
+
+__mongodb_assets_role_fields:
+  - role
+  - db
+
+__mongodb_assets_restriction_fields:
+  - clientSource
+  - serverAddress
+
+__mongodb_assets_min_pymongo_version: "4.0"
