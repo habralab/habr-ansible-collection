@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-19
+
+### Added
+- `hostname`: Opt-in persistent Ubuntu hostname management with validated
+  inventory fallback, cloud-init preservation, and cron restart handling.
+
 ## [2.1.0] - 2026-08-19
 
 ### Added
