@@ -1,5 +1,5 @@
 ---
-garagehq_version: "2.1.0"
+garagehq_version: "2.3.0"
 garagehq_arch: "x86_64-unknown-linux-musl"
 garagehq_download_force: false
 garagehq_download_url: "https://garagehq.deuxfleurs.fr/_releases/v{{ garagehq_version }}/{{ garagehq_arch }}/garage"
