@@ -8,12 +8,22 @@
     group: "root"
     force: "{{ garagehq_download_force }}"
   become: true
+  notify: "Restart garage-server"
+  tags:
+    - garagehq
+
+- name: "Create system group for Garage"
+  ansible.builtin.group:
+    name: "{{ garagehq_group }}"
+    system: true
+  become: true
   tags:
     - garagehq
 
 - name: "Create system user for Garage"
   ansible.builtin.user:
     name: "{{ garagehq_user }}"
+    group: "{{ garagehq_group }}"
     system: true
     shell: "/usr/sbin/nologin"
     create_home: false
@@ -93,6 +103,30 @@
     - garagehq
     - config
 
+- name: "Inspect Garage configuration directory"
+  ansible.builtin.stat:
+    path: "{{ garagehq_config_dir }}"
+  register: garagehq_config_dir_stat
+  become: true
+  check_mode: false
+  when:
+    - garagehq_conf_handle | bool
+  tags:
+    - garagehq
+    - config
+
+- name: "Inspect Garage RPC secret file"
+  ansible.builtin.stat:
+    path: "{{ garagehq_conf_rpc_secret_file }}"
+  register: garagehq_rpc_secret_stat
+  become: true
+  check_mode: false
+  when:
+    - garagehq_conf_handle | bool
+  tags:
+    - garagehq
+    - config
+
 - name: "Persist provided RPC secret"
   ansible.builtin.copy:
     dest: "{{ garagehq_conf_rpc_secret_file }}"
@@ -134,6 +168,7 @@
   when:
     - garagehq_conf_handle | bool
     - garagehq_conf_rpc_secret_file | length > 0
+    - not ansible_check_mode or garagehq_rpc_secret_stat.stat.exists
   tags:
     - garagehq
     - config
@@ -149,6 +184,19 @@
   notify: "Restart garage-server"
   when:
     - garagehq_conf_handle | bool
+    - not ansible_check_mode or garagehq_config_dir_stat.stat.exists
+  tags:
+    - garagehq
+    - config
+
+- name: "Report pending Garage configuration file"
+  ansible.builtin.debug:
+    msg: "Garage configuration will be installed at {{ garagehq_config_file }}."
+  changed_when: true
+  when:
+    - garagehq_conf_handle | bool
+    - ansible_check_mode
+    - not garagehq_config_dir_stat.stat.exists
   tags:
     - garagehq
     - config

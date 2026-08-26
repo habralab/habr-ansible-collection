@@ -147,6 +147,9 @@ Basic sanity checks are performed before startup
 
 This role exposes configuration via variables prefixed with `garagehq_`.
 
+Garage `2.3.0` is installed by default. Set `garagehq_version` to pin another
+release and `garagehq_arch` to select an upstream binary target.
+
 The **complete and authoritative list** of available variables, defaults and
 inline documentation can be found in:
 
@@ -177,7 +180,7 @@ tooling.
 
 ## Requirements
 
-- ansible-core >= 2.18
+- ansible-core >= 2.16
 - Supported platforms: Ubuntu (focal, jammy, noble)
 
 ---
