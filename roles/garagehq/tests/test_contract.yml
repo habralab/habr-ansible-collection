@@ -1,0 +1,42 @@
+---
+- name: Test Garage HQ role contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../defaults/main.yml
+  tasks:
+    - name: Load role implementation
+      ansible.builtin.set_fact:
+        garagehq_tasks: >-
+          {{ lookup('ansible.builtin.file', playbook_dir + '/../tasks/main.yml') | from_yaml }}
+        garagehq_handlers: >-
+          {{ lookup('ansible.builtin.file', playbook_dir + '/../handlers/main.yml') | from_yaml }}
+        garagehq_rendered_config: >-
+          {{ lookup('ansible.builtin.template', playbook_dir + '/../templates/garage.toml') }}
+
+    - name: Verify Garage release defaults
+      ansible.builtin.assert:
+        that:
+          - garagehq_version == '2.3.0'
+          - garagehq_download_url == 'https://garagehq.deuxfleurs.fr/_releases/v2.3.0/x86_64-unknown-linux-musl/garage'
+        quiet: true
+
+    - name: Verify managed binary lifecycle
+      ansible.builtin.assert:
+        that:
+          - garagehq_tasks[0].notify == 'Restart garage-server'
+          - garagehq_tasks[1]['ansible.builtin.group'].name == garagehq_group
+          - garagehq_tasks[2]['ansible.builtin.user'].group == garagehq_group
+          - garagehq_handlers[0].when == ['garagehq_systemd_service | bool']
+        quiet: true
+
+    - name: Verify default configuration surface
+      ansible.builtin.assert:
+        that:
+          - "'replication_factor = 1' in garagehq_rendered_config"
+          - "'[s3_api]' in garagehq_rendered_config"
+          - "'[s3_web]' in garagehq_rendered_config"
+          - "'[k2v_api]' in garagehq_rendered_config"
+          - "'[admin]' in garagehq_rendered_config"
+        quiet: true

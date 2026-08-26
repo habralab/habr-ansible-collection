@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-08-26
+
+### Changed
+- `garagehq`: Update the default Garage release from `2.1.0` to `2.3.0`.
+
+### Fixed
+- `garagehq`: Restart the managed service after binary upgrades and make
+  fresh-host check mode complete without materializing dependent files.
+- `garagehq`: Create the configured primary group explicitly before the
+  service account.
+
 ## [2.2.0] - 2026-08-19
 
 ### Added
