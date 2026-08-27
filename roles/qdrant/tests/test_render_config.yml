@@ -1,0 +1,24 @@
+---
+- name: Test Qdrant configuration rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    qdrant_config_overrides:
+      service:
+        host: 127.0.0.1
+        http_port: 6333
+        grpc_port: 6334
+  tasks:
+    - name: Render Qdrant configuration overlay
+      ansible.builtin.set_fact:
+        qdrant_rendered_config: >-
+          {{ lookup('ansible.builtin.template', playbook_dir + '/../templates/90-ansible.yaml.j2') }}
+
+    - name: Verify Qdrant configuration values
+      ansible.builtin.assert:
+        that:
+          - "'host: 127.0.0.1' in qdrant_rendered_config"
+          - "'http_port: 6333' in qdrant_rendered_config"
+          - "'grpc_port: 6334' in qdrant_rendered_config"
+        quiet: true

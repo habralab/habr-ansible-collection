@@ -1,0 +1,41 @@
+---
+- name: Validate Qdrant base contract
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_release'] in qdrant_supported_releases
+      - qdrant_version is string
+      - qdrant_version is match('^[0-9]+[.][0-9]+[.][0-9]+$')
+      - qdrant_package_revision is string
+      - qdrant_package_revision is match('^[0-9]+$')
+      - qdrant_package_architecture | length > 0
+      - qdrant_package_url is string
+      - qdrant_package_url | length > 0
+      - qdrant_package_checksum is match('^sha256:[0-9a-f]{64}$')
+      - qdrant_user is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - qdrant_group is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - qdrant_binary_path is match('^/')
+      - qdrant_config_manage is boolean
+      - qdrant_config_overrides is mapping
+      - qdrant_service_enabled is boolean
+      - qdrant_service_state in ['started', 'stopped']
+      - qdrant_service_restart in ['no', 'on-success', 'on-failure', 'always']
+      - qdrant_health_check_enabled is boolean
+      - qdrant_health_port | int > 0
+      - qdrant_health_port | int < 65536
+      - qdrant_health_retries | int > 0
+      - qdrant_health_delay | int >= 0
+    fail_msg: >-
+      qdrant requires Ubuntu Focal through Resolute on an architecture with an
+      official Debian package, a pinned SHA-256 checksum, valid service state,
+      and a mapping in qdrant_config_overrides.
+
+- name: Validate managed Qdrant configuration contract
+  ansible.builtin.assert:
+    that:
+      - qdrant_config_path is match('^/')
+      - qdrant_config_overrides | length > 0
+    fail_msg: >-
+      Managed Qdrant configuration requires an absolute qdrant_config_path and
+      a non-empty qdrant_config_overrides mapping.
+  when: qdrant_config_manage | bool

@@ -1,0 +1,20 @@
+---
+- name: Ensure Qdrant configuration directory exists
+  ansible.builtin.file:
+    path: "{{ qdrant_config_path | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ qdrant_group }}"
+    mode: "0750"
+  when: qdrant_config_manage | bool
+
+- name: Deploy Qdrant configuration overlay
+  ansible.builtin.template:
+    src: 90-ansible.yaml.j2
+    dest: "{{ qdrant_config_path }}"
+    owner: root
+    group: "{{ qdrant_group }}"
+    mode: "0640"
+  no_log: "{{ qdrant_config_no_log }}"
+  notify: Restart Qdrant
+  when: qdrant_config_manage | bool

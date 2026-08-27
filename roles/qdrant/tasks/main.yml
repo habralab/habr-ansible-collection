@@ -1,0 +1,131 @@
+---
+- name: Validate Qdrant role configuration
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - qdrant
+  tags:
+    - qdrant
+
+- name: Create Qdrant system group
+  ansible.builtin.group:
+    name: "{{ qdrant_group }}"
+    system: true
+  tags:
+    - qdrant
+
+- name: Create Qdrant system user
+  ansible.builtin.user:
+    name: "{{ qdrant_user }}"
+    group: "{{ qdrant_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  tags:
+    - qdrant
+
+- name: Install Qdrant package
+  ansible.builtin.include_tasks:
+    file: package.yml
+    apply:
+      tags:
+        - qdrant
+        - qdrant_packages
+        - apt
+  tags:
+    - qdrant
+    - qdrant_packages
+    - apt
+
+- name: Create Qdrant runtime directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ qdrant_user }}"
+    group: "{{ qdrant_group }}"
+    mode: "0750"
+  loop:
+    - "{{ qdrant_var_dir }}"
+    - "{{ qdrant_storage_dir }}"
+    - "{{ qdrant_snapshots_dir }}"
+  loop_control:
+    label: "{{ item }}"
+  tags:
+    - qdrant
+    - qdrant_config
+
+- name: Inspect Qdrant server binary
+  ansible.builtin.stat:
+    path: "{{ qdrant_binary_path }}"
+  register: qdrant_server_binary
+  tags:
+    - qdrant
+    - qdrant_packages
+    - qdrant_config
+
+- name: Require Qdrant server binary after package installation
+  ansible.builtin.assert:
+    that:
+      - qdrant_server_binary.stat.exists
+      - qdrant_server_binary.stat.executable
+    fail_msg: >-
+      The Qdrant package did not provide an executable at
+      {{ qdrant_binary_path }}.
+  when: not ansible_check_mode
+  tags:
+    - qdrant
+    - qdrant_packages
+
+- name: Manage Qdrant configuration overlay
+  ansible.builtin.include_tasks:
+    file: config.yml
+    apply:
+      tags:
+        - qdrant
+        - qdrant_config
+  when: qdrant_server_binary.stat.exists
+  tags:
+    - qdrant
+    - qdrant_config
+
+- name: Manage Qdrant service
+  ansible.builtin.include_tasks:
+    file: service.yml
+    apply:
+      tags:
+        - qdrant
+        - qdrant_service
+        - systemd
+        - systemd-unit
+  tags:
+    - qdrant
+    - qdrant_service
+    - systemd
+    - systemd-unit
+
+- name: Apply Qdrant handlers
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - qdrant
+    - qdrant_packages
+    - qdrant_config
+    - qdrant_service
+
+- name: Verify Qdrant readiness
+  ansible.builtin.uri:
+    url: "http://{{ qdrant_health_host }}:{{ qdrant_health_port }}/readyz"
+    method: GET
+    status_code: 200
+  register: qdrant_readiness
+  changed_when: false
+  retries: "{{ qdrant_health_retries }}"
+  delay: "{{ qdrant_health_delay }}"
+  until: qdrant_readiness.status == 200
+  when:
+    - qdrant_health_check_enabled | bool
+    - qdrant_service_state == 'started'
+    - not ansible_check_mode
+  tags:
+    - qdrant
+    - qdrant_service

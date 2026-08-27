@@ -1,0 +1,41 @@
+---
+- name: Create Qdrant package cache directory
+  ansible.builtin.file:
+    path: "{{ qdrant_package_cache_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download pinned Qdrant package
+  ansible.builtin.get_url:
+    url: "{{ qdrant_package_url }}"
+    dest: "{{ qdrant_package_path }}"
+    checksum: "{{ qdrant_package_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: qdrant_package_download
+
+- name: Inspect cached Qdrant package
+  ansible.builtin.stat:
+    path: "{{ qdrant_package_path }}"
+  register: qdrant_cached_package
+  check_mode: false
+
+- name: Report Qdrant package pending download in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Qdrant {{ qdrant_version }} will be installed after the pinned package is
+      downloaded during a normal run.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not qdrant_cached_package.stat.exists
+
+- name: Install pinned Qdrant package
+  ansible.builtin.apt:
+    deb: "{{ qdrant_package_path }}"
+    state: present
+  notify: Restart Qdrant
+  when: qdrant_cached_package.stat.exists

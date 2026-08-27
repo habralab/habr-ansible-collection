@@ -1,0 +1,44 @@
+---
+qdrant_version: "1.19.0"
+qdrant_package_revision: "1"
+qdrant_package_architecture: >-
+  {{ qdrant_architecture_map.get(ansible_facts['architecture'], '') }}
+qdrant_package_filename: >-
+  qdrant_{{ qdrant_version }}-{{ qdrant_package_revision }}_{{ qdrant_package_architecture }}.deb
+qdrant_package_url: >-
+  https://github.com/qdrant/qdrant/releases/download/v{{ qdrant_version }}/{{ qdrant_package_filename }}
+qdrant_package_checksum: >-
+  {{
+    qdrant_package_checksums.get(
+      qdrant_version ~ '-' ~ qdrant_package_revision ~ '-' ~ qdrant_package_architecture,
+      ''
+    )
+  }}
+qdrant_package_cache_dir: /var/cache/qdrant
+qdrant_package_path: "{{ qdrant_package_cache_dir }}/{{ qdrant_package_filename }}"
+
+qdrant_user: qdrant
+qdrant_group: qdrant
+qdrant_binary_path: /usr/bin/qdrant
+
+qdrant_var_dir: /var/lib/qdrant
+qdrant_storage_dir: "{{ qdrant_var_dir }}/storage"
+qdrant_snapshots_dir: "{{ qdrant_var_dir }}/snapshots"
+
+qdrant_config_manage: false
+qdrant_config_path: /etc/qdrant/90-ansible.yaml
+qdrant_config_no_log: true
+qdrant_config_overrides: {}
+
+qdrant_service_name: qdrant
+qdrant_service_enabled: true
+qdrant_service_state: started
+qdrant_service_restart: always
+qdrant_service_restart_sec: "5"
+qdrant_service_timeout_stop_sec: "90"
+
+qdrant_health_check_enabled: true
+qdrant_health_host: 127.0.0.1
+qdrant_health_port: 6333
+qdrant_health_retries: 10
+qdrant_health_delay: 2
