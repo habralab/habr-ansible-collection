@@ -1,0 +1,30 @@
+---
+- name: Validate Python virtual environment declarations
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - python_venv
+  tags:
+    - python_venv
+
+- name: Initialize Python virtual environment results
+  ansible.builtin.set_fact:
+    python_venv_results: {}
+  when: python_venv_environments | length > 0
+  tags:
+    - python_venv
+
+- name: Materialize Python virtual environments
+  ansible.builtin.include_tasks:
+    file: runtime.yml
+    apply:
+      tags:
+        - python_venv
+  loop: "{{ python_venv_environments }}"
+  loop_control:
+    loop_var: python_venv_item
+    label: "{{ python_venv_item.name | default('UNKNOWN') }}"
+  when: python_venv_environments | length > 0
+  tags:
+    - python_venv

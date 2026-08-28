@@ -1,0 +1,15 @@
+---
+- name: Test Python virtual environment default no-op
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Run Python virtual environment role with defaults
+      ansible.builtin.include_role:
+        name: python_venv
+
+    - name: Verify no runtime results were created
+      ansible.builtin.assert:
+        that:
+          - python_venv_results is not defined
+        quiet: true
