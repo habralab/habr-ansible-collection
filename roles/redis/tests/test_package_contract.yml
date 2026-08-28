@@ -1,0 +1,39 @@
+---
+- name: Test Redis package source and version contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      architecture: x86_64
+  tasks:
+    - name: Load Redis defaults
+      ansible.builtin.include_vars:
+        file: ../defaults/main.yml
+
+    - name: Load Redis internal variables
+      ansible.builtin.include_vars:
+        file: ../vars/main.yml
+
+    - name: Verify the floating default package contract
+      ansible.builtin.assert:
+        that:
+          - redis_package_version | length == 0
+          - __redis_server_packages == ['redis-server']
+          - redis_official_repository_url == 'https://packages.redis.io/deb'
+          - redis_official_repository_arch == 'amd64'
+          - "'noble' in redis_official_supported_releases"
+        quiet: true
+
+    - name: Select an exact Redis package version
+      ansible.builtin.set_fact:
+        redis_package_version: "6:8.2.8-1rl1~noble1"
+        redis_sentinel_packages:
+          - redis-sentinel
+
+    - name: Verify exact server and Sentinel package requests
+      ansible.builtin.assert:
+        that:
+          - __redis_server_packages == ['redis-server=6:8.2.8-1rl1~noble1']
+          - __redis_sentinel_packages == ['redis-sentinel=6:8.2.8-1rl1~noble1']
+        quiet: true

@@ -7,6 +7,21 @@ redis_redislabs_repository_url: https://ppa.launchpadcontent.net/redislabs/redis
 redis_redislabs_repository_key_url: >-
   https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x60A0586666DE0BA4B481628ACC59E6B43FA6E3CA
 
+redis_official_repository_name: redis-official
+redis_official_repository_url: https://packages.redis.io/deb
+redis_official_repository_key_url: https://packages.redis.io/gpg
+redis_official_repository_arch: >-
+  {{
+    {
+      'x86_64': 'amd64',
+      'amd64': 'amd64',
+      'aarch64': 'arm64',
+      'arm64': 'arm64'
+    }.get(ansible_facts['architecture'], ansible_facts['architecture'])
+  }}
+
+redis_package_version: ""
+
 redis_server_packages:
   - redis-server
 redis_server_enabled: true

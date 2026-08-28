@@ -5,8 +5,32 @@
       - ansible_facts['distribution'] == 'Ubuntu'
       - ansible_facts['distribution_major_version'] | int >= 20
       - redis_repository in redis_supported_repositories
+      - redis_repository_manage is boolean
+      - redis_package_version is string
+      - redis_package_version | length == 0 or redis_package_version is match('^\S+$')
       - redis_server_packages is sequence
       - redis_server_packages is not string
+      - redis_server_packages | length > 0
+      - redis_server_packages | reject('string') | list | length == 0
+      - >-
+        redis_package_version | length == 0
+        or not redis_server_enabled
+        or redis_server_packages | select('search', '=') | list | length == 0
+      - >-
+        redis_package_version | length == 0
+        or not redis_server_enabled
+        or redis_server_package_state == 'present'
+      - redis_sentinel_packages is sequence
+      - redis_sentinel_packages is not string
+      - redis_sentinel_packages | reject('string') | list | length == 0
+      - >-
+        redis_package_version | length == 0
+        or not redis_sentinel_enabled
+        or redis_sentinel_packages | select('search', '=') | list | length == 0
+      - >-
+        redis_package_version | length == 0
+        or not redis_sentinel_enabled
+        or redis_sentinel_package_state == 'present'
       - redis_server_config is mapping
       - redis_sysctl is mapping
       - redis_sentinel_monitors is sequence
@@ -26,6 +50,19 @@
       ppa_redislabs currently publishes packages only for Ubuntu Focal, Jammy,
       and Noble. Select ubuntu or unmanaged for this release.
   when: redis_repository == 'ppa_redislabs'
+  tags:
+    - redis
+    - redis_repository
+
+- name: Validate official Redis repository support
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution_release'] in redis_official_supported_releases
+      - redis_official_repository_arch | length > 0
+    fail_msg: >-
+      The official Redis repository currently supports Ubuntu Jammy, Noble,
+      and Resolute. Select ubuntu or unmanaged for another release.
+  when: redis_repository == 'official'
   tags:
     - redis
     - redis_repository
@@ -55,6 +92,32 @@
     - redis_repository
     - apt
 
+- name: Configure official Redis repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - redis
+        - redis_repository
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ redis_official_repository_name }}"
+      url: "{{ redis_official_repository_url }}"
+      suite: "{{ ansible_facts['distribution_release'] }}"
+      components:
+        - main
+      arch: "{{ redis_official_repository_arch }}"
+      key_url: "{{ redis_official_repository_key_url }}"
+      state: present
+  when:
+    - redis_repository == 'official'
+    - redis_repository_manage | bool
+  tags:
+    - redis
+    - redis_repository
+    - apt
+
 - name: Apply Redis repository cache update
   ansible.builtin.meta: flush_handlers
   tags:
@@ -64,8 +127,9 @@
 
 - name: Install Redis server packages
   ansible.builtin.apt:
-    name: "{{ redis_server_packages }}"
+    name: "{{ __redis_server_packages }}"
     state: "{{ redis_server_package_state }}"
+    allow_downgrade: "{{ redis_package_version | length > 0 }}"
     update_cache: true
     cache_valid_time: 3600
   when: redis_server_enabled | bool
