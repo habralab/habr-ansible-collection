@@ -1,0 +1,19 @@
+---
+- name: Configure PostgreSQL PGDG repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+    apply:
+      tags:
+        - postgres
+        - postgres_repository
+        - apt
+  vars:
+    apt_repo_config:
+      name: "{{ postgres_repository_name }}"
+      url: "{{ postgres_repository_url }}"
+      suite: "{{ postgres_repository_suite }}"
+      components: "{{ postgres_repository_components }}"
+      arch: "{{ postgres_repository_arch }}"
+      key_url: "{{ postgres_repository_key_url }}"
+      keyring: "{{ postgres_repository_keyring }}"
+      state: present
