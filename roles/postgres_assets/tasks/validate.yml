@@ -1,0 +1,197 @@
+---
+- name: Validate PostgreSQL assets input containers
+  ansible.builtin.assert:
+    that:
+      - postgres_assets_python_packages is sequence
+      - postgres_assets_python_packages is not string
+      - postgres_assets_roles is sequence
+      - postgres_assets_roles is not string
+      - postgres_assets_databases is sequence
+      - postgres_assets_databases is not string
+      - postgres_assets_login_host is string
+      - postgres_assets_login_port | int > 0
+      - postgres_assets_login_port | int < 65536
+      - postgres_assets_login_user is string
+      - postgres_assets_login_user | length > 0
+      - postgres_assets_login_password is string
+      - postgres_assets_login_database is string
+      - postgres_assets_login_database | length > 0
+      - postgres_assets_login_unix_socket is string
+      - postgres_assets_ssl_mode in ['allow', 'disable', 'prefer', 'require', 'verify-ca', 'verify-full']
+      - postgres_assets_become is boolean
+      - postgres_assets_become_user is string
+      - not postgres_assets_become or postgres_assets_become_user | length > 0
+      - postgres_assets_no_log is boolean
+    fail_msg: PostgreSQL assets inputs have invalid container or connection types.
+    quiet: true
+  no_log: "{{ postgres_assets_no_log }}"
+
+- name: Validate PostgreSQL Python package entries
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item | length > 0
+    fail_msg: postgres_assets_python_packages entries must be non-empty strings.
+    quiet: true
+  loop: "{{ postgres_assets_python_packages }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Validate PostgreSQL role entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    fail_msg: Every postgres_assets_roles entry must be a mapping.
+    quiet: true
+  loop: "{{ postgres_assets_roles }}"
+  loop_control:
+    label: >-
+      {{ item.name | default('invalid role entry')
+         if item is mapping else 'invalid role entry' }}
+  no_log: "{{ postgres_assets_no_log }}"
+
+- name: Validate PostgreSQL role contracts
+  ansible.builtin.assert:
+    that:
+      - item.keys() | difference(postgres_assets_role_fields) | length == 0
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.state is defined
+      - item.state in ['present', 'absent']
+      - item.state == 'absent' or item.password is defined
+      - item.state == 'absent' or item.password is string
+      - item.state == 'absent' or item.password | length > 0
+      - item.state == 'present' or item.keys() | difference(['name', 'state']) | length == 0
+      - item.role_attr_flags | default('LOGIN') is string
+      - item.configuration | default({}) is mapping
+      - item.no_password_changes | default(false) is boolean
+      - item.reset_unspecified_configuration | default(false) is boolean
+    fail_msg: >-
+      PostgreSQL roles accept only documented fields. Present roles require a
+      non-empty password; absent roles accept only name and state.
+    quiet: true
+  loop: "{{ postgres_assets_roles }}"
+  loop_control:
+    label: "{{ item.name | default('invalid role entry') }}"
+  no_log: "{{ postgres_assets_no_log }}"
+
+- name: Reject duplicate PostgreSQL role entries
+  ansible.builtin.assert:
+    that:
+      - >-
+        postgres_assets_roles | map(attribute='name') | unique | list | length
+        == postgres_assets_roles | length
+    fail_msg: postgres_assets_roles contains duplicate role names.
+    quiet: true
+  no_log: "{{ postgres_assets_no_log }}"
+
+- name: Validate PostgreSQL database entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    fail_msg: Every postgres_assets_databases entry must be a mapping.
+    quiet: true
+  loop: "{{ postgres_assets_databases }}"
+  loop_control:
+    label: >-
+      {{ item.name | default('invalid database entry')
+         if item is mapping else 'invalid database entry' }}
+
+- name: Validate PostgreSQL database contracts
+  ansible.builtin.assert:
+    that:
+      - item.keys() | difference(postgres_assets_database_fields) | length == 0
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.state is defined
+      - item.state in ['present', 'absent']
+      - item.state == 'absent' or item.owner is defined
+      - item.state == 'absent' or item.owner is string
+      - item.state == 'absent' or item.owner | length > 0
+      - item.state == 'present' or item.extensions is not defined
+      - item.extensions | default([]) is sequence
+      - item.extensions | default([]) is not string
+      - item.force | default(false) is boolean
+    fail_msg: >-
+      PostgreSQL databases accept only documented fields. Present databases
+      require an explicit owner and an optional extension list.
+    quiet: true
+  loop: "{{ postgres_assets_databases }}"
+  loop_control:
+    label: "{{ item.name | default('invalid database entry') }}"
+
+- name: Reject duplicate PostgreSQL database entries
+  ansible.builtin.assert:
+    that:
+      - >-
+        postgres_assets_databases | map(attribute='name') | unique | list | length
+        == postgres_assets_databases | length
+    fail_msg: postgres_assets_databases contains duplicate database names.
+    quiet: true
+
+- name: Initialize normalized PostgreSQL extension contracts
+  ansible.builtin.set_fact:
+    postgres_assets_extensions: []
+
+- name: Flatten PostgreSQL extension contracts
+  ansible.builtin.set_fact:
+    postgres_assets_extensions: >-
+      {{
+        postgres_assets_extensions
+        + [item.1 | combine({'database': item.0.name})]
+      }}
+  loop: >-
+    {{
+      postgres_assets_databases
+      | selectattr('state', 'equalto', 'present')
+      | list
+      | subelements('extensions', skip_missing=true)
+    }}
+  loop_control:
+    label: >-
+      {{ item.0.name }} / {{ item.1.name | default('invalid extension entry') }}
+
+- name: Validate PostgreSQL extension entries are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    fail_msg: Every PostgreSQL extension entry must be a mapping.
+    quiet: true
+  loop: "{{ postgres_assets_extensions }}"
+  loop_control:
+    label: "{{ item.name | default('invalid extension entry') }}"
+
+- name: Validate PostgreSQL extension contracts
+  ansible.builtin.assert:
+    that:
+      - item.keys() | difference(postgres_assets_extension_fields + ['database']) | length == 0
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - item.state is defined
+      - item.state in ['present', 'absent']
+      - item.schema | default('') is string
+      - item.version | default('') is string
+      - item.cascade | default(false) is boolean
+    fail_msg: >-
+      PostgreSQL extensions require name and state and accept only schema,
+      version, and cascade options.
+    quiet: true
+  loop: "{{ postgres_assets_extensions }}"
+  loop_control:
+    label: "{{ item.name | default('invalid extension entry') }}@{{ item.database }}"
+
+- name: Reject duplicate extensions within PostgreSQL databases
+  ansible.builtin.assert:
+    that:
+      - >-
+        item.extensions | default([]) | map(attribute='name') | unique | list | length
+        == item.extensions | default([]) | length
+    fail_msg: "Database {{ item.name }} contains duplicate extension names."
+    quiet: true
+  loop: >-
+    {{ postgres_assets_databases | selectattr('state', 'equalto', 'present') | list }}
+  loop_control:
+    label: "{{ item.name }}"

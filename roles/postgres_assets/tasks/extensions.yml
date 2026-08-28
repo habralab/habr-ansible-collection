@@ -1,0 +1,22 @@
+---
+- name: Manage PostgreSQL extensions
+  community.postgresql.postgresql_ext:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    login_db: "{{ item.database }}"
+    schema: "{{ item.schema | default(omit) }}"
+    version: "{{ item.version | default(omit) }}"
+    cascade: "{{ item.cascade | default(false) }}"
+    login_host: "{{ postgres_assets_login_host }}"
+    login_port: "{{ postgres_assets_login_port }}"
+    login_user: "{{ postgres_assets_login_user }}"
+    login_password: "{{ postgres_assets_login_password }}"
+    login_unix_socket: "{{ postgres_assets_login_unix_socket }}"
+    ssl_mode: "{{ postgres_assets_ssl_mode }}"
+    trust_input: false
+  loop: "{{ postgres_assets_extensions }}"
+  loop_control:
+    label: "{{ item.name }}@{{ item.database }}"
+  become: "{{ postgres_assets_become }}"
+  become_user: "{{ postgres_assets_become_user }}"
+  no_log: "{{ postgres_assets_no_log }}"

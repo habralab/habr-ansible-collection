@@ -47,6 +47,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
 - `packages`: Declarative management of APT packages and .deb URLs.
 - `php`: Installs and configures parallel PHP CLI and FPM versions.
+- `postgres_assets`: Manages PostgreSQL application roles, databases, and extensions.
 - `redis`: Installs Redis Server and optional Sentinel without replacing package defaults.
 - `ssh_authorized_keys`: Manages SSH public keys through catalogs, groups and per-user contracts.
 - `systemd_logind`: Manages `systemd-logind` configuration and user lingering.
