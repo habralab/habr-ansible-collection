@@ -1,0 +1,27 @@
+---
+- name: Ensure PostgreSQL HBA include directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_hba_include_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+
+- name: Deploy PostgreSQL HBA fragment
+  ansible.builtin.template:
+    src: 90-ansible-hba.conf.j2
+    dest: "{{ postgres_hba_path }}"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  no_log: "{{ postgres_hba_no_log }}"
+  notify: Restart PostgreSQL
+
+- name: Include the Ansible HBA fragment directory from package configuration
+  ansible.builtin.lineinfile:
+    path: "{{ postgres_hba_stock_path }}"
+    line: "include_dir '{{ postgres_hba_include_dir }}'"
+    insertafter: EOF
+    state: present
+  no_log: "{{ postgres_hba_no_log }}"
+  notify: Restart PostgreSQL

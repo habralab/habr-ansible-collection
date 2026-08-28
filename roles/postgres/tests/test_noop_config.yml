@@ -1,0 +1,18 @@
+---
+- name: Test PostgreSQL default configuration no-op
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load PostgreSQL role defaults
+      ansible.builtin.include_vars:
+        file: ../defaults/main.yml
+
+    - name: Verify configuration ownership is disabled by default
+      ansible.builtin.assert:
+        that:
+          - not postgres_config_manage
+          - postgres_config | length == 0
+          - not postgres_hba_manage
+          - postgres_hba_rules | length == 0
+        quiet: true

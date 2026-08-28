@@ -1,0 +1,10 @@
+# Managed by Ansible. Local changes will be overwritten.
+{% for option, value in postgres_config | dictsort %}
+{% if value is sameas true %}
+{{ option }} = on
+{% elif value is sameas false %}
+{{ option }} = off
+{% else %}
+{{ option }} = {{ value }}
+{% endif %}
+{% endfor %}

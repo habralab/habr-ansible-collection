@@ -1,0 +1,130 @@
+---
+- name: Validate PostgreSQL role configuration
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - postgres
+  tags:
+    - postgres
+
+- name: Configure PostgreSQL package repository
+  ansible.builtin.include_tasks:
+    file: repository.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_repository
+        - apt
+  when: postgres_repository_manage | bool
+  tags:
+    - postgres
+    - postgres_repository
+    - apt
+
+- name: Apply PostgreSQL repository cache update
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - postgres
+    - postgres_repository
+    - apt
+
+- name: Install PostgreSQL packages
+  ansible.builtin.apt:
+    name: "{{ postgres_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags:
+    - postgres
+    - postgres_packages
+    - apt
+
+- name: Inspect PostgreSQL server binary
+  ansible.builtin.stat:
+    path: "/usr/lib/postgresql/{{ postgres_version }}/bin/postgres"
+  register: postgres_server_binary
+  tags:
+    - postgres
+    - postgres_packages
+    - postgres_config
+
+- name: Require PostgreSQL server binary after package installation
+  ansible.builtin.assert:
+    that:
+      - postgres_server_binary.stat.exists
+      - postgres_server_binary.stat.executable
+    fail_msg: >-
+      PostgreSQL packages did not provide the expected server binary for
+      version {{ postgres_version }}.
+  when: not ansible_check_mode
+  tags:
+    - postgres
+    - postgres_packages
+
+- name: Manage PostgreSQL server configuration
+  ansible.builtin.include_tasks:
+    file: config.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_config
+  when:
+    - postgres_server_binary.stat.exists
+    - postgres_config_manage | bool
+  tags:
+    - postgres
+    - postgres_config
+
+- name: Manage PostgreSQL client authentication
+  ansible.builtin.include_tasks:
+    file: hba.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_hba
+  when:
+    - postgres_server_binary.stat.exists
+    - postgres_hba_manage | bool
+  tags:
+    - postgres
+    - postgres_hba
+
+- name: Ensure PostgreSQL service state
+  ansible.builtin.service:
+    name: "{{ postgres_service_name }}"
+    enabled: "{{ postgres_service_enabled }}"
+    state: "{{ postgres_service_state }}"
+  when: not ansible_check_mode
+  tags:
+    - postgres
+    - postgres_service
+
+- name: Apply PostgreSQL handlers
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - postgres
+    - postgres_config
+    - postgres_hba
+    - postgres_service
+
+- name: Verify PostgreSQL readiness
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pg_isready
+      - --host
+      - "{{ postgres_health_host }}"
+      - --port
+      - "{{ postgres_health_port | string }}"
+  register: postgres_readiness
+  changed_when: false
+  retries: "{{ postgres_health_retries }}"
+  delay: "{{ postgres_health_delay }}"
+  until: postgres_readiness.rc == 0
+  when:
+    - postgres_health_check_enabled | bool
+    - postgres_service_state == 'started'
+    - not ansible_check_mode
+  tags:
+    - postgres
+    - postgres_service
