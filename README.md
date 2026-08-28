@@ -49,6 +49,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `php`: Installs and configures parallel PHP CLI and FPM versions.
 - `postgres`: Installs and configures a standalone PostgreSQL server from PGDG.
 - `postgres_assets`: Manages PostgreSQL application roles, databases, and extensions.
+- `python_venv`: Creates application Python virtual environments with pinned dependencies.
 - `qdrant`: Installs a pinned Qdrant Debian package and manages a standalone service.
 - `redis`: Installs Redis Server and optional Sentinel without replacing package defaults.
 - `ssh_authorized_keys`: Manages SSH public keys through catalogs, groups and per-user contracts.
