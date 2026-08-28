@@ -1,10 +1,34 @@
 ---
 redis_supported_repositories:
   - ubuntu
+  - official
   - ppa_redislabs
   - unmanaged
+
+redis_official_supported_releases:
+  - jammy
+  - noble
+  - resolute
 
 redis_redislabs_supported_releases:
   - focal
   - jammy
   - noble
+
+__redis_server_packages: >-
+  {{
+    redis_server_packages
+    if redis_package_version | length == 0
+    else redis_server_packages
+      | map('regex_replace', '$', '=' ~ redis_package_version)
+      | list
+  }}
+
+__redis_sentinel_packages: >-
+  {{
+    redis_sentinel_packages
+    if redis_package_version | length == 0
+    else redis_sentinel_packages
+      | map('regex_replace', '$', '=' ~ redis_package_version)
+      | list
+  }}
