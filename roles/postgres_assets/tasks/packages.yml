@@ -1,0 +1,38 @@
+---
+- name: Install PostgreSQL Python client packages
+  ansible.builtin.apt:
+    name: "{{ postgres_assets_python_packages }}"
+    state: present
+  when: postgres_assets_python_packages | length > 0
+
+- name: Inspect PostgreSQL Python client availability
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_facts['python']['executable'] }}"
+      - -c
+      - >-
+        import importlib.util;
+        assert importlib.util.find_spec('psycopg') or importlib.util.find_spec('psycopg2')
+  register: postgres_assets_psycopg_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Explain unavailable PostgreSQL asset checks
+  ansible.builtin.debug:
+    msg: >-
+      PostgreSQL assets cannot be inspected until Psycopg is installed. Apply
+      the package stage once, then check mode can inspect roles and databases.
+  when:
+    - ansible_check_mode
+    - postgres_assets_psycopg_probe.rc != 0
+
+- name: Require PostgreSQL Python client after package installation
+  ansible.builtin.assert:
+    that:
+      - postgres_assets_psycopg_probe.rc == 0
+    fail_msg: >-
+      PostgreSQL asset management requires Psycopg in the target Ansible
+      Python environment. Adjust postgres_assets_python_packages for this host.
+    quiet: true
+  when: not ansible_check_mode

@@ -1,0 +1,24 @@
+---
+- name: Test PostgreSQL assets default no-op
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      python:
+        executable: /usr/bin/python3
+  vars_files:
+    - ../defaults/main.yml
+  tasks:
+    - name: Apply PostgreSQL assets with defaults
+      ansible.builtin.include_role:
+        name: postgres_assets
+
+    - name: Verify empty PostgreSQL asset contracts
+      ansible.builtin.assert:
+        that:
+          - postgres_assets_roles | length == 0
+          - postgres_assets_databases | length == 0
+          - postgres_assets_extensions | length == 0
+          - postgres_assets_psycopg_probe is not defined
+        quiet: true

@@ -1,0 +1,27 @@
+---
+- name: Manage PostgreSQL databases
+  community.postgresql.postgresql_db:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    owner: "{{ item.owner | default(omit) }}"
+    encoding: "{{ item.encoding | default(omit) }}"
+    lc_collate: "{{ item.lc_collate | default(omit) }}"
+    lc_ctype: "{{ item.lc_ctype | default(omit) }}"
+    template: "{{ item.template | default(omit) }}"
+    comment: "{{ item.comment | default(omit) }}"
+    conn_limit: "{{ item.conn_limit | default(omit) }}"
+    force: "{{ item.force | default(false) }}"
+    login_host: "{{ postgres_assets_login_host }}"
+    login_port: "{{ postgres_assets_login_port }}"
+    login_user: "{{ postgres_assets_login_user }}"
+    login_password: "{{ postgres_assets_login_password }}"
+    login_db: "{{ postgres_assets_login_database }}"
+    login_unix_socket: "{{ postgres_assets_login_unix_socket }}"
+    ssl_mode: "{{ postgres_assets_ssl_mode }}"
+    trust_input: false
+  loop: "{{ postgres_assets_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: "{{ postgres_assets_become }}"
+  become_user: "{{ postgres_assets_become_user }}"
+  no_log: "{{ postgres_assets_no_log }}"

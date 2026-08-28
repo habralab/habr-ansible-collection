@@ -1,0 +1,32 @@
+---
+postgres_assets_role_fields:
+  - name
+  - state
+  - password
+  - role_attr_flags
+  - comment
+  - expires
+  - conn_limit
+  - no_password_changes
+  - configuration
+  - reset_unspecified_configuration
+
+postgres_assets_database_fields:
+  - name
+  - state
+  - owner
+  - encoding
+  - lc_collate
+  - lc_ctype
+  - template
+  - comment
+  - conn_limit
+  - force
+  - extensions
+
+postgres_assets_extension_fields:
+  - name
+  - state
+  - schema
+  - version
+  - cascade
