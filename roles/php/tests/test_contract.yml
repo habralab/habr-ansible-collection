@@ -1,0 +1,91 @@
+---
+- name: Test PHP required extension contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Validate an omitted required extension mapping
+      ansible.builtin.include_role:
+        name: php
+        tasks_from: validate_version
+      vars:
+        php_version_item:
+          key: "8.5"
+          value:
+            sapis:
+              - cli
+
+    - name: Validate required extensions and exact versions
+      ansible.builtin.include_role:
+        name: php
+        tasks_from: validate_version
+      vars:
+        php_version_item:
+          key: "8.5"
+          value:
+            sapis:
+              - cli
+              - fpm
+            required_extensions:
+              apcu: ""
+              redis: "6.3.0"
+
+    - name: Initialize invalid extension version result
+      ansible.builtin.set_fact:
+        php_invalid_extension_version_rejected: false
+
+    - name: Reject a non-string extension version
+      block:
+        - name: Validate an invalid extension version
+          ansible.builtin.include_role:
+            name: php
+            tasks_from: validate_version
+          vars:
+            php_version_item:
+              key: "8.5"
+              value:
+                sapis:
+                  - cli
+                required_extensions:
+                  redis: 6.3
+      rescue:
+        - name: Record invalid extension version rejection
+          ansible.builtin.set_fact:
+            php_invalid_extension_version_rejected: true
+
+    - name: Verify invalid extension version rejection
+      ansible.builtin.assert:
+        that:
+          - php_invalid_extension_version_rejected
+        quiet: true
+
+    - name: Initialize missing CLI result
+      ansible.builtin.set_fact:
+        php_missing_cli_rejected: false
+
+    - name: Reject runtime verification without the CLI SAPI
+      block:
+        - name: Validate required extensions without the CLI SAPI
+          ansible.builtin.include_role:
+            name: php
+            tasks_from: validate_version
+          vars:
+            php_version_item:
+              key: "8.5"
+              value:
+                sapis:
+                  - fpm
+                required_extensions:
+                  redis: "6.3.0"
+      rescue:
+        - name: Record missing CLI rejection
+          ansible.builtin.set_fact:
+            php_missing_cli_rejected: true
+
+    - name: Verify missing CLI rejection
+      ansible.builtin.assert:
+        that:
+          - php_missing_cli_rejected
+        quiet: true
