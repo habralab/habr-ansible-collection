@@ -21,3 +21,12 @@
 - Native YAML booleans normalize to systemd `yes` or `no` values.
 - Timer lifecycle remains generic: enable/start/restart operations target the
   `.timer`; the paired service is a separate declaration.
+
+## Service Resource Limits
+
+- `PIDFile` is a scalar string and is rendered before execution directives.
+- `LimitNOFILE`, `LimitNPROC`, and `LimitCORE` accept non-negative native YAML
+  integers or non-empty systemd strings, including `infinity` and soft/hard
+  pairs.
+- Native YAML booleans are rejected even though Jinja may otherwise treat them
+  as integer-like values.

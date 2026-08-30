@@ -22,6 +22,21 @@
           and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is string
         )
         or (
+          _systemd_unit_directive.value.value_type == 'string_or_integer'
+          and (
+            (
+              systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is string
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key]
+                  | length > 0
+            )
+            or (
+              systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is integer
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is not boolean
+              and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] | int >= 0
+            )
+          )
+        )
+        or (
           _systemd_unit_directive.value.value_type == 'boolean'
           and systemd_unit_config.source.model[_systemd_unit_section_name][_systemd_unit_directive.key] is boolean
         )
