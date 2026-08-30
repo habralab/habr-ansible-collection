@@ -1,0 +1,170 @@
+---
+- name: "Inspect Python virtual environment user | {{ python_venv_item.name }}"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ python_venv_item.user }}"
+    fail_key: false
+
+- name: "Inspect Python virtual environment group | {{ python_venv_item.name }}"
+  ansible.builtin.getent:
+    database: group
+    key: "{{ python_venv_item.group }}"
+    fail_key: false
+
+- name: "Inspect Python interpreter | {{ python_venv_item.name }}"
+  ansible.builtin.stat:
+    path: "{{ python_venv_item.python }}"
+  register: python_venv_interpreter_stat
+
+- name: "Normalize Python virtual environment prerequisites | {{ python_venv_item.name }}"
+  ansible.builtin.set_fact:
+    python_venv_user_exists: >-
+      {{
+        ansible_facts.getent_passwd is defined
+        and ansible_facts.getent_passwd.get(python_venv_item.user) is not none
+      }}
+    python_venv_group_exists: >-
+      {{
+        ansible_facts.getent_group is defined
+        and ansible_facts.getent_group.get(python_venv_item.group) is not none
+      }}
+
+- name: "Validate Python virtual environment prerequisites | {{ python_venv_item.name }}"
+  ansible.builtin.assert:
+    that:
+      - python_venv_user_exists
+      - python_venv_group_exists
+      - python_venv_interpreter_stat.stat.exists
+      - python_venv_interpreter_stat.stat.executable
+    fail_msg: >-
+      The declared user, group, and executable Python interpreter must exist
+      before creating virtual environment '{{ python_venv_item.name }}'.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: "Report unavailable prerequisites in check mode | {{ python_venv_item.name }}"
+  ansible.builtin.debug:
+    msg: >-
+      User, group, or Python interpreter is not available. Runtime work for
+      '{{ python_venv_item.name }}' is skipped in check mode.
+  when:
+    - ansible_check_mode
+    - >-
+      not python_venv_user_exists
+      or not python_venv_group_exists
+      or not python_venv_interpreter_stat.stat.exists
+      or not python_venv_interpreter_stat.stat.executable | default(false)
+
+- name: "Materialize Python virtual environment | {{ python_venv_item.name }}"
+  when:
+    - python_venv_user_exists
+    - python_venv_group_exists
+    - python_venv_interpreter_stat.stat.exists
+    - python_venv_interpreter_stat.stat.executable
+  block:
+    - name: "Verify Python venv support | {{ python_venv_item.name }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ python_venv_item.python }}"
+          - -m
+          - venv
+          - --help
+      changed_when: false
+      check_mode: false
+
+    - name: "Create Python virtual environment directory | {{ python_venv_item.name }}"
+      ansible.builtin.file:
+        path: "{{ python_venv_item.path }}"
+        state: directory
+        owner: "{{ python_venv_item.user }}"
+        group: "{{ python_venv_item.group }}"
+        mode: "{{ python_venv_item.mode | default('0755') }}"
+
+    - name: "Inspect existing Python virtual environment | {{ python_venv_item.name }}"
+      ansible.builtin.stat:
+        path: "{{ python_venv_item.path }}/bin/python"
+      register: python_venv_runtime_stat
+
+    - name: "Create Python virtual environment | {{ python_venv_item.name }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ python_venv_item.python }}"
+          - -m
+          - venv
+          - "{{ python_venv_item.path }}"
+        creates: "{{ python_venv_item.path }}/bin/python"
+      become: true
+      become_user: "{{ python_venv_item.user }}"
+
+    - name: "Inspect Python requirements file | {{ python_venv_item.name }}"
+      ansible.builtin.stat:
+        path: "{{ python_venv_item.requirements_file }}"
+      register: python_venv_requirements_file_stat
+      when: python_venv_item.requirements_file | default('') | length > 0
+
+    - name: "Validate Python requirements file | {{ python_venv_item.name }}"
+      ansible.builtin.assert:
+        that:
+          - python_venv_requirements_file_stat.stat.exists
+          - python_venv_requirements_file_stat.stat.isreg
+        fail_msg: >-
+          Requirements file '{{ python_venv_item.requirements_file }}' must
+          exist before provisioning '{{ python_venv_item.name }}'.
+        quiet: true
+      when:
+        - not ansible_check_mode
+        - python_venv_item.requirements_file | default('') | length > 0
+
+    - name: "Install pinned Python requirements | {{ python_venv_item.name }}"
+      ansible.builtin.pip:
+        name: "{{ python_venv_item.requirements }}"
+        state: present
+        virtualenv: "{{ python_venv_item.path }}"
+        extra_args: "{{ python_venv_item.pip_extra_args | default(omit, true) }}"
+      become: true
+      become_user: "{{ python_venv_item.user }}"
+      environment:
+        HOME: "{{ ansible_facts.getent_passwd[python_venv_item.user][4] }}"
+        PIP_DISABLE_PIP_VERSION_CHECK: "1"
+        PIP_NO_INPUT: "1"
+      when:
+        - python_venv_item.requirements | default([]) | length > 0
+        - not ansible_check_mode or python_venv_runtime_stat.stat.exists
+
+    - name: "Install Python requirements file | {{ python_venv_item.name }}"
+      ansible.builtin.pip:
+        requirements: "{{ python_venv_item.requirements_file }}"
+        state: present
+        virtualenv: "{{ python_venv_item.path }}"
+        extra_args: "{{ python_venv_item.pip_extra_args | default(omit, true) }}"
+      become: true
+      become_user: "{{ python_venv_item.user }}"
+      environment:
+        HOME: "{{ ansible_facts.getent_passwd[python_venv_item.user][4] }}"
+        PIP_DISABLE_PIP_VERSION_CHECK: "1"
+        PIP_NO_INPUT: "1"
+      when:
+        - python_venv_item.requirements_file | default('') | length > 0
+        - >-
+          python_venv_requirements_file_stat.stat.exists
+          or not ansible_check_mode
+        - not ansible_check_mode or python_venv_runtime_stat.stat.exists
+
+    - name: "Record Python virtual environment result | {{ python_venv_item.name }}"
+      ansible.builtin.set_fact:
+        python_venv_results: >-
+          {{
+            python_venv_results | combine(
+              {
+                python_venv_item.name: {
+                  'path': python_venv_item.path,
+                  'source_python': python_venv_item.python,
+                  'python': python_venv_item.path ~ '/bin/python',
+                  'pip': python_venv_item.path ~ '/bin/pip',
+                  'bin_dir': python_venv_item.path ~ '/bin',
+                  'user': python_venv_item.user,
+                  'group': python_venv_item.group
+                }
+              }
+            )
+          }}

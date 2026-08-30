@@ -1,0 +1,14 @@
+---
+qdrant_supported_releases:
+  - focal
+  - jammy
+  - noble
+  - resolute
+
+qdrant_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+
+qdrant_package_checksums:
+  1.19.0-1-amd64: >-
+    sha256:2c73614176642aeb8da5127fb583b4a63398e89c05c87eb2dc12faf1ad9c19ea

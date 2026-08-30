@@ -1,0 +1,9 @@
+---
+- name: Restart Qdrant
+  ansible.builtin.service:
+    name: "{{ qdrant_service_name }}"
+    state: restarted
+    enabled: "{{ qdrant_service_enabled }}"
+  when:
+    - qdrant_service_state == 'started'
+    - not ansible_check_mode

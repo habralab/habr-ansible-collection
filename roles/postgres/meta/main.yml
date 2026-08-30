@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: postgres
+  author: Habr Team <servers@habr.team>
+  description: Install and configure a standalone PostgreSQL server from PGDG
+  company: Habr
+  issue_tracker_url: https://github.com/habralab/habr-ansible-collection/issues
+  license: MIT
+  min_ansible_version: "2.16.0"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+        - resolute
+dependencies: []

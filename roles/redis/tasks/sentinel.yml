@@ -19,8 +19,9 @@
 
 - name: Install Redis Sentinel packages
   ansible.builtin.apt:
-    name: "{{ redis_sentinel_packages }}"
+    name: "{{ __redis_sentinel_packages }}"
     state: "{{ redis_sentinel_package_state }}"
+    allow_downgrade: "{{ redis_package_version | length > 0 }}"
     update_cache: true
     cache_valid_time: 3600
 

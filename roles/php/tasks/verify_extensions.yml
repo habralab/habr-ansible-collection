@@ -1,0 +1,37 @@
+---
+- name: >-
+    Verify loaded PHP extensions | {{ php_version_item.key ~ ' / ' ~ php_extension_check_sapi }}
+  ansible.builtin.command:
+    argv:
+      - "/usr/bin/php{{ php_version_item.key }}"
+      - -r
+      - >-
+        $required = json_decode($argv[1], true);
+        $errors = [];
+        foreach ($required as $extension => $expected) {
+          if (!extension_loaded($extension)) {
+            $errors[] = $extension . ': not loaded';
+            continue;
+          }
+          $actual = phpversion($extension);
+          if ($expected !== '' && $actual !== $expected) {
+            $errors[] = sprintf(
+              '%s: expected %s, loaded %s',
+              $extension,
+              $expected,
+              $actual === false ? 'unknown' : $actual
+            );
+          }
+        }
+        if ($errors) {
+          fwrite(STDERR, implode(PHP_EOL, $errors) . PHP_EOL);
+          exit(1);
+        }
+      - >-
+        {{ php_version_item.value.required_extensions | to_json }}
+  environment:
+    PHPRC: >-
+      /etc/php/{{ php_version_item.key }}/{{ php_extension_check_sapi }}/php.ini
+    PHP_INI_SCAN_DIR: >-
+      /etc/php/{{ php_version_item.key }}/{{ php_extension_check_sapi }}/conf.d
+  changed_when: false

@@ -1,0 +1,74 @@
+---
+- name: Test Qdrant role contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      distribution: Ubuntu
+      distribution_release: noble
+      architecture: x86_64
+  vars_files:
+    - ../vars/main.yml
+    - ../defaults/main.yml
+  tasks:
+    - name: Validate the default Qdrant contract
+      ansible.builtin.include_role:
+        name: qdrant
+        tasks_from: validate
+
+    - name: Verify the pinned default release
+      ansible.builtin.assert:
+        that:
+          - qdrant_version == '1.19.0'
+          - qdrant_package_architecture == 'amd64'
+          - qdrant_package_filename == 'qdrant_1.19.0-1_amd64.deb'
+          - qdrant_package_checksum == 'sha256:2c73614176642aeb8da5127fb583b4a63398e89c05c87eb2dc12faf1ad9c19ea'
+        quiet: true
+
+    - name: Initialize invalid checksum result
+      ansible.builtin.set_fact:
+        qdrant_invalid_checksum_rejected: false
+
+    - name: Reject an invalid package checksum
+      block:
+        - name: Validate invalid Qdrant package checksum
+          ansible.builtin.include_role:
+            name: qdrant
+            tasks_from: validate
+          vars:
+            qdrant_package_checksum: invalid
+      rescue:
+        - name: Record invalid checksum rejection
+          ansible.builtin.set_fact:
+            qdrant_invalid_checksum_rejected: true
+
+    - name: Verify invalid checksum rejection
+      ansible.builtin.assert:
+        that:
+          - qdrant_invalid_checksum_rejected
+        quiet: true
+
+    - name: Initialize empty managed configuration result
+      ansible.builtin.set_fact:
+        qdrant_empty_config_rejected: false
+
+    - name: Reject empty managed configuration
+      block:
+        - name: Validate empty managed Qdrant configuration
+          ansible.builtin.include_role:
+            name: qdrant
+            tasks_from: validate
+          vars:
+            qdrant_config_manage: true
+            qdrant_config_overrides: {}
+      rescue:
+        - name: Record empty managed configuration rejection
+          ansible.builtin.set_fact:
+            qdrant_empty_config_rejected: true
+
+    - name: Verify empty managed configuration rejection
+      ansible.builtin.assert:
+        that:
+          - qdrant_empty_config_rejected
+        quiet: true

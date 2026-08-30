@@ -1,0 +1,18 @@
+---
+- name: Ensure PostgreSQL configuration include directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_config_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+
+- name: Deploy PostgreSQL configuration fragment
+  ansible.builtin.template:
+    src: 90-ansible.conf.j2
+    dest: "{{ postgres_config_path }}"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  no_log: "{{ postgres_config_no_log }}"
+  notify: Restart PostgreSQL

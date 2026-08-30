@@ -1,0 +1,87 @@
+---
+- name: Validate PostgreSQL assets contract
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - postgres_assets
+  tags:
+    - postgres_assets
+
+- name: Prepare PostgreSQL assets dependencies
+  ansible.builtin.include_tasks:
+    file: packages.yml
+    apply:
+      tags:
+        - postgres_assets
+        - postgres_assets_packages
+  when: >-
+    postgres_assets_roles | length > 0
+    or postgres_assets_databases | length > 0
+  tags:
+    - postgres_assets
+    - postgres_assets_packages
+
+- name: Create and update PostgreSQL roles
+  ansible.builtin.include_tasks:
+    file: roles.yml
+    apply:
+      tags:
+        - postgres_assets
+        - postgres_assets_roles
+  vars:
+    postgres_assets_role_state: present
+  when:
+    - postgres_assets_psycopg_probe is defined
+    - postgres_assets_psycopg_probe.rc == 0
+    - postgres_assets_roles | selectattr('state', 'equalto', 'present') | list | length > 0
+  tags:
+    - postgres_assets
+    - postgres_assets_roles
+
+- name: Manage PostgreSQL databases
+  ansible.builtin.include_tasks:
+    file: databases.yml
+    apply:
+      tags:
+        - postgres_assets
+        - postgres_assets_databases
+  when:
+    - postgres_assets_psycopg_probe is defined
+    - postgres_assets_psycopg_probe.rc == 0
+    - postgres_assets_databases | length > 0
+  tags:
+    - postgres_assets
+    - postgres_assets_databases
+
+- name: Manage PostgreSQL extensions
+  ansible.builtin.include_tasks:
+    file: extensions.yml
+    apply:
+      tags:
+        - postgres_assets
+        - postgres_assets_extensions
+  when:
+    - postgres_assets_psycopg_probe is defined
+    - postgres_assets_psycopg_probe.rc == 0
+    - postgres_assets_extensions | length > 0
+  tags:
+    - postgres_assets
+    - postgres_assets_extensions
+
+- name: Remove PostgreSQL roles after dependent assets
+  ansible.builtin.include_tasks:
+    file: roles.yml
+    apply:
+      tags:
+        - postgres_assets
+        - postgres_assets_roles
+  vars:
+    postgres_assets_role_state: absent
+  when:
+    - postgres_assets_psycopg_probe is defined
+    - postgres_assets_psycopg_probe.rc == 0
+    - postgres_assets_roles | selectattr('state', 'equalto', 'absent') | list | length > 0
+  tags:
+    - postgres_assets
+    - postgres_assets_roles

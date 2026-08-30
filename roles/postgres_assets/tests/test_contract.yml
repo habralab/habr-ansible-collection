@@ -1,0 +1,32 @@
+---
+- name: Test PostgreSQL assets contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    postgres_assets_roles:
+      - name: example
+        state: present
+        password: secret
+        role_attr_flags: LOGIN
+    postgres_assets_databases:
+      - name: example
+        state: present
+        owner: example
+        encoding: UTF8
+        extensions:
+          - name: pg_trgm
+            state: present
+  tasks:
+    - name: Validate PostgreSQL asset contracts
+      ansible.builtin.include_role:
+        name: postgres_assets
+        tasks_from: validate
+
+    - name: Verify normalized PostgreSQL extensions
+      ansible.builtin.assert:
+        that:
+          - postgres_assets_extensions | length == 1
+          - postgres_assets_extensions[0].database == 'example'
+          - postgres_assets_extensions[0].name == 'pg_trgm'
+        quiet: true

@@ -1,0 +1,29 @@
+---
+- name: Validate Python virtual environment input shape
+  ansible.builtin.assert:
+    that:
+      - python_venv_environments is sequence
+      - python_venv_environments is not string
+      - python_venv_environments is not mapping
+    fail_msg: python_venv_environments must be a list of virtual environment declarations.
+    quiet: true
+
+- name: Validate each Python virtual environment
+  ansible.builtin.include_tasks: validate_runtime.yml
+  loop: "{{ python_venv_environments }}"
+  loop_control:
+    loop_var: python_venv_item
+    label: "{{ python_venv_item.name | default('UNKNOWN') }}"
+
+- name: Validate unique Python virtual environment names and paths
+  ansible.builtin.assert:
+    that:
+      - >-
+        python_venv_environments | map(attribute='name') | list | unique | length
+        == python_venv_environments | length
+      - >-
+        python_venv_environments | map(attribute='path') | list | unique | length
+        == python_venv_environments | length
+    fail_msg: Each Python virtual environment must use a unique name and path.
+    quiet: true
+  when: python_venv_environments | length > 0

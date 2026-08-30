@@ -1,0 +1,4 @@
+# Managed by Ansible. Local changes will be overwritten.
+{% for rule in postgres_hba_rules %}
+{{ rule.type }} {{ rule.database }} {{ rule.user }}{% if rule.type != 'local' %} {{ rule.address }}{% endif %} {{ rule.method }}{% if rule.options | default([]) | length > 0 %} {{ rule.options | join(' ') }}{% endif %}
+{% endfor %}
