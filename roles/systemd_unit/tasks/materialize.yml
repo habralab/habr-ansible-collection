@@ -121,7 +121,7 @@
             'render_type': spec.render_type,
             'value_type': spec.value_type
           } -%}
-      {%- if spec.value_type == 'string' -%}
+      {%- if spec.value_type in ['string', 'string_or_integer'] -%}
       {%- set directive = directive | combine({'value': section[directive_name]}) -%}
       {%- elif spec.value_type == 'boolean' -%}
       {%- set directive = directive | combine({'value': 'yes' if section[directive_name] else 'no'}) -%}

@@ -52,9 +52,21 @@ __systemd_unit_section_directive_specs:
     Group:
       render_type: "scalar"
       value_type: "string"
+    PIDFile:
+      render_type: "scalar"
+      value_type: "string"
     WorkingDirectory:
       render_type: "scalar"
       value_type: "string"
+    LimitNOFILE:
+      render_type: "scalar"
+      value_type: "string_or_integer"
+    LimitNPROC:
+      render_type: "scalar"
+      value_type: "string_or_integer"
+    LimitCORE:
+      render_type: "scalar"
+      value_type: "string_or_integer"
     Environment:
       render_type: "repeatable"
       value_type: "list"

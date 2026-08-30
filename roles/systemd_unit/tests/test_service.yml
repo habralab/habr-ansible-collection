@@ -1,0 +1,101 @@
+---
+- name: Test systemd_unit service model contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    test_service_config: &test_service_config
+      name: "example.service"
+      scope: "system"
+      state: "present"
+      source:
+        model:
+          Unit:
+            Description: "Resource-limited example service"
+          Service:
+            Type: "forking"
+            User: "example"
+            PIDFile: "/run/example/example.pid"
+            LimitNOFILE: 65536
+            LimitNPROC: "4096:8192"
+            LimitCORE: "infinity"
+            ExecStart:
+              - "/usr/local/bin/example start"
+          Install:
+            WantedBy:
+              - "multi-user.target"
+  tasks:
+    - name: Validate service declaration
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: validate
+      vars:
+        systemd_unit_config: *test_service_config
+
+    - name: Materialize system service data
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: materialize
+      vars:
+        systemd_unit_config: *test_service_config
+
+    - name: Assert service resource rendering
+      ansible.builtin.assert:
+        that:
+          - "'PIDFile=/run/example/example.pid' in _systemd_unit_runtime.rendered_content"
+          - "'LimitNOFILE=65536' in _systemd_unit_runtime.rendered_content"
+          - "'LimitNPROC=4096:8192' in _systemd_unit_runtime.rendered_content"
+          - "'LimitCORE=infinity' in _systemd_unit_runtime.rendered_content"
+          - >-
+            _systemd_unit_runtime.rendered_content.index('PIDFile=')
+            < _systemd_unit_runtime.rendered_content.index('LimitNOFILE=')
+          - >-
+            _systemd_unit_runtime.rendered_content.index('LimitCORE=')
+            < _systemd_unit_runtime.rendered_content.index('ExecStart=')
+        quiet: true
+
+    - name: Validate user service resource declaration
+      ansible.builtin.include_role:
+        name: systemd_unit
+        tasks_from: validate
+      vars:
+        systemd_unit_config:
+          name: "example-user.service"
+          scope: "user"
+          user: "{{ lookup('ansible.builtin.env', 'USER') }}"
+          state: "present"
+          source:
+            model:
+              Service:
+                PIDFile: "%t/example-user.pid"
+                LimitNOFILE: "1024:65536"
+                LimitNPROC: 2048
+                LimitCORE: 0
+                ExecStart:
+                  - "/usr/bin/sleep infinity"
+
+    - name: Reject boolean resource limit
+      block:
+        - name: Validate boolean resource limit
+          ansible.builtin.include_role:
+            name: systemd_unit
+            tasks_from: validate
+          vars:
+            systemd_unit_config:
+              name: "invalid-limit.service"
+              scope: "system"
+              state: "present"
+              source:
+                model:
+                  Service:
+                    LimitNOFILE: true
+
+        - name: Fail when boolean resource limit was accepted
+          ansible.builtin.fail:
+            msg: "Service model unexpectedly accepted a boolean resource limit."
+      rescue:
+        - name: Assert expected resource limit validation failure
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result is defined
+            quiet: true
