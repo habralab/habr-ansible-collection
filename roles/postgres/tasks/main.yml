@@ -90,6 +90,22 @@
     - postgres
     - postgres_hba
 
+- name: Preflight PostgreSQL configuration files
+  ansible.builtin.include_tasks:
+    file: preflight.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_config
+        - postgres_hba
+  when:
+    - postgres_server_binary.stat.exists
+    - postgres_config_manage | bool or postgres_hba_manage | bool
+  tags:
+    - postgres
+    - postgres_config
+    - postgres_hba
+
 - name: Ensure PostgreSQL service state
   ansible.builtin.service:
     name: "{{ postgres_service_name }}"
@@ -98,6 +114,39 @@
   when: not ansible_check_mode
   tags:
     - postgres
+    - postgres_service
+
+- name: Inspect effective PostgreSQL configuration files
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/psql
+      - --dbname
+      - postgres
+      - --port
+      - "{{ postgres_health_port | string }}"
+      - --tuples-only
+      - --no-align
+      - --command
+      - >-
+        SELECT count(*) FROM (
+          SELECT error FROM pg_file_settings WHERE error IS NOT NULL
+          UNION ALL
+          SELECT error FROM pg_hba_file_rules WHERE error IS NOT NULL
+        ) AS configuration_errors;
+  become: true
+  become_user: postgres
+  register: postgres_configuration_errors
+  changed_when: false
+  failed_when: postgres_configuration_errors.stdout | trim != '0'
+  when:
+    - postgres_server_binary.stat.exists
+    - postgres_config_manage | bool or postgres_hba_manage | bool
+    - postgres_service_state == 'started'
+    - not ansible_check_mode
+  tags:
+    - postgres
+    - postgres_config
+    - postgres_hba
     - postgres_service
 
 - name: Apply PostgreSQL handlers

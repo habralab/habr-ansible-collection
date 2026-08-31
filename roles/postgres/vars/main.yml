@@ -5,12 +5,14 @@ postgres_supported_releases:
   - resolute
 
 postgres_supported_versions:
-  - "13"
   - "14"
   - "15"
   - "16"
   - "17"
   - "18"
+
+postgres_permitted_eol_versions:
+  - "13"
 
 postgres_architecture_map:
   x86_64: amd64
