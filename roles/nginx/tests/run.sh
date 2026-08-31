@@ -10,6 +10,7 @@ set -euo pipefail
 PATTERN="${1:-}"
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$TESTS_DIR/../../.." && pwd)"
+ANSIBLE_PLAYBOOK="${ANSIBLE_PLAYBOOK:-ansible-playbook}"
 
 playbooks=()
 while IFS= read -r playbook; do
@@ -32,7 +33,7 @@ for playbook in "${playbooks[@]}"; do
   rel="${playbook#"$ROOT/"}"
   echo ""
   echo "━━━ $rel"
-  if ansible-playbook "$playbook" 2>&1 | tail -5; then
+  if "$ANSIBLE_PLAYBOOK" "$playbook" 2>&1 | tail -5; then
     passed=$(( passed + 1 ))
   else
     failed=$(( failed + 1 ))
