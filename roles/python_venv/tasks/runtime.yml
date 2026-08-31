@@ -85,6 +85,43 @@
         path: "{{ python_venv_item.path }}/bin/python"
       register: python_venv_runtime_stat
 
+    - name: "Resolve declared Python interpreter | {{ python_venv_item.name }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ python_venv_item.python }}"
+          - -c
+          - "import os, sys; print(os.path.realpath(sys.executable))"
+      register: python_venv_declared_interpreter
+      changed_when: false
+      check_mode: false
+      when: python_venv_runtime_stat.stat.exists
+
+    - name: "Resolve virtual environment base interpreter | {{ python_venv_item.name }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ python_venv_item.path }}/bin/python"
+          - -c
+          - "import os, sys; print(os.path.realpath(sys._base_executable))"
+      register: python_venv_base_interpreter
+      changed_when: false
+      check_mode: false
+      when: python_venv_runtime_stat.stat.exists
+
+    - name: "Reject Python interpreter drift | {{ python_venv_item.name }}"
+      ansible.builtin.assert:
+        that:
+          - python_venv_declared_interpreter.stdout | length > 0
+          - python_venv_base_interpreter.stdout | length > 0
+          - >-
+            python_venv_declared_interpreter.stdout
+            == python_venv_base_interpreter.stdout
+        fail_msg: >-
+          Existing virtual environment '{{ python_venv_item.name }}' was not
+          created from {{ python_venv_item.python }}. Remove or migrate it
+          explicitly before changing the declared interpreter.
+        quiet: true
+      when: python_venv_runtime_stat.stat.exists
+
     - name: "Create Python virtual environment | {{ python_venv_item.name }}"
       ansible.builtin.command:
         argv:

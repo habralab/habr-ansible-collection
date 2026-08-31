@@ -3,6 +3,10 @@
   ansible.builtin.assert:
     that:
       - python_venv_item is mapping
+      - >-
+        python_venv_item.keys()
+        | difference(python_venv_environment_fields)
+        | length == 0
       - python_venv_item.name | default('') is string
       - python_venv_item.name | default('') | length > 0
       - python_venv_item.path | default('') is string
