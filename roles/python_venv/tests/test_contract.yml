@@ -92,3 +92,32 @@
         that:
           - python_venv_conflicting_requirements_rejected
         quiet: true
+
+    - name: Initialize unknown field result
+      ansible.builtin.set_fact:
+        python_venv_unknown_field_rejected: false
+
+    - name: Reject an unknown environment field
+      block:
+        - name: Validate an environment with an unknown field
+          ansible.builtin.include_role:
+            name: python_venv
+            tasks_from: validate
+          vars:
+            python_venv_environments:
+              - name: invalid
+                path: /opt/invalid/venv
+                python: /usr/bin/python3
+                user: invalid
+                group: invalid
+                requirement_file: /opt/invalid/requirements.txt
+      rescue:
+        - name: Record unknown field rejection
+          ansible.builtin.set_fact:
+            python_venv_unknown_field_rejected: true
+
+    - name: Verify unknown environment field rejection
+      ansible.builtin.assert:
+        that:
+          - python_venv_unknown_field_rejected
+        quiet: true

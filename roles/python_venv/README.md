@@ -56,6 +56,11 @@ python_venv_environments:
 No interpreter version is selected implicitly. Repository selection and
 system package versions remain explicit inventory policy.
 
+If an existing environment resolves to a different source interpreter, the
+role fails rather than silently retaining the old runtime or destructively
+recreating it. Migrate or remove that environment explicitly before changing
+`python`.
+
 ## Runtime results
 
 For non-empty input, the role exposes `python_venv_results` keyed by declaration

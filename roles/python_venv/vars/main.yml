@@ -1,0 +1,11 @@
+---
+python_venv_environment_fields:
+  - name
+  - path
+  - python
+  - user
+  - group
+  - mode
+  - requirements
+  - requirements_file
+  - pip_extra_args
