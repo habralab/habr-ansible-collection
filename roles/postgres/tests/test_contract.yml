@@ -24,7 +24,16 @@
           - postgres_repository_suite == 'noble-pgdg'
           - postgres_repository_arch == 'amd64'
           - "'postgresql-18' in postgres_packages"
+          - "'13' not in postgres_supported_versions"
+          - "'13' in postgres_permitted_eol_versions"
         quiet: true
+
+    - name: Validate explicitly permitted PostgreSQL 13
+      ansible.builtin.include_role:
+        name: postgres
+        tasks_from: validate
+      vars:
+        postgres_version: "13"
 
     - name: Validate an explicitly managed PostgreSQL configuration
       ansible.builtin.include_role:

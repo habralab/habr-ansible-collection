@@ -33,6 +33,11 @@ the package source. Package names remain configurable through
 The role selects a major package series rather than an exact minor package
 revision so normal PostgreSQL security and bug-fix updates remain available.
 
+PostgreSQL 13 is end-of-life and is not included in the supported-version
+list. It remains explicitly permitted for legacy hosts so existing inventory
+can converge while those hosts are upgraded; the role emits a warning whenever
+it is selected.
+
 ## Configuration ownership
 
 Both configuration models are disabled by default:
@@ -94,6 +99,10 @@ postgres_health_port: 5432
 Configuration changes restart PostgreSQL because not every server setting can
 be applied by reload. Set the readiness endpoint to an address actually used by
 the configured listener.
+
+Before restarting, the role parses the effective server configuration and, for
+a running target, checks `pg_file_settings` and `pg_hba_file_rules` for errors
+in the files currently present on disk.
 
 ## Tags
 

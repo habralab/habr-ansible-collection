@@ -4,7 +4,9 @@
     that:
       - ansible_facts['distribution'] == 'Ubuntu'
       - postgres_version is string
-      - postgres_version in postgres_supported_versions
+      - >-
+        postgres_version in postgres_supported_versions
+        or postgres_version in postgres_permitted_eol_versions
       - postgres_repository_manage is boolean
       - not postgres_repository_manage or ansible_facts['distribution_release'] in postgres_supported_releases
       - postgres_repository_arch | length > 0
@@ -29,11 +31,21 @@
       valid package and service settings, and explicit mappings/lists for
       optional configuration ownership.
 
+- name: Warn about explicitly permitted EOL PostgreSQL versions
+  ansible.builtin.debug:
+    msg: >-
+      PostgreSQL {{ postgres_version }} is end-of-life and no longer receives
+      upstream security or bug fixes. It remains explicitly permitted for
+      legacy hosts and should be upgraded.
+  when: postgres_version in postgres_permitted_eol_versions
+
 - name: Validate managed PostgreSQL configuration contract
   ansible.builtin.assert:
     that:
       - postgres_config | length > 0
       - postgres_config_path is match('^/')
+      - postgres_config_stock_path is match('^/')
+      - postgres_data_dir is match('^/')
     fail_msg: >-
       Managed PostgreSQL configuration requires a non-empty postgres_config
       mapping and an absolute postgres_config_path.
