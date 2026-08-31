@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-31
+
+### Fixed
+- `postgres_assets`: Pass the administrative connection database to
+  `community.postgresql.postgresql_db` through its supported `maintenance_db`
+  parameter, allowing non-empty database contracts to converge.
+
 ## [2.3.0] - 2026-08-31
 
 ### Added
