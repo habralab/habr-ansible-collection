@@ -1,0 +1,54 @@
+---
+- name: "Validate Python virtual environment | {{ python_venv_item.name | default('UNKNOWN') }}"
+  ansible.builtin.assert:
+    that:
+      - python_venv_item is mapping
+      - >-
+        python_venv_item.keys()
+        | difference(python_venv_environment_fields)
+        | length == 0
+      - python_venv_item.name | default('') is string
+      - python_venv_item.name | default('') | length > 0
+      - python_venv_item.path | default('') is string
+      - python_venv_item.path | default('') is match('^/.+')
+      - python_venv_item.python | default('') is string
+      - python_venv_item.python | default('') is match('^/.+')
+      - python_venv_item.user | default('') is string
+      - python_venv_item.user | default('') | length > 0
+      - python_venv_item.group | default('') is string
+      - python_venv_item.group | default('') | length > 0
+      - python_venv_item.mode | default('0755') is string
+      - python_venv_item.requirements | default([]) is sequence
+      - python_venv_item.requirements | default([]) is not string
+      - python_venv_item.requirements_file | default('') is string
+      - >-
+        python_venv_item.requirements_file | default('') | length == 0
+        or python_venv_item.requirements_file | default('') is match('^/.+')
+      - python_venv_item.pip_extra_args | default('') is string
+      - >-
+        python_venv_item.requirements | default([]) | length == 0
+        or python_venv_item.requirements_file | default('') | length == 0
+    fail_msg: >-
+      A Python virtual environment requires a name, absolute path and Python
+      executable, user, group, and at most one requirements source.
+    quiet: true
+
+- name: "Validate pinned Python requirements | {{ python_venv_item.name }}"
+  ansible.builtin.assert:
+    that:
+      - python_venv_requirement is string
+      - >-
+        python_venv_requirement is match(
+          '^[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9._,-]+\])?==\S+$'
+        )
+    fail_msg: >-
+      Inline Python requirements must use an exact name==version pin. Use a
+      requirements_file for markers, hashes, direct URLs, or constraints.
+    quiet: true
+  loop: "{{ python_venv_item.requirements | default([]) }}"
+  loop_control:
+    loop_var: python_venv_requirement
+    label: "{{ python_venv_requirement }}"
+  when:
+    - python_venv_item.requirements | default([]) is sequence
+    - python_venv_item.requirements | default([]) is not string

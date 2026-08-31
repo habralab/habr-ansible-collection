@@ -1,0 +1,30 @@
+---
+- name: "Manage PostgreSQL roles | {{ postgres_assets_role_state }}"
+  community.postgresql.postgresql_user:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    password: "{{ item.password | default(omit) }}"
+    encrypted: true
+    role_attr_flags: "{{ item.role_attr_flags | default('LOGIN') }}"
+    comment: "{{ item.comment | default(omit) }}"
+    expires: "{{ item.expires | default(omit) }}"
+    conn_limit: "{{ item.conn_limit | default(omit) }}"
+    no_password_changes: "{{ item.no_password_changes | default(false) }}"
+    configuration: "{{ item.configuration | default({}) }}"
+    reset_unspecified_configuration: >-
+      {{ item.reset_unspecified_configuration | default(false) }}
+    login_host: "{{ postgres_assets_login_host }}"
+    login_port: "{{ postgres_assets_login_port }}"
+    login_user: "{{ postgres_assets_login_user }}"
+    login_password: "{{ postgres_assets_login_password }}"
+    login_db: "{{ postgres_assets_login_database }}"
+    login_unix_socket: "{{ postgres_assets_login_unix_socket }}"
+    ssl_mode: "{{ postgres_assets_ssl_mode }}"
+    trust_input: false
+  loop: >-
+    {{ postgres_assets_roles | selectattr('state', 'equalto', postgres_assets_role_state) | list }}
+  loop_control:
+    label: "{{ item.name }}"
+  become: "{{ postgres_assets_become }}"
+  become_user: "{{ postgres_assets_become_user }}"
+  no_log: "{{ postgres_assets_no_log }}"

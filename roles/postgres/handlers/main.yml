@@ -1,0 +1,9 @@
+---
+- name: Restart PostgreSQL
+  ansible.builtin.service:
+    name: "{{ postgres_service_name }}"
+    state: restarted
+    enabled: "{{ postgres_service_enabled }}"
+  when:
+    - postgres_service_state == 'started'
+    - not ansible_check_mode

@@ -1,0 +1,18 @@
+---
+postgres_assets_python_packages:
+  - python3-psycopg2
+
+postgres_assets_login_host: ""
+postgres_assets_login_port: 5432
+postgres_assets_login_user: postgres
+postgres_assets_login_password: ""
+postgres_assets_login_database: postgres
+postgres_assets_login_unix_socket: /var/run/postgresql
+postgres_assets_ssl_mode: prefer
+
+postgres_assets_become: true
+postgres_assets_become_user: postgres
+postgres_assets_no_log: true
+
+postgres_assets_roles: []
+postgres_assets_databases: []

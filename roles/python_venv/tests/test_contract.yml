@@ -1,0 +1,123 @@
+---
+- name: Test Python virtual environment role contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Validate a pinned inline requirements declaration
+      ansible.builtin.include_role:
+        name: python_venv
+        tasks_from: validate
+      vars:
+        python_venv_environments:
+          - name: example
+            path: /opt/example/venv
+            python: /usr/bin/python3.10
+            user: example
+            group: example
+            requirements:
+              - package-one==1.2.3
+              - package-two[extra]==4.5.6+cpu
+
+    - name: Validate an external requirements file declaration
+      ansible.builtin.include_role:
+        name: python_venv
+        tasks_from: validate
+      vars:
+        python_venv_environments:
+          - name: external
+            path: /srv/external/venv
+            python: /usr/bin/python3
+            user: external
+            group: external
+            requirements_file: /srv/external/requirements.lock
+
+    - name: Initialize unpinned requirement result
+      ansible.builtin.set_fact:
+        python_venv_unpinned_requirement_rejected: false
+
+    - name: Reject an unpinned inline requirement
+      block:
+        - name: Validate an unpinned inline requirement
+          ansible.builtin.include_role:
+            name: python_venv
+            tasks_from: validate
+          vars:
+            python_venv_environments:
+              - name: invalid
+                path: /opt/invalid/venv
+                python: /usr/bin/python3
+                user: invalid
+                group: invalid
+                requirements:
+                  - package-one
+      rescue:
+        - name: Record unpinned requirement rejection
+          ansible.builtin.set_fact:
+            python_venv_unpinned_requirement_rejected: true
+
+    - name: Verify unpinned requirement rejection
+      ansible.builtin.assert:
+        that:
+          - python_venv_unpinned_requirement_rejected
+        quiet: true
+
+    - name: Initialize conflicting requirements result
+      ansible.builtin.set_fact:
+        python_venv_conflicting_requirements_rejected: false
+
+    - name: Reject conflicting requirements sources
+      block:
+        - name: Validate conflicting requirements sources
+          ansible.builtin.include_role:
+            name: python_venv
+            tasks_from: validate
+          vars:
+            python_venv_environments:
+              - name: invalid
+                path: /opt/invalid/venv
+                python: /usr/bin/python3
+                user: invalid
+                group: invalid
+                requirements:
+                  - package-one==1.0.0
+                requirements_file: /opt/invalid/requirements.txt
+      rescue:
+        - name: Record conflicting requirements rejection
+          ansible.builtin.set_fact:
+            python_venv_conflicting_requirements_rejected: true
+
+    - name: Verify conflicting requirements rejection
+      ansible.builtin.assert:
+        that:
+          - python_venv_conflicting_requirements_rejected
+        quiet: true
+
+    - name: Initialize unknown field result
+      ansible.builtin.set_fact:
+        python_venv_unknown_field_rejected: false
+
+    - name: Reject an unknown environment field
+      block:
+        - name: Validate an environment with an unknown field
+          ansible.builtin.include_role:
+            name: python_venv
+            tasks_from: validate
+          vars:
+            python_venv_environments:
+              - name: invalid
+                path: /opt/invalid/venv
+                python: /usr/bin/python3
+                user: invalid
+                group: invalid
+                requirement_file: /opt/invalid/requirements.txt
+      rescue:
+        - name: Record unknown field rejection
+          ansible.builtin.set_fact:
+            python_venv_unknown_field_rejected: true
+
+    - name: Verify unknown environment field rejection
+      ansible.builtin.assert:
+        that:
+          - python_venv_unknown_field_rejected
+        quiet: true

@@ -1,0 +1,17 @@
+---
+- name: Parse effective PostgreSQL server configuration
+  ansible.builtin.command:
+    argv:
+      - "/usr/lib/postgresql/{{ postgres_version }}/bin/postgres"
+      - -D
+      - "{{ postgres_data_dir }}"
+      - -C
+      - data_directory
+      - -c
+      - "config_file={{ postgres_config_stock_path }}"
+  become: true
+  become_user: postgres
+  changed_when: false
+  when:
+    - postgres_config_manage | bool
+    - not ansible_check_mode

@@ -1,0 +1,44 @@
+---
+- name: Manage Qdrant systemd unit
+  ansible.builtin.include_role:
+    name: habr.linuxhost.systemd_unit
+    apply:
+      tags:
+        - qdrant
+        - qdrant_service
+        - systemd
+        - systemd-unit
+  vars:
+    systemd_unit_config:
+      name: "{{ qdrant_service_name }}.service"
+      scope: system
+      state: present
+      enabled: "{{ qdrant_service_enabled }}"
+      service_state: "{{ qdrant_service_state }}"
+      restart_on_change: "{{ qdrant_service_state == 'started' }}"
+      source:
+        model:
+          Unit:
+            Description: Qdrant vector database
+            After:
+              - network-online.target
+            Wants:
+              - network-online.target
+          Service:
+            Type: simple
+            User: "{{ qdrant_user }}"
+            Group: "{{ qdrant_group }}"
+            WorkingDirectory: "{{ qdrant_var_dir }}"
+            ExecStart:
+              - >-
+                {{ qdrant_binary_path }}{{
+                  ' --config-path ' ~ qdrant_config_path
+                  if qdrant_config_manage | bool
+                  else ''
+                }}
+            Restart: "{{ qdrant_service_restart }}"
+            RestartSec: "{{ qdrant_service_restart_sec }}"
+            TimeoutStopSec: "{{ qdrant_service_timeout_stop_sec }}"
+          Install:
+            WantedBy:
+              - multi-user.target

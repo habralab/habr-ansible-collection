@@ -1,0 +1,39 @@
+---
+postgres_supported_releases:
+  - jammy
+  - noble
+  - resolute
+
+postgres_supported_versions:
+  - "14"
+  - "15"
+  - "16"
+  - "17"
+  - "18"
+
+postgres_permitted_eol_versions:
+  - "13"
+
+postgres_architecture_map:
+  x86_64: amd64
+  amd64: amd64
+  aarch64: arm64
+  arm64: arm64
+  ppc64le: ppc64el
+  ppc64el: ppc64el
+
+postgres_hba_rule_fields:
+  - type
+  - database
+  - user
+  - address
+  - method
+  - options
+
+postgres_hba_types:
+  - local
+  - host
+  - hostssl
+  - hostnossl
+  - hostgssenc
+  - hostnogssenc

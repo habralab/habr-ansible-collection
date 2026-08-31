@@ -11,12 +11,40 @@
       - php_version_item.value.sapis | difference(php_supported_sapis) | length == 0
       - php_version_item.value.extensions | default([]) is sequence
       - php_version_item.value.extensions | default([]) is not string
+      - php_version_item.value.required_extensions | default({}) is mapping
       - php_version_item.value.cli_ini | default({}) is mapping
       - php_version_item.value.fpm_ini | default({}) is mapping
       - php_version_item.value.fpm_pools | default({}) is mapping
     fail_msg: >-
       Each php_versions entry must use a quoted major.minor key, contain one or
       more supported SAPIs, and use lists/maps for extensions and configuration.
+
+- name: "Validate required PHP extensions | {{ php_version_item.key }}"
+  ansible.builtin.assert:
+    that:
+      - php_required_extension.key is string
+      - php_required_extension.key | length > 0
+      - php_required_extension.value is string
+    fail_msg: >-
+      required_extensions must map extension names to an exact version or an
+      empty string when only extension loading should be checked.
+  loop: >-
+    {{ php_version_item.value.required_extensions | default({}) | dict2items }}
+  loop_control:
+    loop_var: php_required_extension
+    label: "{{ php_required_extension.key }}"
+  when: php_version_item.value.required_extensions | default({}) is mapping
+
+- name: "Validate required PHP extension runtime | {{ php_version_item.key }}"
+  ansible.builtin.assert:
+    that:
+      - "'cli' in php_version_item.value.sapis"
+    fail_msg: >-
+      required_extensions requires the cli SAPI so the role can verify the
+      configured CLI and FPM extension runtimes.
+  when:
+    - php_version_item.value.required_extensions | default({}) is mapping
+    - php_version_item.value.required_extensions | default({}) | length > 0
 
 - name: "Validate PHP FPM pools | {{ php_version_item.key }}"
   ansible.builtin.assert:

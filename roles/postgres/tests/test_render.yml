@@ -1,0 +1,37 @@
+---
+- name: Test PostgreSQL configuration rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    postgres_config:
+      listen_addresses: "'127.0.0.1'"
+      max_connections: 100
+      jit: false
+    postgres_hba_rules:
+      - type: local
+        database: all
+        user: postgres
+        method: peer
+      - type: host
+        database: example
+        user: example
+        address: 192.0.2.10/32
+        method: scram-sha-256
+  tasks:
+    - name: Render PostgreSQL configuration templates
+      ansible.builtin.set_fact:
+        postgres_rendered_config: >-
+          {{ lookup('ansible.builtin.template', playbook_dir + '/../templates/90-ansible.conf.j2') }}
+        postgres_rendered_hba: >-
+          {{ lookup('ansible.builtin.template', playbook_dir + '/../templates/90-ansible-hba.conf.j2') }}
+
+    - name: Verify PostgreSQL configuration values
+      ansible.builtin.assert:
+        that:
+          - '"listen_addresses = ''127.0.0.1''" in postgres_rendered_config'
+          - '"max_connections = 100" in postgres_rendered_config'
+          - '"jit = off" in postgres_rendered_config'
+          - '"local all postgres peer" in postgres_rendered_hba'
+          - '"host example example 192.0.2.10/32 scram-sha-256" in postgres_rendered_hba'
+        quiet: true

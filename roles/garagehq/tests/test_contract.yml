@@ -26,8 +26,10 @@
       ansible.builtin.assert:
         that:
           - garagehq_tasks[0].notify == 'Restart garage-server'
-          - garagehq_tasks[1]['ansible.builtin.group'].name == garagehq_group
-          - garagehq_tasks[2]['ansible.builtin.user'].group == garagehq_group
+          - garagehq_tasks[1].name == 'Create system group for Garage'
+          - "'ansible.builtin.group' in garagehq_tasks[1]"
+          - garagehq_tasks[2].name == 'Create system user for Garage'
+          - "'group' in garagehq_tasks[2]['ansible.builtin.user']"
           - garagehq_handlers[0].when == ['garagehq_systemd_service | bool']
         quiet: true
 

@@ -106,3 +106,21 @@
       when:
         - "'fpm' in php_version_item.value.sapis"
         - not ansible_check_mode
+
+- name: "Verify loaded PHP extensions | {{ php_version_item.key }}"
+  ansible.builtin.include_tasks:
+    file: verify_extensions.yml
+    apply:
+      tags:
+        - php
+        - php_extensions
+  loop: "{{ php_version_item.value.sapis | intersect(['cli', 'fpm']) }}"
+  loop_control:
+    loop_var: php_extension_check_sapi
+    label: "{{ php_version_item.key }} / {{ php_extension_check_sapi }}"
+  when:
+    - php_version_item.value.required_extensions | default({}) | length > 0
+    - not ansible_check_mode
+  tags:
+    - php
+    - php_extensions

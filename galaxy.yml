@@ -1,7 +1,7 @@
 ---
 namespace: habr
 name: linuxhost
-version: 2.2.1
+version: 2.3.0
 readme: README.md
 
 authors:
@@ -23,6 +23,7 @@ dependencies:
   ansible.posix: ">=2.2.2,<3.0.0"
   community.general: ">=5.1.0,<12.0.0"
   community.mongodb: ">=1.8.0,<2.0.0"
+  community.postgresql: ">=4.0.0,<5.0.0"
 
 repository: https://github.com/habralab/habr-ansible-collection
 issues: https://github.com/habralab/habr-ansible-collection/issues

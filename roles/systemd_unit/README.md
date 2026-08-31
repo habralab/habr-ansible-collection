@@ -76,6 +76,9 @@ systemd_unit_config:
       Service:
         Type: "simple"
         WorkingDirectory: "/srv/app"
+        LimitNOFILE: 65536
+        LimitNPROC: "4096:8192"
+        LimitCORE: "infinity"
         ExecStart:
           - "/home/web/.nvm/versions/node/current/bin/pm2-runtime start ecosystem.config.js"
         Restart: "always"
@@ -87,6 +90,10 @@ systemd_unit_config:
 Model mode intentionally supports a conservative subset of the `Unit`,
 `Service`, `Timer`, and `Install` sections. Unsupported systemd syntax should
 use one of the raw source modes.
+
+The `Service` model supports `PIDFile` and the `LimitNOFILE`, `LimitNPROC`, and
+`LimitCORE` resource limits. Limits accept a non-negative YAML integer or a
+non-empty systemd value such as `infinity` or `soft:hard`.
 
 ### Timer Model
 

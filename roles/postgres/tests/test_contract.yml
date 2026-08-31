@@ -1,0 +1,59 @@
+---
+- name: Test PostgreSQL role contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      distribution: Ubuntu
+      distribution_release: noble
+      architecture: x86_64
+  vars_files:
+    - ../vars/main.yml
+    - ../defaults/main.yml
+  tasks:
+    - name: Validate the default PostgreSQL contract
+      ansible.builtin.include_role:
+        name: postgres
+        tasks_from: validate
+
+    - name: Verify the default PostgreSQL release
+      ansible.builtin.assert:
+        that:
+          - postgres_version == '18'
+          - postgres_repository_suite == 'noble-pgdg'
+          - postgres_repository_arch == 'amd64'
+          - "'postgresql-18' in postgres_packages"
+          - "'13' not in postgres_supported_versions"
+          - "'13' in postgres_permitted_eol_versions"
+        quiet: true
+
+    - name: Validate explicitly permitted PostgreSQL 13
+      ansible.builtin.include_role:
+        name: postgres
+        tasks_from: validate
+      vars:
+        postgres_version: "13"
+
+    - name: Validate an explicitly managed PostgreSQL configuration
+      ansible.builtin.include_role:
+        name: postgres
+        tasks_from: validate
+      vars:
+        postgres_config_manage: true
+        postgres_config:
+          listen_addresses: "'127.0.0.1'"
+          max_connections: 100
+
+    - name: Validate an explicitly managed PostgreSQL HBA fragment
+      ansible.builtin.include_role:
+        name: postgres
+        tasks_from: validate
+      vars:
+        postgres_hba_manage: true
+        postgres_hba_rules:
+          - type: host
+            database: example
+            user: example
+            address: 192.0.2.10/32
+            method: scram-sha-256

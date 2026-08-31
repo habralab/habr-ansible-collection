@@ -29,6 +29,8 @@ passwords. Secrets should still be stored in Ansible Vault.
 `redis_repository` accepts:
 
 - `ubuntu` (default): use the distribution archive without adding a source;
+- `official`: add the current official `packages.redis.io` repository through
+  `habr.linuxhost.apt_repo`; it supports Ubuntu Jammy, Noble and Resolute;
 - `ppa_redislabs`: add the historical Redis Labs PPA through
   `habr.linuxhost.apt_repo`; it currently publishes for Focal, Jammy and Noble;
 - `unmanaged`: use a repository configured outside this role.
@@ -42,6 +44,7 @@ contract, but is not the default.
 ```yaml
 redis_repository: ubuntu
 redis_repository_manage: true
+redis_package_version: ""
 
 redis_server_packages:
   - redis-server
@@ -64,6 +67,23 @@ redis_sentinel_requirepass: ""
 redis_sentinel_monitors: []
 redis_sentinel_reseed: false
 ```
+
+`redis_package_version` accepts the complete Debian version reported by
+`apt policy`. When non-empty, that exact version is requested for every enabled
+server and Sentinel package and APT downgrades are allowed so the declared
+version remains convergent. Package names must not already contain `=version`.
+
+For example, Redis 8.2.8 from the official repository on Ubuntu Noble is:
+
+```yaml
+redis_repository: official
+redis_package_version: "6:8.2.8-1rl1~noble1"
+redis_server_packages:
+  - redis-server
+```
+
+The complete Debian version is distribution-specific. Obtain it from the
+configured repository instead of constructing it from the upstream version.
 
 Example overrides:
 
@@ -124,3 +144,8 @@ Setting `redis_sentinel_reseed: true` explicitly stops Sentinel and removes its
 writable state before recreating it from the bootstrap variables. This is a
 destructive recovery/rotation operation and must not be stored as a persistent
 host default.
+
+## Upstream documentation
+
+- https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/apt/
+- https://github.com/redis/redis-debian

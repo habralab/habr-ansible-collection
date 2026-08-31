@@ -1,0 +1,110 @@
+---
+- name: Validate PostgreSQL base contract
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - postgres_version is string
+      - >-
+        postgres_version in postgres_supported_versions
+        or postgres_version in postgres_permitted_eol_versions
+      - postgres_repository_manage is boolean
+      - not postgres_repository_manage or ansible_facts['distribution_release'] in postgres_supported_releases
+      - postgres_repository_arch | length > 0
+      - postgres_packages is sequence
+      - postgres_packages is not string
+      - postgres_packages | length > 0
+      - postgres_cluster_name is match('^[A-Za-z0-9_-]+$')
+      - postgres_service_enabled is boolean
+      - postgres_service_state in ['started', 'stopped']
+      - postgres_config_manage is boolean
+      - postgres_config is mapping
+      - postgres_hba_manage is boolean
+      - postgres_hba_rules is sequence
+      - postgres_hba_rules is not string
+      - postgres_health_check_enabled is boolean
+      - postgres_health_port | int > 0
+      - postgres_health_port | int < 65536
+      - postgres_health_retries | int > 0
+      - postgres_health_delay | int >= 0
+    fail_msg: >-
+      postgres requires Ubuntu, a supported major version and architecture,
+      valid package and service settings, and explicit mappings/lists for
+      optional configuration ownership.
+
+- name: Warn about explicitly permitted EOL PostgreSQL versions
+  ansible.builtin.debug:
+    msg: >-
+      PostgreSQL {{ postgres_version }} is end-of-life and no longer receives
+      upstream security or bug fixes. It remains explicitly permitted for
+      legacy hosts and should be upgraded.
+  when: postgres_version in postgres_permitted_eol_versions
+
+- name: Validate managed PostgreSQL configuration contract
+  ansible.builtin.assert:
+    that:
+      - postgres_config | length > 0
+      - postgres_config_path is match('^/')
+      - postgres_config_stock_path is match('^/')
+      - postgres_data_dir is match('^/')
+    fail_msg: >-
+      Managed PostgreSQL configuration requires a non-empty postgres_config
+      mapping and an absolute postgres_config_path.
+  when: postgres_config_manage | bool
+
+- name: Validate PostgreSQL configuration keys and values
+  ansible.builtin.assert:
+    that:
+      - item.key is match('^[a-z][a-z0-9_]*$')
+      - item.value is string or item.value is number or item.value is boolean
+    fail_msg: >-
+      PostgreSQL settings require safe parameter names and scalar string,
+      number, or boolean values.
+  loop: "{{ postgres_config | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: postgres_config_manage | bool
+  no_log: "{{ postgres_config_no_log }}"
+
+- name: Validate managed PostgreSQL HBA contract
+  ansible.builtin.assert:
+    that:
+      - postgres_version | int >= 16
+      - postgres_hba_rules | length > 0
+      - postgres_hba_stock_path is match('^/')
+      - postgres_hba_path is match('^/')
+    fail_msg: >-
+      Managed HBA fragments require PostgreSQL 16 or newer, a non-empty rule
+      list, and absolute stock and managed HBA paths.
+  when: postgres_hba_manage | bool
+
+- name: Validate PostgreSQL HBA rule mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.keys() | difference(postgres_hba_rule_fields) | length == 0
+      - item.type is defined
+      - item.type in postgres_hba_types
+      - item.database is defined
+      - item.database is string
+      - item.database | length > 0
+      - item.user is defined
+      - item.user is string
+      - item.user | length > 0
+      - item.method is defined
+      - item.method is match('^[a-z0-9-]+$')
+      - item.type == 'local' or item.address is defined
+      - item.type == 'local' or item.address is string
+      - item.type == 'local' or item.address | length > 0
+      - item.options | default([]) is sequence
+      - item.options | default([]) is not string
+    fail_msg: >-
+      Each HBA rule requires type, database, user and method; non-local rules
+      also require an address. Only documented rule fields are accepted.
+  loop: "{{ postgres_hba_rules }}"
+  loop_control:
+    label: >-
+      {{ item.type | default('?') if item is mapping else '?' }}
+      {{ item.database | default('?') if item is mapping else '?' }}
+      {{ item.user | default('?') if item is mapping else '?' }}
+  when: postgres_hba_manage | bool
+  no_log: "{{ postgres_hba_no_log }}"

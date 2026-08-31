@@ -17,6 +17,13 @@ under `mods-available`.
 `extensions` contains Debian package suffixes: `mysql` installs
 `php<version>-mysql`, while `xml` installs `php<version>-xml`.
 
+`required_extensions` optionally verifies extensions after package and
+configuration changes. Map an extension to its exact runtime version, or to an
+empty string when only successful loading matters. The check uses the selected
+version's CLI binary and runs once with the CLI configuration and, when enabled,
+once with the FPM configuration. It requires the `cli` SAPI and is skipped in
+Ansible check mode.
+
 ```yaml
 php_repository: ubuntu
 php_cli_default_version: "8.5"
@@ -30,6 +37,9 @@ php_versions:
       - curl
       - mbstring
       - mysql
+    required_extensions:
+      curl: ""
+      redis: "6.3.0"
     cli_ini:
       date.timezone: UTC
     fpm_ini:

@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-31
+
+### Added
+- `postgres`: Install PostgreSQL from PGDG, optionally own server and HBA
+  configuration fragments, validate configuration before restart, and manage
+  the service lifecycle. PostgreSQL 13 remains explicitly permitted as a
+  temporary EOL compatibility exception.
+- `postgres_assets`: Manage PostgreSQL application roles, databases, and
+  extensions independently from server provisioning.
+- `python_venv`: Create application virtual environments from explicit Python
+  interpreters and install pinned inline or consumer-owned requirements.
+- `qdrant`: Install a checksum-pinned official Debian package, optionally
+  manage the configuration overlay, and run Qdrant as a systemd service.
+
+### Changed
+- `php`: Verify that required extensions are loaded and, when requested, match
+  exact runtime versions for configured CLI and FPM installations.
+- `redis`: Support the official Redis APT repository and exact package version
+  selection for server and Sentinel packages.
+- `systemd_unit`: Render and validate `PIDFile`, `LimitNOFILE`, `LimitNPROC`,
+  and `LimitCORE` service directives from YAML models.
+- `collection`: Declare the bounded `community.postgresql` dependency required
+  by PostgreSQL asset management.
+- `ci`: Connect the PHP, PostgreSQL, PostgreSQL assets, Python virtualenv,
+  Qdrant, and Redis role tests to the top-level test runner.
+
+### Fixed
+- `postgres`: Reject invalid managed server and HBA configuration before a
+  pending restart is applied.
+- `python_venv`: Reject unknown declaration fields and existing environments
+  created from a different source interpreter instead of silently retaining
+  runtime drift.
+- `ci`: Make Garage contract inspection safe for unrendered Jinja values and
+  allow nginx tests to select the intended `ansible-playbook` executable.
+
 ## [2.2.1] - 2026-08-26
 
 ### Changed
