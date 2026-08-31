@@ -15,7 +15,7 @@
     login_port: "{{ postgres_assets_login_port }}"
     login_user: "{{ postgres_assets_login_user }}"
     login_password: "{{ postgres_assets_login_password }}"
-    login_db: "{{ postgres_assets_login_database }}"
+    maintenance_db: "{{ postgres_assets_login_database }}"
     login_unix_socket: "{{ postgres_assets_login_unix_socket }}"
     ssl_mode: "{{ postgres_assets_ssl_mode }}"
     trust_input: false

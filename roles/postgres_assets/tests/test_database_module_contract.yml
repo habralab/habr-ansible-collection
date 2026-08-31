@@ -1,0 +1,45 @@
+---
+- name: Test PostgreSQL database module argument contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    postgres_assets_databases:
+      - name: example
+        state: present
+        owner: example
+        encoding: UTF8
+    postgres_assets_login_host: 127.0.0.1
+    postgres_assets_login_port: 1
+    postgres_assets_become: false
+    postgres_assets_no_log: false
+  tasks:
+    - name: Initialize PostgreSQL database module result
+      ansible.builtin.set_fact:
+        postgres_assets_database_module_invoked: false
+        postgres_assets_database_module_failure: ""
+
+    - name: Exercise PostgreSQL database module arguments
+      block:
+        - name: Apply PostgreSQL database contracts
+          ansible.builtin.include_role:
+            name: postgres_assets
+            tasks_from: databases
+      rescue:
+        - name: Record PostgreSQL database module failure
+          ansible.builtin.set_fact:
+            postgres_assets_database_module_invoked: true
+            postgres_assets_database_module_failure: >-
+              {{ ansible_failed_result | to_json }}
+
+    - name: Verify PostgreSQL database module accepted role arguments
+      ansible.builtin.assert:
+        that:
+          - postgres_assets_database_module_invoked
+          - >-
+            'Unsupported parameters' not in
+            postgres_assets_database_module_failure
+        fail_msg: >-
+          postgresql_db rejected the arguments supplied by the
+          postgres_assets database task before connection handling.
+        quiet: true
