@@ -1,0 +1,34 @@
+---
+- name: "DROP-IN | render request rate limits"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    item:
+      value:
+        description: "Global HTTP Request Rate Limits"
+    nginx_limit_req_zones:
+      - name: "per_ip"
+        key: "$binary_remote_addr"
+        size: "10m"
+        rate: "10r/s"
+      - name: "disabled"
+        key: "$binary_remote_addr"
+        size: "10m"
+        rate: "1r/s"
+        state: "absent"
+    nginx_limit_req_status: 429
+  tasks:
+    - name: "Validate and materialize request rate limits"
+      ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+
+    - name: "Render limit_req drop-in"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/drop-ins/limit_req.conf.j2') }}"
+
+    - name: "Assert zones and status rendered"
+      ansible.builtin.assert:
+        that:
+          - "'limit_req_zone $binary_remote_addr zone=per_ip:10m rate=10r/s;' in nginx_rendered"
+          - "'limit_req_status 429;' in nginx_rendered"
+          - "'zone=disabled:' not in nginx_rendered"
+        fail_msg: "FAIL: rendered=\\n{{ nginx_rendered }}"

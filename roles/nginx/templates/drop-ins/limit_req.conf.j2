@@ -1,0 +1,11 @@
+##
+# {{ item.value.description | default('Global HTTP Request Rate Limits') }}
+##
+
+{% for zone in _nginx_limit_req_zones_active %}
+limit_req_zone {{ zone.key }} zone={{ zone.name }}:{{ zone.size }} rate={{ zone.rate }};
+{% endfor %}
+
+{% if nginx_limit_req_status is defined %}
+limit_req_status {{ nginx_limit_req_status }};
+{% endif %}
