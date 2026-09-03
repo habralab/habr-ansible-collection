@@ -23,4 +23,5 @@ nginx_server_maintenance: {}
 nginx_auth: []
 nginx_auth_passwd_list: []
 nginx_geos: []
+nginx_limit_req_zones: []
 nginx_maps: []

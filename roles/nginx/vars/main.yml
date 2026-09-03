@@ -164,6 +164,11 @@ __nginx_dropins:
     template: "geos"
     triggers:
       - "^nginx_geos$"
+  limit_req:
+    description: "Global HTTP Request Rate Limits"
+    template: "limit_req"
+    triggers:
+      - "^nginx_limit_req_(zones|status)$"
   maps:
     description: "Global HTTP Map Blocks"
     template: "maps"
