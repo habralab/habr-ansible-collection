@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-03
+
+### Added
+- `nginx`: Manage validated `limit_req_zone` declarations and an optional
+  rejection status in the HTTP context, and render repeatable `limit_req`
+  directives for bundled virtual servers and locations.
+
 ## [2.3.1] - 2026-08-31
 
 ### Fixed
