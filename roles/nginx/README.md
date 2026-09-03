@@ -142,7 +142,7 @@ Official Nginx documentation for the modules configured by this section:
 | `nginx_sendfile` | `true` | `off` | Enable sendfile. |
 | `nginx_client_max_body_size` | `undefined` | `1m` | Sets the maximum allowed size of the client request body. |
 | `nginx_client_body_buffer_size` | `undefined` | `8k|16k` | Sets buffer size for reading client request body. |
-| `nginx_limit_req_zones` | `[]` | `-` | Managed request-rate zones. Each item defines `name`, `key`, `size`, `rate`, and optional `state`. |
+| `nginx_limit_req_zones` | `[]` | `-` | Managed request-rate zones. Present items define `name`, `key`, `size`, `rate`, and optional `state`; absent items require only `name` and `state`. |
 | `nginx_limit_req_status` | `undefined` | `503` | Status returned for requests rejected by rate limiting. |
 | `nginx_tcp_nodelay` | `undefined` | `on` | Enables or disables the use of the `TCP_NODELAY` option. |
 | `nginx_tcp_nopush` | `true` | `off` | Enable tcp_nopush. |
@@ -495,7 +495,7 @@ Official Nginx documentation: [HTTP Limit Req module](https://nginx.org/en/docs/
 | `nginx_limit_req_status` | `undefined` | Optional rejection status from `400` through `599`, rendered as `limit_req_status` in the `http` context. |
 
 Rendered file:
-- `/etc/nginx/conf.d/limit_req.conf` when at least one zone or `nginx_limit_req_status` is configured
+- `/etc/nginx/conf.d/limit_req.conf` when at least one active zone or `nginx_limit_req_status` is configured
 
 `nginx_limit_req_zones` item fields:
 

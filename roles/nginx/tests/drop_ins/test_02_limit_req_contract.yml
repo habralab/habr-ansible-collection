@@ -19,6 +19,29 @@
         that:
           - _nginx_limit_req_zones_active | length == 0
 
+    - name: "Materialize mixed zone states in declaration order"
+      ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+      vars:
+        nginx_limit_req_zones:
+          - name: "explicit-first"
+            key: "$binary_remote_addr"
+            size: "10m"
+            rate: "10r/s"
+            state: "present"
+          - name: "implicit-second"
+            key: "$server_name"
+            size: "10m"
+            rate: "1r/s"
+          - name: "retired-third"
+            state: "absent"
+
+    - name: "Assert active zone declaration order is preserved"
+      ansible.builtin.assert:
+        that:
+          - >-
+            _nginx_limit_req_zones_active | map(attribute='name') | list ==
+            ['explicit-first', 'implicit-second']
+
     - name: "Exercise an incomplete present zone"
       block:
         - name: "Validate incomplete present zone"
