@@ -41,21 +41,20 @@
     fail_msg: "nginx_limit_req_status must be an integer from 400 through 599."
   when: nginx_limit_req_status is defined
 
+- name: "Build active request rate limit zones payload"
+  ansible.builtin.set_fact:
+    _nginx_limit_req_zones_active_json: >-
+      {% set active = namespace(items=[]) %}
+      {% for zone in nginx_limit_req_zones
+         if zone.state | default('present') == 'present' %}
+      {% set active.items = active.items + [zone] %}
+      {% endfor %}
+      {{ active.items | to_json }}
+
 - name: "Materialize active request rate limit zones"
   ansible.builtin.set_fact:
     _nginx_limit_req_zones_active: >-
-      {{
-        (
-          nginx_limit_req_zones
-          | selectattr('state', 'undefined')
-          | list
-        ) + (
-          nginx_limit_req_zones
-          | selectattr('state', 'defined')
-          | selectattr('state', 'equalto', 'present')
-          | list
-        )
-      }}
+      {{ _nginx_limit_req_zones_active_json | trim | from_json }}
 
 - name: "Validate active request rate limit zone uniqueness"
   ansible.builtin.assert:
