@@ -130,6 +130,15 @@ __nginx_server_vhost_directive_specs:
       - "location"
     spacing: false
 
+  # limit_req zone=name [burst=number] [nodelay | delay=number];
+  limit_req:
+    directive: "limit_req"
+    renderer: "repeatable"
+    contexts:
+      - "server"
+      - "location"
+    spacing: false
+
   # listen address[:port] [params];
   listen:
     directive: "listen"
@@ -480,6 +489,7 @@ __nginx_server_vhost_block_specs:
     members:
       - client_body_timeout
       - client_max_body_size
+      - limit_req
       - port_in_redirect
 
   directives:

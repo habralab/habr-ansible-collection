@@ -80,11 +80,18 @@
     fail_msg: >-
       _nginx_repos_merged must be a dictionary.
       nginx_server_location_presets, nginx_server_location_preset_defaults, and nginx_server_maintenance must be dictionaries.
-      nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list, nginx_geos, and nginx_maps must be lists.
+      nginx_packages, nginx_remove_packages, nginx_auth, nginx_auth_passwd_list,
+      nginx_geos and nginx_maps must be lists.
       nginx_only_servers must be a string or a list of strings.
   tags:
     - nginx
     - apt
+
+- name: "Validate and materialize request rate limits"
+  ansible.builtin.import_tasks: limit_req.yml
+  tags:
+    - nginx
+    - nginx-config
 
 - name: "Assemble global maps registry"
   ansible.builtin.set_fact:
@@ -253,6 +260,8 @@
   when:
     - q('varnames', item.value.triggers | join('|')) | length > 0
     - item.key != 'geos' or (_nginx_geos_registry.materialized | default(nginx_geos) | length > 0)
+    - item.key != 'limit_req' or
+      (_nginx_limit_req_zones_active | length > 0 or nginx_limit_req_status is defined)
     - item.key != 'maps' or (_nginx_maps_registry.materialized | default(nginx_maps) | length > 0)
   notify: Reload nginx
   become: true
@@ -271,6 +280,11 @@
     (
       item.key == 'geos' and
       (_nginx_geos_registry.materialized | default(nginx_geos) | length == 0)
+    ) or
+    (
+      item.key == 'limit_req' and
+      _nginx_limit_req_zones_active | length == 0 and
+      nginx_limit_req_status is not defined
     ) or
     (
       item.key == 'maps' and

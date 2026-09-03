@@ -1,0 +1,149 @@
+---
+- name: "DROP-IN | validate request rate limit contract"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _nginx_limit_req_zone_contract_error: >-
+      Each nginx_limit_req_zones item must have a non-empty name, an optional
+      state of present or absent, and non-empty key, size, and rate strings when present.
+  tasks:
+    - name: "Validate an absent-only zones collection"
+      ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+      vars:
+        nginx_limit_req_zones:
+          - name: "retired"
+            state: "absent"
+
+    - name: "Assert absent zones are not materialized"
+      ansible.builtin.assert:
+        that:
+          - _nginx_limit_req_zones_active | length == 0
+
+    - name: "Materialize mixed zone states in declaration order"
+      ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+      vars:
+        nginx_limit_req_zones:
+          - name: "explicit-first"
+            key: "$binary_remote_addr"
+            size: "10m"
+            rate: "10r/s"
+            state: "present"
+          - name: "implicit-second"
+            key: "$server_name"
+            size: "10m"
+            rate: "1r/s"
+          - name: "retired-third"
+            state: "absent"
+
+    - name: "Assert active zone declaration order is preserved"
+      ansible.builtin.assert:
+        that:
+          - >-
+            _nginx_limit_req_zones_active | map(attribute='name') | list ==
+            ['explicit-first', 'implicit-second']
+
+    - name: "Exercise an incomplete present zone"
+      block:
+        - name: "Validate incomplete present zone"
+          ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+          vars:
+            nginx_limit_req_zones:
+              - name: "incomplete"
+                key: "$binary_remote_addr"
+                size: "10m"
+
+        - name: "Fail when incomplete zone was accepted"
+          ansible.builtin.fail:
+            msg: "Incomplete present zone unexpectedly passed validation."
+      rescue:
+        - name: "Assert incomplete zone failed contract validation"
+          ansible.builtin.assert:
+            that:
+              - >-
+                _nginx_limit_req_zone_contract_error
+                in (ansible_failed_result.results | default([]) | map(attribute='msg') | list)
+
+        - name: "Record expected incomplete zone rejection"
+          ansible.builtin.set_fact:
+            _nginx_incomplete_zone_rejected: true
+
+    - name: "Exercise an unknown zone state"
+      block:
+        - name: "Validate unknown zone state"
+          ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+          vars:
+            nginx_limit_req_zones:
+              - name: "invalid-state"
+                state: "disabled"
+
+        - name: "Fail when unknown state was accepted"
+          ansible.builtin.fail:
+            msg: "Unknown zone state unexpectedly passed validation."
+      rescue:
+        - name: "Assert unknown state failed contract validation"
+          ansible.builtin.assert:
+            that:
+              - >-
+                _nginx_limit_req_zone_contract_error
+                in (ansible_failed_result.results | default([]) | map(attribute='msg') | list)
+
+        - name: "Record expected unknown state rejection"
+          ansible.builtin.set_fact:
+            _nginx_unknown_state_rejected: true
+
+    - name: "Exercise duplicate active zone names"
+      block:
+        - name: "Validate duplicate active zone names"
+          ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+          vars:
+            nginx_limit_req_zones:
+              - name: "duplicate"
+                key: "$binary_remote_addr"
+                size: "10m"
+                rate: "10r/s"
+              - name: "duplicate"
+                key: "$server_name"
+                size: "10m"
+                rate: "1r/s"
+
+        - name: "Fail when duplicate active names were accepted"
+          ansible.builtin.fail:
+            msg: "Duplicate active zone names unexpectedly passed validation."
+      rescue:
+        - name: "Assert duplicate names failed uniqueness validation"
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg == 'Active nginx_limit_req_zones entries must have unique names.'
+
+        - name: "Record expected duplicate name rejection"
+          ansible.builtin.set_fact:
+            _nginx_duplicate_name_rejected: true
+
+    - name: "Exercise an invalid request rate limit status"
+      block:
+        - name: "Validate invalid request rate limit status"
+          ansible.builtin.include_tasks: "../../../../roles/nginx/tasks/limit_req.yml"
+          vars:
+            nginx_limit_req_zones: []
+            nginx_limit_req_status: 200
+
+        - name: "Fail when invalid status was accepted"
+          ansible.builtin.fail:
+            msg: "Invalid request rate limit status unexpectedly passed validation."
+      rescue:
+        - name: "Assert invalid status failed contract validation"
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg == 'nginx_limit_req_status must be an integer from 400 through 599.'
+
+        - name: "Record expected invalid status rejection"
+          ansible.builtin.set_fact:
+            _nginx_invalid_status_rejected: true
+
+    - name: "Assert invalid definitions were rejected"
+      ansible.builtin.assert:
+        that:
+          - _nginx_incomplete_zone_rejected | default(false)
+          - _nginx_unknown_state_rejected | default(false)
+          - _nginx_duplicate_name_rejected | default(false)
+          - _nginx_invalid_status_rejected | default(false)

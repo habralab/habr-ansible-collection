@@ -142,6 +142,8 @@ Official Nginx documentation for the modules configured by this section:
 | `nginx_sendfile` | `true` | `off` | Enable sendfile. |
 | `nginx_client_max_body_size` | `undefined` | `1m` | Sets the maximum allowed size of the client request body. |
 | `nginx_client_body_buffer_size` | `undefined` | `8k|16k` | Sets buffer size for reading client request body. |
+| `nginx_limit_req_zones` | `[]` | `-` | Managed request-rate zones. Present items define `name`, `key`, `size`, `rate`, and optional `state`; absent items require only `name` and `state`. |
+| `nginx_limit_req_status` | `undefined` | `503` | Status returned for requests rejected by rate limiting. |
 | `nginx_tcp_nodelay` | `undefined` | `on` | Enables or disables the use of the `TCP_NODELAY` option. |
 | `nginx_tcp_nopush` | `true` | `off` | Enable tcp_nopush. |
 | `nginx_server_tokens` | `undefined` | `on` | Hide Nginx version. |
@@ -481,6 +483,50 @@ nginx_maps:
 Regex quoting note:
 - In YAML, regex-heavy `match` strings should usually be wrapped in single quotes so backslashes and `{m,n}` fragments survive parsing unchanged.
 - The role renderer also wraps `default`, `match`, and `value` in single quotes inside the generated nginx config, following the safer legacy behavior for complex map patterns.
+
+### Request Rate Limits
+Managed `limit_req_zone` declarations for the `http` context.
+
+Official Nginx documentation: [HTTP Limit Req module](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html)
+
+| Variable | Default | Description |
+|---|---|---|
+| `nginx_limit_req_zones` | `[]` | List of managed request-rate zones. |
+| `nginx_limit_req_status` | `undefined` | Optional rejection status from `400` through `599`, rendered as `limit_req_status` in the `http` context. |
+
+Rendered file:
+- `/etc/nginx/conf.d/limit_req.conf` when at least one active zone or `nginx_limit_req_status` is configured
+
+`nginx_limit_req_zones` item fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Name of the shared-memory zone. Required for both states. |
+| `key` | for `present` | Key expression used to identify a request class, for example `$binary_remote_addr`. |
+| `size` | for `present` | Shared-memory zone size, for example `10m`. |
+| `rate` | for `present` | Permitted request rate, for example `10r/s` or `60r/m`. |
+| `state` | no | `present` or `absent`. Defaults to `present`. |
+
+`servers/vhost` supports `limit_req` in `server` and `location` contexts. Its value can be one nginx argument string or a list, which renders one directive per item.
+
+```yaml
+nginx_limit_req_zones:
+  - name: "per_ip"
+    key: "$binary_remote_addr"
+    size: "10m"
+    rate: "10r/s"
+
+nginx_limit_req_status: 429
+
+nginx_servers:
+  - name: "api"
+    template: "servers/vhost"
+    server_name: "api.example.com"
+    locations:
+      - name: "/v1/"
+        limit_req:
+          - "zone=per_ip burst=30 nodelay"
+```
 
 ### Geos
 Managed `geo` blocks for the `http` context.

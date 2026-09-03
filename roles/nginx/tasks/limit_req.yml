@@ -1,0 +1,65 @@
+---
+- name: "Validate request rate limit zones collection"
+  ansible.builtin.assert:
+    that:
+      - nginx_limit_req_zones is sequence
+      - nginx_limit_req_zones is not string
+    fail_msg: "nginx_limit_req_zones must be a list."
+
+- name: "Validate request rate limit zone definitions"
+  ansible.builtin.assert:
+    that:
+      - nginx_limit_req_zone is mapping
+      - nginx_limit_req_zone.name | default(none) is string
+      - nginx_limit_req_zone.name | default('') | length > 0
+      - nginx_limit_req_zone.name | default('') is match('^[^:\\s]+$')
+      - nginx_limit_req_zone.state | default('present') in ['present', 'absent']
+      - >-
+        nginx_limit_req_zone.state | default('present') == 'absent' or
+        (
+          nginx_limit_req_zone.key | default(none) is string and
+          nginx_limit_req_zone.key | default('') | length > 0 and
+          nginx_limit_req_zone.size | default(none) is string and
+          nginx_limit_req_zone.size | default('') | length > 0 and
+          nginx_limit_req_zone.rate | default(none) is string and
+          nginx_limit_req_zone.rate | default('') | length > 0
+        )
+    fail_msg: >-
+      Each nginx_limit_req_zones item must have a non-empty name, an optional
+      state of present or absent, and non-empty key, size, and rate strings when present.
+  loop: "{{ nginx_limit_req_zones }}"
+  loop_control:
+    loop_var: nginx_limit_req_zone
+    label: "{{ nginx_limit_req_zone.name | default(nginx_limit_req_zone | string) }}"
+
+- name: "Validate request rate limit status"
+  ansible.builtin.assert:
+    that:
+      - nginx_limit_req_status is integer
+      - nginx_limit_req_status >= 400
+      - nginx_limit_req_status <= 599
+    fail_msg: "nginx_limit_req_status must be an integer from 400 through 599."
+  when: nginx_limit_req_status is defined
+
+- name: "Build active request rate limit zones payload"
+  ansible.builtin.set_fact:
+    _nginx_limit_req_zones_active_json: >-
+      {% set active = namespace(items=[]) %}
+      {% for zone in nginx_limit_req_zones
+         if zone.state | default('present') == 'present' %}
+      {% set active.items = active.items + [zone] %}
+      {% endfor %}
+      {{ active.items | to_json }}
+
+- name: "Materialize active request rate limit zones"
+  ansible.builtin.set_fact:
+    _nginx_limit_req_zones_active: >-
+      {{ _nginx_limit_req_zones_active_json | trim | from_json }}
+
+- name: "Validate active request rate limit zone uniqueness"
+  ansible.builtin.assert:
+    that:
+      - >-
+        _nginx_limit_req_zones_active | map(attribute='name') | unique | length ==
+        _nginx_limit_req_zones_active | length
+    fail_msg: "Active nginx_limit_req_zones entries must have unique names."

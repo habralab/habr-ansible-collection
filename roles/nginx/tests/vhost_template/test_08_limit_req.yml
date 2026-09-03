@@ -1,0 +1,38 @@
+---
+- name: "VHOST | render request rate limits"
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - "../../../../roles/nginx/vars/server_vhost.yml"
+  vars:
+    nginx_proxy_cache_root: "/var/cache/nginx"
+    __nginx_server_vhost_mode:
+      render_directives: true
+    item:
+      name: "rate-limited"
+      server_name: "example.com"
+      limit_req: "zone=per_server burst=100"
+      locations:
+        - name: "/api"
+          limit_req:
+            - "zone=per_ip burst=30 nodelay"
+            - "zone=per_account burst=10"
+    nginx_server_runtime:
+      geos_registry: {materialized: []}
+      maps_registry: {materialized: []}
+      upstreams_registry: {materialized: []}
+      proxy_set_header_registry: {materialized: []}
+      if: []
+      error_page: []
+  tasks:
+    - name: "Render vhost template"
+      ansible.builtin.set_fact:
+        nginx_rendered: "{{ lookup('template', playbook_dir + '/../../../../roles/nginx/templates/servers/vhost.j2') }}"
+
+    - name: "Assert server and location limits rendered"
+      ansible.builtin.assert:
+        that:
+          - "'limit_req zone=per_server burst=100;' in nginx_rendered"
+          - "'limit_req zone=per_ip burst=30 nodelay;' in nginx_rendered"
+          - "'limit_req zone=per_account burst=10;' in nginx_rendered"
+        fail_msg: "FAIL: rendered=\\n{{ nginx_rendered }}"
