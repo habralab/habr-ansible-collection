@@ -6,11 +6,35 @@
 - name: Validate Redis server configuration
   ansible.builtin.command:
     argv:
+      - /usr/bin/timeout
+      - "{{ redis_server_config_validation_timeout }}s"
       - /usr/bin/redis-server
       - "{{ redis_server_wrapper_config }}"
-      - --test-memory
-      - "2"
+      - --daemonize
+      - "no"
+      - --supervised
+      - "no"
+      - --port
+      - "0"
+      - --unixsocket
+      - "{{ redis_server_config_validation_socket }}"
+      - --unixsocketperm
+      - "700"
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --dir
+      - /tmp
+      - --dbfilename
+      - "{{ redis_server_config_validation_dbfilename }}"
+      - --pidfile
+      - "{{ redis_server_config_validation_pidfile }}"
+      - --logfile
+      - ""
+  register: redis_server_config_validation
   changed_when: false
+  failed_when: redis_server_config_validation.rc not in [0, 124]
   no_log: "{{ redis_server_config_no_log }}"
 
 - name: Restart Redis server

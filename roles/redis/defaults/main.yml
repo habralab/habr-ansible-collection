@@ -41,6 +41,10 @@ redis_server_systemd_dropin_file: >-
 redis_server_config_manage: true
 redis_server_config_no_log: true
 redis_server_config: {}
+redis_server_config_validation_timeout: 2
+redis_server_config_validation_socket: /tmp/redis-ansible-check.sock
+redis_server_config_validation_pidfile: /tmp/redis-ansible-check.pid
+redis_server_config_validation_dbfilename: redis-ansible-check.rdb
 
 redis_sysctl: {}
 
