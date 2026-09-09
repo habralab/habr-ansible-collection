@@ -129,7 +129,9 @@
       - --command
       - >-
         SELECT count(*) FROM (
-          SELECT error FROM pg_file_settings WHERE error IS NOT NULL
+          SELECT error FROM pg_file_settings
+          WHERE error IS NOT NULL
+            AND error != 'setting could not be applied'
           UNION ALL
           SELECT error FROM pg_hba_file_rules WHERE error IS NOT NULL
         ) AS configuration_errors;

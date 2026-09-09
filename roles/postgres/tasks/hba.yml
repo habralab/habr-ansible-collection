@@ -17,10 +17,22 @@
   no_log: "{{ postgres_hba_no_log }}"
   notify: Restart PostgreSQL
 
+- name: Remove legacy PostgreSQL HBA include directives
+  ansible.builtin.lineinfile:
+    path: "{{ postgres_hba_stock_path }}"
+    line: "{{ postgres_hba_legacy_include_line }}"
+    state: absent
+  loop: "{{ postgres_hba_legacy_include_lines }}"
+  loop_control:
+    loop_var: postgres_hba_legacy_include_line
+    label: "{{ postgres_hba_legacy_include_line }}"
+  no_log: "{{ postgres_hba_no_log }}"
+  notify: Restart PostgreSQL
+
 - name: Include the Ansible HBA fragment directory from package configuration
   ansible.builtin.lineinfile:
     path: "{{ postgres_hba_stock_path }}"
-    line: "include_dir '{{ postgres_hba_include_dir }}'"
+    line: "{{ postgres_hba_include_line }}"
     insertafter: EOF
     state: present
   no_log: "{{ postgres_hba_no_log }}"
