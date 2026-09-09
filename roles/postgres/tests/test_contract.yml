@@ -26,6 +26,8 @@
           - "'postgresql-18' in postgres_packages"
           - "'13' not in postgres_supported_versions"
           - "'13' in postgres_permitted_eol_versions"
+          - postgres_hba_include_line == 'include_dir "/etc/postgresql/18/main/pg_hba.conf.d"'
+          - postgres_hba_legacy_include_lines | length > 0
         quiet: true
 
     - name: Validate explicitly permitted PostgreSQL 13
