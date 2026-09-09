@@ -50,10 +50,12 @@
     - skip_ansible_lint
 - name: "Remove repository files if state is absent | {{ apt_repo_config.name }}"
   ansible.builtin.file:
-    path: "/etc/apt/sources.list.d/{{ apt_repo_config.name }}{{ item }}"
+    path: "/etc/apt/sources.list.d/{{ apt_repo_config.name }}{{ apt_repo_file_suffix }}"
     state: absent
   loop:
     - ".list"
     - ".sources"
+  loop_control:
+    loop_var: apt_repo_file_suffix
   when: (apt_repo_config.state | default(apt_repo_state)) == 'absent'
   notify: Update apt cache
