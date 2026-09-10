@@ -1,0 +1,107 @@
+---
+- name: Install NodeSource provider prerequisites
+  ansible.builtin.apt:
+    name: "{{ nodejs_nodesource_packages }}"
+    state: present
+  become: true
+
+- name: Configure NodeSource APT repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+  vars:
+    apt_repo_config:
+      name: nodesource
+      url: >-
+        {{
+          nodejs_nodesource_repo_base
+          ~ '/node_'
+          ~ _nodejs_environment.provider.channel
+          ~ '.x'
+        }}
+      suite: nodistro
+      components:
+        - main
+      arch: "{{ nodejs_debian_architecture_map[ansible_facts.architecture] }}"
+      key_url: "{{ nodejs_nodesource_key_url }}"
+      state: present
+
+- name: Configure NodeSource package preference
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/nodejs
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: nodejs
+      Pin: origin deb.nodesource.com
+      Pin-Priority: 600
+  become: true
+
+- name: Apply pending NodeSource repository handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Inspect NodeSource Node.js package candidate
+  ansible.builtin.command:
+    argv:
+      - apt-cache
+      - policy
+      - "{{ nodejs_system_package }}"
+  environment:
+    LC_ALL: C
+  register: _nodejs_nodesource_candidate_query
+  changed_when: false
+  check_mode: false
+
+- name: Normalize NodeSource candidate policy
+  ansible.builtin.include_tasks: nodesource_candidate.yml
+  vars:
+    _nodejs_nodesource_candidate_policy: "{{ _nodejs_nodesource_candidate_query.stdout }}"
+    _nodejs_nodesource_candidate_policy_lines: >-
+      {{ _nodejs_nodesource_candidate_query.stdout_lines }}
+
+- name: Validate NodeSource package candidate
+  ansible.builtin.assert:
+    that:
+      - _nodejs_nodesource_candidate_matches
+    fail_msg: >-
+      A NodeSource Node.js {{ _nodejs_environment.provider.channel }}.x package
+      candidate was not found. Apply the repository layer first when checking a
+      pristine host, then rerun the role.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Report unavailable NodeSource candidate in check mode
+  ansible.builtin.debug:
+    msg: >-
+      The NodeSource repository must be applied before check mode can validate
+      and install the {{ _nodejs_environment.provider.channel }}.x candidate.
+  when:
+    - ansible_check_mode
+    - not _nodejs_nodesource_candidate_matches
+
+- name: Install NodeSource Node.js runtime package
+  ansible.builtin.apt:
+    name: "{{ nodejs_system_package ~ '=' ~ _nodejs_nodesource_candidate_version }}"
+    state: present
+    allow_downgrade: true
+  become: true
+  when:
+    - not ansible_check_mode or _nodejs_nodesource_candidate_matches
+
+- name: Resolve NodeSource Node.js runtime
+  ansible.builtin.include_tasks: runtime_system.yml
+  when:
+    - not ansible_check_mode or _nodejs_nodesource_candidate_matches
+
+- name: Validate resolved NodeSource Node.js major
+  ansible.builtin.assert:
+    that:
+      - >-
+        nodejs_environment_result.runtime.version_resolved.startswith(
+          'v' ~ _nodejs_environment.provider.channel ~ '.'
+        )
+    fail_msg: >-
+      The resolved Node.js runtime does not match the requested NodeSource
+      {{ _nodejs_environment.provider.channel }}.x channel.
+    quiet: true
+  when: not ansible_check_mode

@@ -1,0 +1,53 @@
+---
+- name: Validate NodeSource candidate parsing
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    nodejs_nodesource_repo_base: https://deb.nodesource.com
+    _nodejs_environment:
+      provider:
+        channel: "24"
+  tasks:
+    - name: Parse matching NodeSource candidate
+      ansible.builtin.include_tasks: ../tasks/nodesource_candidate.yml
+      vars:
+        _nodejs_nodesource_candidate_policy: |
+          nodejs:
+            Installed: (none)
+            Candidate: 24.8.0-1nodesource1
+            Version table:
+               24.8.0-1nodesource1 600
+                  600 https://deb.nodesource.com/node_24.x nodistro/main amd64 Packages
+        _nodejs_nodesource_candidate_policy_lines:
+          - "nodejs:"
+          - "  Installed: (none)"
+          - "  Candidate: 24.8.0-1nodesource1"
+          - "  Version table:"
+
+    - name: Assert matching NodeSource candidate
+      ansible.builtin.assert:
+        that:
+          - _nodejs_nodesource_candidate_version == '24.8.0-1nodesource1'
+          - _nodejs_nodesource_candidate_matches
+
+    - name: Parse wrong NodeSource candidate
+      ansible.builtin.include_tasks: ../tasks/nodesource_candidate.yml
+      vars:
+        _nodejs_nodesource_candidate_policy: |
+          nodejs:
+            Installed: 20.0.0
+            Candidate: 20.0.0
+            Version table:
+               20.0.0 500
+                  500 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages
+        _nodejs_nodesource_candidate_policy_lines:
+          - "nodejs:"
+          - "  Installed: 20.0.0"
+          - "  Candidate: 20.0.0"
+          - "  Version table:"
+
+    - name: Assert wrong NodeSource candidate was rejected
+      ansible.builtin.assert:
+        that:
+          - not _nodejs_nodesource_candidate_matches

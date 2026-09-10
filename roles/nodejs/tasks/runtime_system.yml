@@ -1,0 +1,85 @@
+---
+- name: Resolve system Node.js executable paths
+  ansible.builtin.shell: "command -v {{ item }}"
+  args:
+    executable: /bin/bash
+  loop:
+    - node
+    - npm
+    - npx
+  register: _nodejs_system_executable_queries
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Query resolved system Node.js version
+  ansible.builtin.command:
+    argv:
+      - "{{ _nodejs_system_node_bin }}"
+      - --version
+  register: _nodejs_system_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: _nodejs_system_node_bin | length > 0
+  vars:
+    _nodejs_system_node_bin: >-
+      {{ _nodejs_system_executable_queries.results[0].stdout | default('') | trim }}
+
+- name: Validate resolved system Node.js runtime
+  ansible.builtin.assert:
+    that:
+      - _nodejs_system_node_bin | length > 0
+      - >-
+        _nodejs_environment.runtime.npm_packages | default([]) | length == 0
+        or _nodejs_system_npm_bin | length > 0
+    fail_msg: >-
+      Failed to resolve the system Node.js runtime for
+      '{{ _nodejs_environment.name }}'.
+    quiet: true
+  when: not ansible_check_mode
+  vars:
+    _nodejs_system_node_bin: >-
+      {{ _nodejs_system_executable_queries.results[0].stdout | default('') | trim }}
+    _nodejs_system_npm_bin: >-
+      {{ _nodejs_system_executable_queries.results[1].stdout | default('') | trim }}
+
+- name: Normalize system Node.js environment result
+  ansible.builtin.set_fact:
+    nodejs_environment_result:
+      name: "{{ _nodejs_environment.name }}"
+      scope: system
+      state: "{{ _nodejs_environment.state }}"
+      execution_user: root
+      provider:
+        type: "{{ _nodejs_environment.provider.type }}"
+      runtime:
+        state: present
+        version_resolved: >-
+          {{ _nodejs_system_version_query.stdout | default('') | trim }}
+        node_bin: "{{ _nodejs_system_node_bin }}"
+        bin_dir: "{{ _nodejs_system_bin_dir }}"
+        npm_bin: "{{ _nodejs_system_npm_bin }}"
+        npx_bin: "{{ _nodejs_system_npx_bin }}"
+        exec_path: >-
+          {{
+            [_nodejs_system_bin_dir, _nodejs_base_path]
+            | reject('equalto', '')
+            | join(':')
+          }}
+  vars:
+    _nodejs_system_node_bin: >-
+      {{ _nodejs_system_executable_queries.results[0].stdout | default('') | trim }}
+    _nodejs_system_npm_bin: >-
+      {{ _nodejs_system_executable_queries.results[1].stdout | default('') | trim }}
+    _nodejs_system_npx_bin: >-
+      {{ _nodejs_system_executable_queries.results[2].stdout | default('') | trim }}
+    _nodejs_system_bin_dir: >-
+      {{ (_nodejs_system_node_bin | dirname) if _nodejs_system_node_bin | length > 0 else '' }}
+    _nodejs_base_path: >-
+      {{
+        ansible_facts.get('env', {}).get(
+          'PATH',
+          '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+        )
+      }}

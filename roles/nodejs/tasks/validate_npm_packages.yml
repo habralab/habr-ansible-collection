@@ -1,0 +1,42 @@
+---
+- name: Validate runtime-bound npm package declaration
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_npm_package is mapping
+      - current_nodejs_npm_package.keys() | difference(_nodejs_npm_package_keys) | length == 0
+      - current_nodejs_npm_package.name is string
+      - current_nodejs_npm_package.name | length > 0
+      - >-
+        current_nodejs_npm_package.global is not defined
+        or current_nodejs_npm_package.global is boolean
+      - >-
+        current_nodejs_npm_package['version'] is not defined
+        or (
+          current_nodejs_npm_package['version'] is string
+          and current_nodejs_npm_package['version'] | length > 0
+        )
+      - >-
+        current_nodejs_npm_package.global | default(true) | bool
+        or (
+          current_nodejs_npm_package.path is defined
+          and current_nodejs_npm_package.path is string
+          and current_nodejs_npm_package.path | length > 0
+        )
+      - >-
+        current_nodejs_environment.scope == 'user'
+        or current_nodejs_npm_package.global | default(true) | bool
+    fail_msg: >-
+      Each npm package must contain only supported fields and define a non-empty
+      name. Local packages require a path and are supported only for user-scoped
+      environments.
+    quiet: true
+  vars:
+    _nodejs_npm_package_keys:
+      - name
+      - version
+      - global
+      - path
+  loop: "{{ current_nodejs_environment.runtime.npm_packages }}"
+  loop_control:
+    loop_var: current_nodejs_npm_package
+    label: "{{ current_nodejs_npm_package.name | default('UNKNOWN') }}"
