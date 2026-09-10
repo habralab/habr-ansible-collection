@@ -1,0 +1,26 @@
+---
+- name: Normalize NodeSource candidate version
+  ansible.builtin.set_fact:
+    _nodejs_nodesource_candidate_version: >-
+      {{
+        _nodejs_nodesource_candidate_policy_lines
+        | select('match', '^ *Candidate:')
+        | map('regex_replace', '^ *Candidate: *', '')
+        | first
+        | default('')
+      }}
+
+- name: Normalize NodeSource candidate availability
+  ansible.builtin.set_fact:
+    _nodejs_nodesource_candidate_matches: >-
+      {{
+        _nodejs_nodesource_candidate_version.startswith(
+          _nodejs_environment.provider.channel ~ '.'
+        )
+        and (
+          nodejs_nodesource_repo_base
+          ~ '/node_'
+          ~ _nodejs_environment.provider.channel
+          ~ '.x'
+        ) in _nodejs_nodesource_candidate_policy
+      }}

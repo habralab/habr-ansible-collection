@@ -1,0 +1,18 @@
+---
+- name: Validate unmanaged NVM environment contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    current_nodejs_environment:
+      name: developer-node
+      scope: user
+      user: developer
+      state: present
+      provider:
+        type: nvm
+      runtime:
+        state: unmanaged
+  tasks:
+    - name: Validate unmanaged NVM declaration
+      ansible.builtin.include_tasks: ../tasks/validate_environment.yml

@@ -1,0 +1,49 @@
+---
+- name: Initialize Node.js environment context
+  ansible.builtin.set_fact:
+    _nodejs_environment: "{{ current_nodejs_environment }}"
+    nodejs_environment_result: {}
+
+- name: Materialize NVM environment
+  ansible.builtin.include_tasks: provider_nvm.yml
+  when: _nodejs_environment.provider.type == 'nvm'
+
+- name: Materialize Ubuntu environment
+  ansible.builtin.include_tasks: provider_ubuntu.yml
+  when: _nodejs_environment.provider.type == 'ubuntu'
+
+- name: Materialize NodeSource environment
+  ansible.builtin.include_tasks: provider_nodesource.yml
+  when: _nodejs_environment.provider.type == 'nodesource'
+
+- name: Install runtime-bound npm packages
+  ansible.builtin.include_tasks: npm_packages.yml
+  when:
+    - nodejs_environment_result | length > 0
+    - nodejs_environment_result.runtime.state == 'present'
+    - _nodejs_environment.runtime.npm_packages is defined
+    - _nodejs_environment.runtime.npm_packages | length > 0
+    - nodejs_environment_result.runtime.npm_bin | default('') | length > 0
+
+- name: Report deferred npm packages in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Runtime-bound npm packages for '{{ _nodejs_environment.name }}' cannot be
+      inspected until the predicted Node.js runtime exists.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - nodejs_environment_result | length > 0
+    - nodejs_environment_result.runtime.state == 'present'
+    - _nodejs_environment.runtime.npm_packages is defined
+    - _nodejs_environment.runtime.npm_packages | length > 0
+    - nodejs_environment_result.runtime.npm_bin | default('') | length == 0
+
+- name: Accumulate normalized Node.js environment results
+  ansible.builtin.set_fact:
+    nodejs_environment_results: >-
+      {{
+        nodejs_environment_results
+        | combine({nodejs_environment_result.name: nodejs_environment_result})
+      }}
+  when: nodejs_environment_result | length > 0

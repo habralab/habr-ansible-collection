@@ -1,5 +1,15 @@
 ---
-nodejs_runtimes: []
+nodejs_environments: []
 nodejs_nvm_version: "v0.40.4"
 nodejs_nvm_profile: ".bashrc"
 nodejs_nvm_repo: "https://github.com/nvm-sh/nvm.git"
+nodejs_nvm_packages:
+  - ca-certificates
+  - curl
+  - git
+nodejs_nodesource_repo_base: "https://deb.nodesource.com"
+nodejs_nodesource_key_url: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+nodejs_nodesource_packages:
+  - ca-certificates
+  - python3-debian
+nodejs_system_package: "nodejs"

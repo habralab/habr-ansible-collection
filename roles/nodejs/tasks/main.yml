@@ -1,54 +1,88 @@
 ---
-- name: Validate nodejs role input shape
+- name: Validate Node.js environment input shape
   ansible.builtin.assert:
     that:
-      - nodejs_runtimes is sequence
-      - nodejs_runtimes is not string
-      - nodejs_runtimes | length > 0
-    fail_msg: "Variable 'nodejs_runtimes' must be a non-empty list."
+      - nodejs_environments is sequence
+      - nodejs_environments is not string
+      - nodejs_environments | length > 0
+    fail_msg: "Variable 'nodejs_environments' must be a non-empty list."
     quiet: true
   tags:
     - nodejs
 
-- name: Validate each declarative Node.js runtime
+- name: Gather facts required by system Node.js providers
+  ansible.builtin.setup:
+    gather_subset:
+      - "!all"
+      - "!min"
+      - architecture
+      - distribution
+  when: >-
+    nodejs_environments
+    | selectattr('scope', 'defined')
+    | selectattr('scope', 'equalto', 'system')
+    | list
+    | length > 0
+  tags:
+    - nodejs
+
+- name: Validate each declarative Node.js environment
   ansible.builtin.include_tasks:
-    file: validate.yml
+    file: validate_environment.yml
     apply:
       tags:
         - nodejs
-  loop: "{{ nodejs_runtimes }}"
+  loop: "{{ nodejs_environments }}"
   loop_control:
-    loop_var: current_nodejs_runtime
-    label: "{{ current_nodejs_runtime.name | default('UNKNOWN') }}"
+    loop_var: current_nodejs_environment
+    label: "{{ current_nodejs_environment.name | default('UNKNOWN') }}"
   tags:
     - nodejs
 
-- name: Initialize normalized Node.js runtime results
+- name: Initialize normalized Node.js environment results
   ansible.builtin.set_fact:
-    nodejs_runtime_results: {}
+    nodejs_environment_results: {}
   tags:
     - nodejs
 
-- name: Validate unique Node.js runtime names
+- name: Validate environment topology
   ansible.builtin.assert:
     that:
       - >-
-        nodejs_runtimes | map(attribute='name') | list | unique | length
-        == nodejs_runtimes | length
-    fail_msg: "Each item in 'nodejs_runtimes' must use a unique name."
+        nodejs_environments | map(attribute='name') | list | unique | length
+        == nodejs_environments | length
+      - >-
+        nodejs_environments
+        | selectattr('scope', 'equalto', 'system')
+        | list
+        | length <= 1
+      - >-
+        nodejs_environments
+        | selectattr('scope', 'equalto', 'user')
+        | map(attribute='user')
+        | list
+        | unique
+        | length
+        == nodejs_environments
+           | selectattr('scope', 'equalto', 'user')
+           | list
+           | length
+    fail_msg: >-
+      Environment names and user targets must be unique, and at most one
+      system-scoped Node.js environment may be declared.
     quiet: true
   tags:
     - nodejs
 
-- name: Materialize each declarative Node.js runtime
+- name: Materialize each declarative Node.js environment
   ansible.builtin.include_tasks:
-    file: runtime.yml
+    file: environment.yml
     apply:
       tags:
         - nodejs
-  loop: "{{ nodejs_runtimes }}"
+  loop: "{{ nodejs_environments }}"
   loop_control:
-    loop_var: current_nodejs_runtime
-    label: "{{ current_nodejs_runtime.name | default('UNKNOWN') }}"
+    loop_var: current_nodejs_environment
+    label: "{{ current_nodejs_environment.name | default('UNKNOWN') }}"
   tags:
     - nodejs

@@ -1,0 +1,68 @@
+---
+- name: Validate rejected Node.js environment contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  check_mode: true
+  vars:
+    nodejs_environments:
+      - name: invalid-nvm
+        scope: user
+        user: missing-nodejs-contract-user
+        state: present
+        provider:
+          type: nvm
+        runtime:
+          state: present
+  tasks:
+    - name: Initialize invalid contract result
+      ansible.builtin.set_fact:
+        _nodejs_invalid_contract_rejected: false
+
+    - name: Exercise missing managed NVM version
+      block:
+        - name: Apply invalid Node.js environment contract
+          ansible.builtin.include_role:
+            name: nodejs
+      rescue:
+        - name: Record rejected Node.js environment contract
+          ansible.builtin.set_fact:
+            _nodejs_invalid_contract_rejected: true
+
+    - name: Assert invalid contract was rejected
+      ansible.builtin.assert:
+        that:
+          - _nodejs_invalid_contract_rejected
+
+- name: Validate removed Node.js runtime contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  check_mode: true
+  vars:
+    nodejs_runtimes:
+      - name: legacy
+        provider: nvm
+        scope: user
+        user: web
+        version: "22"
+        state: present
+  tasks:
+    - name: Initialize legacy contract result
+      ansible.builtin.set_fact:
+        _nodejs_legacy_contract_rejected: false
+
+    - name: Exercise removed Node.js runtime contract
+      block:
+        - name: Apply removed Node.js runtime contract
+          ansible.builtin.include_role:
+            name: nodejs
+      rescue:
+        - name: Record rejected legacy contract
+          ansible.builtin.set_fact:
+            _nodejs_legacy_contract_rejected: true
+
+    - name: Assert legacy contract was rejected
+      ansible.builtin.assert:
+        that:
+          - _nodejs_legacy_contract_rejected

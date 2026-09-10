@@ -3,7 +3,7 @@
   ansible.builtin.command:
     argv: >-
       {{
-        [nodejs_runtime_result.npm_bin, 'list', '--depth=0', '--json']
+        [nodejs_environment_result.runtime.npm_bin, 'list', '--depth=0', '--json']
         + (
           ['--global']
           if current_nodejs_npm_package.global | default(true) | bool
@@ -18,9 +18,9 @@
         else current_nodejs_npm_package.path
       }}
   become: true
-  become_user: "{{ nodejs_runtime_result.user }}"
+  become_user: "{{ nodejs_environment_result.execution_user }}"
   environment:
-    PATH: "{{ nodejs_runtime_result.exec_path }}"
+    PATH: "{{ nodejs_environment_result.runtime.exec_path }}"
   register: _nodejs_npm_package_query
   changed_when: false
   failed_when: false
@@ -41,7 +41,7 @@
   ansible.builtin.debug:
     msg: >-
       npm package '{{ current_nodejs_npm_package.name }}' would be installed for
-      runtime '{{ nodejs_runtime_result.name }}'.
+      environment '{{ nodejs_environment_result.name }}'.
   changed_when: true
   when:
     - ansible_check_mode
@@ -55,7 +55,7 @@
   ansible.builtin.command:
     argv: >-
       {{
-        [nodejs_runtime_result.npm_bin, 'install']
+        [nodejs_environment_result.runtime.npm_bin, 'install']
         + (
           ['--global']
           if current_nodejs_npm_package.global | default(true) | bool
@@ -77,9 +77,9 @@
         else current_nodejs_npm_package.path
       }}
   become: true
-  become_user: "{{ nodejs_runtime_result.user }}"
+  become_user: "{{ nodejs_environment_result.execution_user }}"
   environment:
-    PATH: "{{ nodejs_runtime_result.exec_path }}"
+    PATH: "{{ nodejs_environment_result.runtime.exec_path }}"
   changed_when: true
   when:
     - not ansible_check_mode

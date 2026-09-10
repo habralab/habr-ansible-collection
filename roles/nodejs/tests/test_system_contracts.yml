@@ -1,0 +1,57 @@
+---
+- name: Validate Ubuntu Node.js environment contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      distribution: Ubuntu
+      distribution_release: noble
+      architecture: x86_64
+    nodejs_supported_ubuntu_releases:
+      - focal
+      - jammy
+      - noble
+    nodejs_debian_architecture_map:
+      x86_64: amd64
+    current_nodejs_environment:
+      name: system-node
+      scope: system
+      state: present
+      provider:
+        type: ubuntu
+      runtime:
+        state: present
+  tasks:
+    - name: Validate Ubuntu declaration
+      ansible.builtin.include_tasks: ../tasks/validate_environment.yml
+
+- name: Validate NodeSource Node.js environment contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_facts:
+      distribution: Ubuntu
+      distribution_release: noble
+      architecture: aarch64
+    nodejs_supported_ubuntu_releases:
+      - focal
+      - jammy
+      - noble
+    nodejs_debian_architecture_map:
+      aarch64: arm64
+    current_nodejs_environment:
+      name: system-node
+      scope: system
+      state: present
+      provider:
+        type: nodesource
+        channel: "24"
+      runtime:
+        state: present
+        npm_packages:
+          - name: corepack
+  tasks:
+    - name: Validate NodeSource declaration
+      ansible.builtin.include_tasks: ../tasks/validate_environment.yml

@@ -1,0 +1,156 @@
+---
+- name: Query requested NVM Node.js version
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm version {{ _nodejs_environment.runtime.version | quote }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ _nodejs_environment.user }}"
+  register: _nodejs_nvm_requested_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Query NVM default Node.js alias
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm version default
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ _nodejs_environment.user }}"
+  register: _nodejs_nvm_default_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install requested Node.js version through NVM
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm install {{ _nodejs_environment.runtime.version | quote }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ _nodejs_environment.user }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - _nodejs_nvm_requested_version_query.stdout | default('N/A') | trim == 'N/A'
+
+- name: Report managed NVM runtime change in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Node.js runtime for '{{ _nodejs_environment.name }}' or its NVM default
+      alias would change.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - >-
+      _nodejs_nvm_requested_version_query.stdout | default('N/A') | trim == 'N/A'
+      or _nodejs_nvm_default_version_query.stdout | default('N/A') | trim
+         != _nodejs_nvm_requested_version_query.stdout | default('') | trim
+
+- name: Set requested Node.js version as NVM default
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm alias default {{ _nodejs_environment.runtime.version | quote }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ _nodejs_environment.user }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - >-
+      _nodejs_nvm_requested_version_query.stdout | default('N/A') | trim == 'N/A'
+      or _nodejs_nvm_default_version_query.stdout | default('N/A') | trim
+         != _nodejs_nvm_requested_version_query.stdout | default('') | trim
+
+- name: Resolve NVM Node.js executable
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm which {{ _nodejs_environment.runtime.version | quote }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ _nodejs_environment.user }}"
+  register: _nodejs_nvm_node_bin_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Resolve managed NVM Node.js version
+  ansible.builtin.shell: >-
+    set -euo pipefail &&
+    export NVM_DIR={{ _nodejs_nvm_dir | quote }} &&
+    . "$NVM_DIR/nvm.sh" &&
+    nvm version {{ _nodejs_environment.runtime.version | quote }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ _nodejs_environment.user }}"
+  register: _nodejs_nvm_resolved_version_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Validate managed NVM runtime resolution
+  ansible.builtin.assert:
+    that:
+      - _nodejs_nvm_resolved_version_query.stdout | trim not in ['', 'N/A']
+      - _nodejs_nvm_node_bin_query.stdout | trim | length > 0
+    fail_msg: >-
+      Failed to resolve managed Node.js runtime for
+      '{{ _nodejs_environment.name }}'.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Normalize managed NVM environment result
+  ansible.builtin.set_fact:
+    nodejs_environment_result: >-
+      {{
+        nodejs_environment_result
+        | combine(
+            {
+              'runtime': {
+                'state': 'present',
+                'version_requested': _nodejs_environment.runtime.version,
+                'version_resolved': _nodejs_nvm_resolved_version_query.stdout | default('') | trim,
+                'node_bin': _nodejs_nvm_node_bin,
+                'bin_dir': _nodejs_nvm_bin_dir,
+                'npm_bin': _nodejs_nvm_npm_bin,
+                'npx_bin': _nodejs_nvm_npx_bin,
+                'exec_path': [_nodejs_nvm_bin_dir, _nodejs_base_path]
+                  | reject('equalto', '') | join(':')
+              }
+            },
+            recursive=True
+          )
+      }}
+  vars:
+    _nodejs_nvm_node_bin: >-
+      {{ _nodejs_nvm_node_bin_query.stdout | default('') | trim }}
+    _nodejs_nvm_bin_dir: >-
+      {{ (_nodejs_nvm_node_bin | dirname) if _nodejs_nvm_node_bin | length > 0 else '' }}
+    _nodejs_nvm_npm_bin: >-
+      {{ _nodejs_nvm_bin_dir ~ '/npm' if _nodejs_nvm_bin_dir | length > 0 else '' }}
+    _nodejs_nvm_npx_bin: >-
+      {{ _nodejs_nvm_bin_dir ~ '/npx' if _nodejs_nvm_bin_dir | length > 0 else '' }}
+    _nodejs_base_path: >-
+      {{
+        ansible_facts.get('env', {}).get(
+          'PATH',
+          '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+        )
+      }}

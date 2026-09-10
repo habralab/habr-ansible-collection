@@ -1,0 +1,41 @@
+---
+- name: Remove role-managed NodeSource APT repository
+  ansible.builtin.include_role:
+    name: habr.linuxhost.apt_repo
+  vars:
+    apt_repo_config:
+      name: nodesource
+      url: "{{ nodejs_nodesource_repo_base }}"
+      state: absent
+
+- name: Remove NodeSource package policy artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/preferences.d/nodejs
+    - /etc/apt/keyrings/nodesource.gpg
+    - /usr/share/keyrings/nodesource.gpg
+  become: true
+
+- name: Apply pending repository removal handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Install Ubuntu Node.js runtime packages
+  ansible.builtin.apt:
+    name: "{{ _nodejs_ubuntu_packages }}"
+    state: present
+  become: true
+  vars:
+    _nodejs_ubuntu_packages: >-
+      {{
+        [nodejs_system_package]
+        + (
+          ['npm']
+          if _nodejs_environment.runtime.npm_packages | default([]) | length > 0
+          else []
+        )
+      }}
+
+- name: Resolve Ubuntu Node.js runtime
+  ansible.builtin.include_tasks: runtime_system.yml
