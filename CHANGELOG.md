@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-10
+
+### Breaking Changes
+- `nodejs`: Replace the `nodejs_runtimes` input and `nodejs_runtime_results`
+  output with the environment-oriented `nodejs_environments` contract and
+  `nodejs_environment_results` output.
+
+### Added
+- `nodejs`: Manage user-scoped NVM environments with either role-managed or
+  externally managed Node.js runtimes.
+- `nodejs`: Install system-scoped Node.js from the Ubuntu archive or an
+  official NodeSource major channel, and support multiple user NVM
+  environments alongside one system runtime.
+
+### Fixed
+- `apt_repo`: Avoid nested loop-variable collisions while managing repository
+  signing keys.
+- `postgres`: Handle HBA include directives and pending-restart settings
+  without losing declared configuration.
+- `redis`: Validate server configuration without executing the memory test
+  during service reload handling.
+
 ## [2.4.0] - 2026-09-03
 
 ### Added

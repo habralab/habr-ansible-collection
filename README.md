@@ -44,7 +44,7 @@ Some roles may also include a role-local `DEVELOPMENT.md` with internal design n
 - `mongodb_assets`: Manages MongoDB application users and database-scoped privileges.
 - `netfilter`: Declarative `iptables` and `ipset` management via `netfilter-persistent`.
 - `nginx`: Installs and configures Nginx using a layout-driven approach (Debian/Upstream).
-- `nodejs`: Declarative provisioning of Node.js runtimes and runtime-bound npm packages.
+- `nodejs`: Declarative system and user Node.js environments through Ubuntu, NodeSource or NVM.
 - `packages`: Declarative management of APT packages and .deb URLs.
 - `php`: Installs and configures parallel PHP CLI and FPM versions.
 - `postgres`: Installs and configures a standalone PostgreSQL server from PGDG.
@@ -72,13 +72,16 @@ Reference roles using FQCN:
         users_list: [{ name: "web", groups: ["www-data"] }]
     - name: habr.linuxhost.nodejs
       vars:
-        nodejs_runtimes:
+        nodejs_environments:
           - name: "web-main"
-            provider: "nvm"
             scope: "user"
             user: "web"
-            version: "22"
             state: "present"
+            provider:
+              type: "nvm"
+            runtime:
+              state: "present"
+              version: "22"
 ```
 
 ## Principles

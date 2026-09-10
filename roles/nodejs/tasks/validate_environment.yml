@@ -1,0 +1,157 @@
+---
+- name: Validate common Node.js environment fields
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_environment is mapping
+      - current_nodejs_environment.keys() | difference(_nodejs_environment_keys) | length == 0
+      - current_nodejs_environment.name is string
+      - current_nodejs_environment.name | length > 0
+      - current_nodejs_environment.scope in ['system', 'user']
+      - current_nodejs_environment.state == 'present'
+      - current_nodejs_environment.provider is mapping
+      - current_nodejs_environment.runtime is mapping
+    fail_msg: >-
+      Each item in 'nodejs_environments' must contain only supported fields and
+      define non-empty name, supported scope, state=present, provider, and runtime.
+    quiet: true
+  vars:
+    _nodejs_environment_keys:
+      - name
+      - scope
+      - state
+      - user
+      - provider
+      - runtime
+
+- name: Validate common Node.js provider and runtime fields
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_environment.provider.keys() | difference(_nodejs_provider_keys) | length == 0
+      - current_nodejs_environment.provider.type in ['nvm', 'ubuntu', 'nodesource']
+      - current_nodejs_environment.runtime.keys() | difference(_nodejs_runtime_keys) | length == 0
+      - current_nodejs_environment.runtime.state in ['present', 'unmanaged']
+      - >-
+        current_nodejs_environment.runtime.npm_packages is not defined
+        or (
+          current_nodejs_environment.runtime.npm_packages is sequence
+          and current_nodejs_environment.runtime.npm_packages is not string
+        )
+    fail_msg: >-
+      Provider and runtime declarations contain unsupported or invalid fields.
+    quiet: true
+  vars:
+    _nodejs_provider_keys:
+      - type
+      - version
+      - profile
+      - repo
+      - channel
+    _nodejs_runtime_keys:
+      - state
+      - version
+      - npm_packages
+
+- name: Validate unmanaged Node.js runtime policy
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_environment.provider.type == 'nvm'
+      - current_nodejs_environment.runtime.version is not defined
+      - current_nodejs_environment.runtime.npm_packages is not defined
+    fail_msg: >-
+      runtime.state=unmanaged is supported only by provider.type=nvm and cannot
+      declare version or npm_packages.
+    quiet: true
+  when: current_nodejs_environment.runtime.state == 'unmanaged'
+
+- name: Validate NVM provider policy
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_environment.scope == 'user'
+      - current_nodejs_environment.user is defined
+      - current_nodejs_environment.user is string
+      - current_nodejs_environment.user | length > 0
+      - >-
+        current_nodejs_environment.provider.keys()
+        | difference(_nodejs_nvm_provider_keys)
+        | length == 0
+      - >-
+        current_nodejs_environment.provider.version is not defined
+        or (
+          current_nodejs_environment.provider.version is string
+          and current_nodejs_environment.provider.version | length > 0
+        )
+      - >-
+        current_nodejs_environment.provider.profile is not defined
+        or (
+          current_nodejs_environment.provider.profile is string
+          and current_nodejs_environment.provider.profile | length > 0
+        )
+      - >-
+        current_nodejs_environment.provider.repo is not defined
+        or (
+          current_nodejs_environment.provider.repo is string
+          and current_nodejs_environment.provider.repo | length > 0
+        )
+      - >-
+        current_nodejs_environment.runtime.state == 'unmanaged'
+        or (
+          current_nodejs_environment.runtime.version is defined
+          and current_nodejs_environment.runtime.version is string
+          and current_nodejs_environment.runtime.version | length > 0
+        )
+    fail_msg: >-
+      NVM environments require scope=user and a non-empty user. Managed runtimes
+      also require a non-empty version.
+    quiet: true
+  vars:
+    _nodejs_nvm_provider_keys:
+      - type
+      - version
+      - profile
+      - repo
+  when: current_nodejs_environment.provider.type == 'nvm'
+
+- name: Validate Ubuntu provider policy
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_environment.scope == 'system'
+      - current_nodejs_environment.user is not defined
+      - current_nodejs_environment.runtime.state == 'present'
+      - current_nodejs_environment.runtime.version is not defined
+      - current_nodejs_environment.provider.keys() | difference(['type']) | length == 0
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_release in nodejs_supported_ubuntu_releases
+    fail_msg: >-
+      Ubuntu environments require scope=system and runtime.state=present. The
+      distribution selects the Node.js version.
+    quiet: true
+  when: current_nodejs_environment.provider.type == 'ubuntu'
+
+- name: Validate NodeSource provider policy
+  ansible.builtin.assert:
+    that:
+      - current_nodejs_environment.scope == 'system'
+      - current_nodejs_environment.user is not defined
+      - current_nodejs_environment.runtime.state == 'present'
+      - current_nodejs_environment.runtime.version is not defined
+      - current_nodejs_environment.provider.channel is defined
+      - current_nodejs_environment.provider.channel is string
+      - current_nodejs_environment.provider.channel is regex('^[1-9][0-9]*$')
+      - current_nodejs_environment.provider.keys() | difference(_nodejs_nodesource_provider_keys) | length == 0
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_release in nodejs_supported_ubuntu_releases
+      - ansible_facts.architecture in nodejs_debian_architecture_map
+    fail_msg: >-
+      NodeSource environments require scope=system, runtime.state=present, and a
+      numeric provider.channel such as '24' on a supported Ubuntu release and
+      architecture.
+    quiet: true
+  vars:
+    _nodejs_nodesource_provider_keys:
+      - type
+      - channel
+  when: current_nodejs_environment.provider.type == 'nodesource'
+
+- name: Validate Node.js environment npm package declarations
+  ansible.builtin.include_tasks: validate_npm_packages.yml
+  when: current_nodejs_environment.runtime.npm_packages is defined

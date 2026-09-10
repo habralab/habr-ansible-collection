@@ -40,6 +40,9 @@ postgres_hba_stock_path: >-
 postgres_hba_include_dir: >-
   /etc/postgresql/{{ postgres_version }}/{{ postgres_cluster_name }}/pg_hba.conf.d
 postgres_hba_path: "{{ postgres_hba_include_dir }}/90-ansible.conf"
+postgres_hba_include_line: 'include_dir "{{ postgres_hba_include_dir }}"'
+postgres_hba_legacy_include_lines:
+  - "include_dir '{{ postgres_hba_include_dir }}'"
 
 postgres_health_check_enabled: true
 postgres_health_host: 127.0.0.1
